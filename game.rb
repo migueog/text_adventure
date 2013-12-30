@@ -1,14 +1,3 @@
-#To-do: Divide main method into two methods
-# - One method runs the program
-# - Second method determines which room the player is
-
-#Layout
-# Player needs to navigate through a series of connected room
-# Player must rescue princess who is located in the final room
-# Some doors are locked and Player must find key to unlock door
-# There are monsters that the Player must fight
-# Player wins if he defeats the boss monster. The princess is then rescued
-
 Room = Struct.new(:description, :connections, :treasure)
 
 rooms = {
@@ -27,22 +16,17 @@ rooms = {
 
 equipment = Array.new
 
-
-def input_a_room_name?(rooms, input)
-  rooms.keys.include?(input)
-end
-
-def input_is_rooms_you_can_connect_to?(room, input)
+def input_is_a_room_you_can_connect_to?(room, input)
   room.connections.include?(input)
 end
 
-def input_does_room_have_treasure(room)
+def does_room_have_treasure?(room)
   room.treasure.empty?()
 end
 
-def is_door_locked(input, equipment)
+def is_door_locked?(room_number, equipment)
   key = equipment.include?("key")
-  if input == "4" && key == true
+  if room_number == "4" && key == true
     room[4]
   else
     puts "The door is locked. Find the key"
@@ -71,7 +55,46 @@ end
 
 def describe_room(room)
   puts room.description
-  puts "This room connects to:" + room.connections.join("-")
+  puts "This room connects to: " + room.connections.join("-")
+end
+
+def sanitize_input(input)
+  input.strip.downcase
+end
+
+def input_looks_like_a_room_name?(input)
+  input =~ /\d+/
+end
+
+def move_to_new_room(current_room, new_room)
+  current_room = new_room
+end
+
+def parse_command(rooms, room, equipment, input)
+  input = sanitize_input(input)
+
+  if input == "inventory"
+    check_inventory(input)
+  elsif input == "open"
+    if does_room_have_treasure?(room)
+      open_treasure_chest(room, input)
+    else
+      puts "There is nothing to open"
+    end
+  elsif input_looks_like_a_room_name?(input)
+    if input_is_a_room_you_can_connect_to?(room, input)
+      is_door_locked?(input, equipment)
+      move_to_new_room(room, rooms[input])
+      describe_room(room)
+    else
+      puts "Connection to room does not exist"
+    end
+  elsif input == "quit"
+    puts "Thanks for playing! Quitting."
+    exit
+  else
+    puts "I did not understand."
+  end
 end
 
 puts "Welcome to the game!"
@@ -79,29 +102,8 @@ puts "Welcome to the game!"
 room = rooms["START"]
 describe_room(room)
 
-
-#NEEDS REGEX TO TELL THE DIFFERENCE BETWEEN STRINGS AND INTEGERS - MOG
 loop do
-  decision = gets.strip
-  input_a_room_name?(rooms, decision)
-  puts equipment.empty?
-  if
-    if decision == "inventory"
-      check_inventory(decision)
-    end
-    
-    if input_does_room_have_treasure(room) == false
-       open_treasure_chest(room,decision)
-    else
-      puts "There is nothing to open"
-    end
+  decision = gets
 
-    if input_is_rooms_you_can_connect_to?(room, decision)
-      is_door_locked(decision, equipment)
-      room = rooms[decision]
-      describe_room(room)
-    else
-      puts "Connection to room does not exist"
-    end
-  end
+  parse_command(rooms, room, equipment, decision)
 end
