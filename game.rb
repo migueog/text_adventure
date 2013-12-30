@@ -24,11 +24,11 @@ def input_is_rooms_you_can_connect_to?(room, input)
   room.connections.include?(input)
 end
 
-def input_does_room_have_treasure(room)
+def does_room_have_treasure?(room)
   room.treasure.empty?()
 end
 
-def is_door_locked(input, equipment)
+def is_door_locked?(input, equipment)
   key = equipment.include?("key")
   if input == "4" && key == true
     room[4]
@@ -67,25 +67,27 @@ puts "Welcome to the game!"
 room = rooms["START"]
 describe_room(room)
 
-
 #NEEDS REGEX TO TELL THE DIFFERENCE BETWEEN STRINGS AND INTEGERS - MOG
 loop do
   decision = gets.strip
+
   input_a_room_name?(rooms, decision)
+
   puts equipment.empty?
+
   if
     if decision == "inventory"
       check_inventory(decision)
     end
     
-    if input_does_room_have_treasure(room) == false
-       open_treasure_chest(room,decision)
+    if does_room_have_treasure?(room) == false
+       open_treasure_chest(room, decision)
     else
       puts "There is nothing to open"
     end
 
-    if input_is_rooms_you_can_connect_to?(room, decision)
-      is_door_locked(decision, equipment)
+    if input_is_a_room_you_can_connect_to?(room, decision)
+      is_door_locked?(decision, equipment)
       room = rooms[decision]
       describe_room(room)
     else
