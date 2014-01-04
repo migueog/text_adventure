@@ -5,8 +5,8 @@ This is a game where you move from room to room on a quest.
 ## TODO
 
 * Divide main method into two methods
-** One method runs the program
-** Second method determines which room the player is
+  * One method runs the program
+  * Second method determines which room the player is
 
 ## Layout
 * Player needs to navigate through a series of connected room
