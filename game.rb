@@ -1,23 +1,58 @@
+class Connection
+  def initialize(room_number, locked_state = :unlocked)
+    @room_number = room_number
+    @locked_state = locked_state
+  end
+
+  def locked?
+    locked_state == :locked
+  end
+
+  def unlocked?
+    !locked?
+  end
+
+  def connects_to
+    @room_number
+  end
+end
+
 Room = Struct.new(:description, :connections, :treasure)
+
+def connects_to(rooms)
+  rooms.map do |room|
+    room_number = room
+    locked_state = :unlocked
+
+    if room_number.respond_to?(:keys)
+      room_number = room.keys.first
+      locked_state = room.values.first
+    end
+
+    Connection.new(room_number, locked_state)
+  end
+end
 
 rooms = {
   "START" => Room.new("The room is illuminated by a single torch that hangs above a door ahead of you", 
-                  ["1"], []),
-  "1" => Room.new("This room is brightly illuminated. There are three doors",  ["2", "3", "4"], []),
-  "2" => Room.new("There is a treasure chest in the middle of the room", ["1"], ["Gold!"]),
-  "3" => Room.new("There is a treasure chest in the middle of the room", ["1"], ["Sword!"]),
-  "4" => Room.new("You are now in the fourth room", ["1","5", "6"], []),
-  "5" => Room.new("You are now in the fifth room", ["4", "7"], []),
-  "6" => Room.new("You are now in the sixth room", ["4", "9"], []),
-  "7" => Room.new("You are now in the seventh room", ["5", "8"], []),
-  "8" => Room.new("You are now in the eigth room", ["7", "9"], []),
-  "9" => Room.new("You are now in the ninth room", ["6", "8"], [])
+                  connects_to(["1"]), []),
+  "1" => Room.new("This room is brightly illuminated. There are three doors", connects_to(["2", "3", {"4" => :locked}]), []),
+  "2" => Room.new("There is a treasure chest in the middle of the room", connects_to(["1"]), ["Gold!"]),
+  "3" => Room.new("There is a treasure chest in the middle of the room", connects_to(["1"]), ["Sword!"]),
+  "4" => Room.new("You are now in the fourth room", connects_to(["1", "5", "6"]), []),
+  "5" => Room.new("You are now in the fifth room", connects_to(["4", "7"]), []),
+  "6" => Room.new("You are now in the sixth room", connects_to(["4", "9"]), []),
+  "7" => Room.new("You are now in the seventh room", connects_to(["5", "8"]), []),
+  "8" => Room.new("You are now in the eigth room", connects_to(["7", "9"]), []),
+  "9" => Room.new("You are now in the ninth room", connects_to(["6", "8"]), [])
 }
 
 equipment = Array.new
 
 def input_is_a_room_you_can_connect_to?(room, input)
-  room.connections.include?(input)
+  room.connections.find do |connection|
+    connection.connects_to == input
+  end
 end
 
 def does_room_have_treasure?(room)
@@ -55,7 +90,8 @@ end
 
 def describe_room(room)
   puts room.description
-  puts "This room connects to: " + room.connections.join("-")
+  connection_names = room.connections.map {|connection| connection.connects_to}
+  puts "This room connects to: " + connection_names.join("-")
 end
 
 def sanitize_input(input)
