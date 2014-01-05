@@ -69,26 +69,37 @@ def is_door_locked?(room_number, equipment)
 end
 
 def check_inventory(input)
-  if input == "inventory"
-    puts equipment
+  if input == "inventory" 
+    if equipment.length > 0
+      i = 0
+      while i < equipment.length
+        equipment[i]
+        puts "\n-----------" 
+      end
+    else
+      puts "Your inventory is empty"
+      puts "What would you like to do?"
+    end
   end
 end
 
 def open_treasure_chest(room, input)
   if input == "open"
-    if room.treasure == "Empty"
+    if room.treasure.empty? == true
       puts "There's nothing here :("
+      describe_room(room)
     else
       x = room.treasure
       puts "You have found" + x.to_s.strip
       equipment.push(room.treasure)
       room[:treasure] = "Empty"
       room[:description] = "There is a treasure chest in the middle of the room but you have already opened it"
-      end
+    end
   end
 end
 
 def describe_room(room)
+  puts "\n-------------------"
   puts room.description
   connection_names = room.connections.map {|connection| connection.connects_to}
   puts "This room connects to: " + connection_names.join("-")
@@ -110,7 +121,7 @@ def parse_command(rooms, room, equipment, input)
   input = sanitize_input(input)
 
   if input == "inventory"
-    check_inventory(input)
+    check_inventory(input, equipment)
   elsif input == "open"
     if does_room_have_treasure?(room)
       open_treasure_chest(room, input)
