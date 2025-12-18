@@ -1,0 +1,43 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+:root {
+  --bg-primary: #0a0a1a;
+  --bg-secondary: #12122a;
+  --bg-tertiary: #1a1a3a;
+  --text-primary: #ffffff;
+  --text-secondary: #a0a0c0;
+  --text-muted: #606080;
+  --accent-blue: #3498db;
+  --accent-green: #2ecc71;
+  --accent-red: #e74c3c;
+  --accent-yellow: #f1c40f;
+  --accent-purple: #9b59b6;
+  --surface-color: #4a90a4;
+  --tomb-color: #6b4a8a;
+  --border-color: #2a2a4a;
+}
+
+body {
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  min-height: 100vh;
+  line-height: 1.5;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+button {
+  cursor: pointer;
+  font-family: inherit;
+}
+
+input, select {
+  font-family: inherit;
+}
