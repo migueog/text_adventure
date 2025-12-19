@@ -1,7 +1,7 @@
 import React from 'react';
 import { useCampaign } from './hooks/useCampaign';
 import GameSetup from './components/GameSetup';
-import HexMap from './components/HexMap';
+import PhaserHexMap from './components/PhaserHexMap';
 import PlayerPanel from './components/PlayerPanel';
 import PhaseTracker from './components/PhaseTracker';
 import DiceRoller from './components/DiceRoller';
@@ -74,7 +74,7 @@ function App() {
         </aside>
 
         <section className="center-content">
-          <HexMap
+          <PhaserHexMap
             hexes={campaign.hexes}
             players={campaign.players}
             mapConfig={campaign.mapConfig}
