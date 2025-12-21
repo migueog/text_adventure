@@ -1,8 +1,8 @@
 'use client'
 
+import dynamic from 'next/dynamic'
 import { useCampaign } from '@/hooks/useCampaign'
 import GameSetup from '@/components/GameSetup'
-import PhaserHexMap from '@/components/PhaserHexMap'
 import PlayerPanel from '@/components/PlayerPanel'
 import PhaseTracker from '@/components/PhaseTracker'
 import DiceRoller from '@/components/DiceRoller'
@@ -10,6 +10,12 @@ import EventLog from '@/components/EventLog'
 import HexDetails from '@/components/HexDetails'
 import VictoryScreen from '@/components/VictoryScreen'
 import ThreatMeter from '@/components/ThreatMeter'
+
+// Dynamically import Phaser component with no SSR
+const PhaserHexMap = dynamic(() => import('@/components/PhaserHexMap'), {
+  ssr: false,
+  loading: () => <div className="phaser-loading">Loading map...</div>
+})
 
 export default function Home() {
   const campaign = useCampaign()
