@@ -85,6 +85,8 @@ A digital campaign manager for the Kill Team Ctesiphus Expedition narrative camp
 - **Vite**: Fast build tool and dev server
 - **Phaser 3**: WebGL-powered hex map rendering
 - **CSS3**: Custom styling with CSS variables
+- **Vitest**: Testing framework with React Testing Library
+- **TypeScript**: Type safety configuration (strict mode enabled)
 
 ## Getting Started
 
@@ -103,6 +105,12 @@ npm install
 
 # Start development server
 npm run dev
+
+# Run tests
+npm test
+
+# Run tests with coverage
+npm run test:coverage
 
 # Build for production
 npm run build
@@ -142,15 +150,45 @@ text_adventure/
 │   ├── utils/
 │   │   ├── dice.js                  # Dice rolling utilities
 │   │   └── hexUtils.js              # Hex grid calculations
+│   ├── test/
+│   │   └── setup.js                 # Vitest test setup
 │   ├── App.jsx                      # Main app component
 │   ├── App.css                      # Global styles
 │   └── main.jsx                     # React entry point
 ├── .github/
+│   ├── copilot-instructions.md      # Development standards
+│   ├── instructions/                # Code-specific guidelines
 │   └── issues/                      # Detailed issue specifications
+├── tsconfig.json                    # TypeScript configuration
+├── vitest.config.js                 # Test configuration
 ├── index.html
 ├── vite.config.js
 └── package.json
 ```
+
+## Development Standards
+
+This project follows strict development standards for code quality and maintainability:
+
+### Test-Driven Development (TDD)
+- **ALL new features require tests before implementation**
+- Coverage target: 85-90% for business logic
+- Use Vitest with React Testing Library
+- Run tests: `npm test` or `npm run test:coverage`
+
+### TypeScript
+- TypeScript configuration with strict mode enabled
+- New files should use TypeScript (.ts/.tsx)
+- No `any` types - use proper types or `unknown`
+- Define interfaces for all data structures
+
+### Code Quality
+- **Function size limit**: 10-20 lines per function
+- Add JSDoc comments to exported functions
+- Comment "WHY", not "WHAT"
+- Each function should do ONE thing
+
+See [.github/copilot-instructions.md](.github/copilot-instructions.md) for complete development standards.
 
 ## Roadmap
 

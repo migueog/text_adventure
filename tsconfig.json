@@ -5,7 +5,6 @@
     "lib": ["ES2020", "DOM", "DOM.Iterable"],
     "module": "ESNext",
     "skipLibCheck": true,
-    "strict": true,
 
     /* Bundler mode */
     "moduleResolution": "bundler",
@@ -15,13 +14,29 @@
     "noEmit": true,
     "jsx": "react-jsx",
 
-    /* Linting */
+    /* Linting - Strict Mode */
+    "strict": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
-    "esModuleInterop": true,
-    "allowSyntheticDefaultImports": true,
-    "forceConsistentCasingInFileNames": true
+    "noImplicitAny": true,
+    "strictNullChecks": true,
+    "strictFunctionTypes": true,
+    "strictBindCallApply": true,
+    "strictPropertyInitialization": true,
+    "noImplicitThis": true,
+    "alwaysStrict": true,
+
+    /* Additional Type Checking */
+    "noUncheckedIndexedAccess": true,
+    "noImplicitReturns": true,
+    "forceConsistentCasingInFileNames": true,
+
+    /* Path Resolution */
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["src/*"]
+    }
   },
   "include": ["src", "lib"],
   "references": [{ "path": "./tsconfig.node.json" }]
