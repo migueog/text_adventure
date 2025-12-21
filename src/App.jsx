@@ -8,6 +8,7 @@ import DiceRoller from './components/DiceRoller';
 import EventLog from './components/EventLog';
 import HexDetails from './components/HexDetails';
 import VictoryScreen from './components/VictoryScreen';
+import ThreatMeter from './components/ThreatMeter';
 import './App.css';
 
 function App() {
@@ -69,6 +70,11 @@ function App() {
             players={campaign.players}
             currentPlayerIndex={campaign.currentPlayerIndex}
             onUpdatePlayer={campaign.updatePlayer}
+          />
+          <ThreatMeter
+            currentThreat={campaign.threatLevel}
+            targetThreat={campaign.targetThreatLevel}
+            soloMode={campaign.soloMode}
           />
           <DiceRoller />
         </aside>

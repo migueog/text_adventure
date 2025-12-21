@@ -84,12 +84,16 @@ export const TOMB_CONDITIONS = {
   36: { name: 'Overlord\'s Attention', description: 'You have been noticed. Threat increases by 2.', effect: 'threatIncrease', value: 2 }
 };
 
+// Map size tiers based on official rules:
+// 2-3 players: 5x5 (smaller map)
+// 4-5 players: 6x6 (standard map)  
+// 6 players: 7x7 (larger map)
 export const MAP_CONFIGS = {
   2: { name: 'Small (2 Players)', rows: 5, cols: 5, surfaceRows: 2, tombRows: 3 },
-  3: { name: 'Medium (3 Players)', rows: 6, cols: 6, surfaceRows: 3, tombRows: 3 },
-  4: { name: 'Standard (4 Players)', rows: 7, cols: 7, surfaceRows: 3, tombRows: 4 },
-  5: { name: 'Large (5 Players)', rows: 8, cols: 7, surfaceRows: 3, tombRows: 5 },
-  6: { name: 'Extra Large (6 Players)', rows: 8, cols: 8, surfaceRows: 3, tombRows: 5 }
+  3: { name: 'Small (3 Players)', rows: 5, cols: 5, surfaceRows: 2, tombRows: 3 },
+  4: { name: 'Standard (4 Players)', rows: 6, cols: 6, surfaceRows: 3, tombRows: 3 },
+  5: { name: 'Standard (5 Players)', rows: 6, cols: 6, surfaceRows: 3, tombRows: 3 },
+  6: { name: 'Large (6 Players)', rows: 7, cols: 7, surfaceRows: 3, tombRows: 4 }
 };
 
 export const PLAYER_COLORS = [
@@ -145,7 +149,10 @@ export const THREAT_LEVELS = {
   4: 'Active',
   5: 'Hostile',
   6: 'Aggressive',
-  7: 'Awakened'
+  7: 'Awakened',
+  8: 'Enraged',
+  9: 'Cataclysmic',
+  10: 'Apocalyptic'
 };
 
 export const VICTORY_CATEGORIES = [
