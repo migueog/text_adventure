@@ -3,6 +3,31 @@ import { MAP_CONFIGS, SURFACE_LOCATIONS, TOMB_LOCATIONS, SURFACE_CONDITIONS, TOM
 import { rollD36, parseValue } from '../utils/dice';
 import { hexId, hexDistance } from '../utils/hexUtils';
 
+// Constants for SP management
+const SP_MIN = 0;
+const SP_MAX = 10;
+
+// Helper function to clamp SP within valid range
+const clampSP = (value) => Math.max(SP_MIN, Math.min(SP_MAX, value));
+
+// Helper function to add history entry
+const addHistoryEntry = (player, round, phase, spChange, cpChange, reason) => {
+  const entry = {
+    round,
+    phase,
+    timestamp: new Date().toISOString(),
+    spBefore: player.supplyPoints,
+    spAfter: clampSP(player.supplyPoints + spChange),
+    spChange,
+    cpBefore: player.campaignPoints,
+    cpAfter: player.campaignPoints + cpChange,
+    cpChange,
+    reason
+  };
+  
+  return [...(player.history || []), entry];
+};
+
 const createInitialHexGrid = (config) => {
   const hexes = {};
   for (let row = 0; row < config.rows; row++) {
@@ -42,7 +67,8 @@ const createPlayer = (id, name, color, startHex) => ({
   gamesWon: 0,
   bases: [startHex],
   camps: [],
-  canDemolish: false // Set to true after winning a battle
+  canDemolish: false, // Set to true after winning a battle
+  history: [] // Track SP/CP changes over time
 });
 
 export function useCampaign() {
@@ -147,11 +173,16 @@ export function useCampaign() {
       if (spGain > 0 || cpGain > 0) {
         setPlayers(prevPlayers => {
           const updated = [...prevPlayers];
+          const player = updated[currentPlayerIndex];
+          const newSP = clampSP(player.supplyPoints + spGain);
+          const newCP = player.campaignPoints + cpGain;
+          
           updated[currentPlayerIndex] = {
-            ...updated[currentPlayerIndex],
-            supplyPoints: updated[currentPlayerIndex].supplyPoints + spGain,
-            campaignPoints: updated[currentPlayerIndex].campaignPoints + cpGain,
-            hexesExplored: updated[currentPlayerIndex].hexesExplored + 1
+            ...player,
+            supplyPoints: newSP,
+            campaignPoints: newCP,
+            hexesExplored: player.hexesExplored + 1,
+            history: addHistoryEntry(player, currentRound, PHASES[currentPhase], spGain, cpGain, `Explored ${location.name}`)
           };
           if (spGain > 0) addEvent(`Gained ${spGain} SP from ${location.name}`, 'reward');
           if (cpGain > 0) addEvent(`Gained ${cpGain} CP from ${location.name}`, 'reward');
@@ -197,10 +228,13 @@ export function useCampaign() {
         return prev;
       }
 
+      const newSP = clampSP(player.supplyPoints - cost);
+      
       updated[playerIndex] = {
         ...player,
         position: targetHex,
-        supplyPoints: player.supplyPoints - cost
+        supplyPoints: newSP,
+        history: addHistoryEntry(player, currentRound, PHASES[currentPhase], -cost, 0, `Moved to hex ${targetHex}`)
       };
 
       addEvent(`${player.name} moved to ${targetHex} (cost: ${cost} SP)`, 'movement');
@@ -211,7 +245,7 @@ export function useCampaign() {
     if (hexes[targetHex] && !hexes[targetHex].explored) {
       exploreHex(targetHex);
     }
-  }, [hexes, exploreHex, addEvent]);
+  }, [hexes, currentRound, currentPhase, exploreHex, addEvent]);
 
   const performAction = useCallback((action, params = {}) => {
     const player = players[currentPlayerIndex];
@@ -231,18 +265,28 @@ export function useCampaign() {
         if (hex?.condition?.effect === 'bonusResupply') spGain += 1;
         if (hex?.condition?.effect === 'reducedResupply') spGain -= 1;
 
-        spGain = Math.max(0, Math.min(spGain, 10 - player.supplyPoints));
+        // Ensure we don't exceed max SP
+        const actualGain = Math.max(0, Math.min(spGain, SP_MAX - player.supplyPoints));
+        
+        if (actualGain === 0) {
+          addEvent(`${player.name} is already at max SP (10)`, 'info');
+          break;
+        }
 
         setPlayers(prev => {
           const updated = [...prev];
+          const currentPlayer = updated[currentPlayerIndex];
+          const newSP = clampSP(currentPlayer.supplyPoints + actualGain);
+          
           updated[currentPlayerIndex] = {
-            ...updated[currentPlayerIndex],
-            supplyPoints: Math.min(10, updated[currentPlayerIndex].supplyPoints + spGain)
+            ...currentPlayer,
+            supplyPoints: newSP,
+            history: addHistoryEntry(currentPlayer, currentRound, PHASES[currentPhase], actualGain, 0, 'Resupply action')
           };
           return updated;
         });
 
-        addEvent(`${player.name} resupplied: +${spGain} SP`, 'action');
+        addEvent(`${player.name} resupplied: +${actualGain} SP`, 'action');
         break;
       }
 
@@ -251,15 +295,19 @@ export function useCampaign() {
         const cost = distance;
 
         if (player.supplyPoints < cost) {
-          addEvent(`Not enough SP to scout (need ${cost})`, 'error');
+          addEvent(`Not enough SP to scout (need ${cost}, have ${player.supplyPoints})`, 'error');
           return;
         }
 
         setPlayers(prev => {
           const updated = [...prev];
+          const currentPlayer = updated[currentPlayerIndex];
+          const newSP = clampSP(currentPlayer.supplyPoints - cost);
+          
           updated[currentPlayerIndex] = {
-            ...updated[currentPlayerIndex],
-            supplyPoints: updated[currentPlayerIndex].supplyPoints - cost
+            ...currentPlayer,
+            supplyPoints: newSP,
+            history: addHistoryEntry(currentPlayer, currentRound, PHASES[currentPhase], -cost, 0, `Scouted hex ${targetHex}`)
           };
           return updated;
         });
@@ -271,33 +319,33 @@ export function useCampaign() {
 
       case 'SEARCH': {
         const hex = hexes[player.position];
+        let spGain = 0;
+        let cpGain = 0;
         let reward = null;
 
         if (hex?.location?.effect === 'searchSP') {
-          const spGain = parseValue(hex.location.value || 'D3');
-          setPlayers(prev => {
-            const updated = [...prev];
-            updated[currentPlayerIndex] = {
-              ...updated[currentPlayerIndex],
-              supplyPoints: Math.min(10, updated[currentPlayerIndex].supplyPoints + spGain)
-            };
-            return updated;
-          });
+          spGain = parseValue(hex.location.value || 'D3');
           reward = `+${spGain} SP`;
         } else if (hex?.location?.effect === 'searchCP') {
-          const cpGain = parseValue(hex.location.value || 1);
-          setPlayers(prev => {
-            const updated = [...prev];
-            updated[currentPlayerIndex] = {
-              ...updated[currentPlayerIndex],
-              campaignPoints: updated[currentPlayerIndex].campaignPoints + cpGain
-            };
-            return updated;
-          });
+          cpGain = parseValue(hex.location.value || 1);
           reward = `+${cpGain} CP`;
         }
 
-        if (reward) {
+        if (spGain > 0 || cpGain > 0) {
+          setPlayers(prev => {
+            const updated = [...prev];
+            const currentPlayer = updated[currentPlayerIndex];
+            const newSP = clampSP(currentPlayer.supplyPoints + spGain);
+            const newCP = currentPlayer.campaignPoints + cpGain;
+            
+            updated[currentPlayerIndex] = {
+              ...currentPlayer,
+              supplyPoints: newSP,
+              campaignPoints: newCP,
+              history: addHistoryEntry(currentPlayer, currentRound, PHASES[currentPhase], spGain, cpGain, 'Search action')
+            };
+            return updated;
+          });
           addEvent(`${player.name} searched and found: ${reward}`, 'action');
         } else {
           addEvent(`${player.name} searched but found nothing`, 'action');
@@ -324,12 +372,21 @@ export function useCampaign() {
         if (hex?.location?.effect === 'freeEncamp') actualCost = 0;
         if (hex?.condition?.effect === 'cheapEncamp') actualCost = Math.max(0, actualCost - 1);
 
+        if (player.supplyPoints < actualCost) {
+          addEvent(`Not enough SP to encamp (need ${actualCost}, have ${player.supplyPoints})`, 'error');
+          return;
+        }
+
         setPlayers(prev => {
           const updated = [...prev];
+          const currentPlayer = updated[currentPlayerIndex];
+          const newSP = clampSP(currentPlayer.supplyPoints - actualCost);
+          
           updated[currentPlayerIndex] = {
-            ...updated[currentPlayerIndex],
-            supplyPoints: updated[currentPlayerIndex].supplyPoints - actualCost,
-            camps: [...updated[currentPlayerIndex].camps, player.position]
+            ...currentPlayer,
+            supplyPoints: newSP,
+            camps: [...currentPlayer.camps, player.position],
+            history: addHistoryEntry(currentPlayer, currentRound, PHASES[currentPhase], -actualCost, 0, `Built camp at hex ${player.position}`)
           };
           return updated;
         });
@@ -383,29 +440,35 @@ export function useCampaign() {
         }
         break;
       }
+      
+      default:
+        addEvent(`Unknown action: ${action}`, 'error');
     }
-  }, [players, hexes, currentPlayerIndex, exploreHex, addEvent]);
+  }, [players, hexes, currentPlayerIndex, currentRound, currentPhase, exploreHex, addEvent]);
 
   const recordBattle = useCallback((result, opponentIndex = null, operativesKilled = 0) => {
     setPlayers(prev => {
       const updated = [...prev];
       const player = updated[currentPlayerIndex];
+      const newSP = clampSP(player.supplyPoints + result.spGain);
+      const newCP = player.campaignPoints + result.cpGain;
 
       updated[currentPlayerIndex] = {
         ...player,
-        supplyPoints: Math.min(10, player.supplyPoints + result.spGain),
-        campaignPoints: player.campaignPoints + result.cpGain,
+        supplyPoints: newSP,
+        campaignPoints: newCP,
         gamesPlayed: player.gamesPlayed + 1,
         gamesWon: result.name === 'Victory' ? player.gamesWon + 1 : player.gamesWon,
         operativesKilled: player.operativesKilled + operativesKilled,
-        canDemolish: result.name === 'Victory'
+        canDemolish: result.name === 'Victory',
+        history: addHistoryEntry(player, currentRound, PHASES[currentPhase], result.spGain, result.cpGain, `Battle result: ${result.name}`)
       };
 
       return updated;
     });
 
     addEvent(`${players[currentPlayerIndex].name}: ${result.name} (+${result.cpGain} CP, +${result.spGain} SP)`, 'battle');
-  }, [players, currentPlayerIndex, addEvent]);
+  }, [players, currentPlayerIndex, currentRound, currentPhase, addEvent]);
 
   const nextPhase = useCallback(() => {
     if (currentPhase < PHASES.length - 1) {
