@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 
 function PlayerCard({ player, isActive, onUpdate }) {
   const [editing, setEditing] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
   const [editName, setEditName] = useState(player.name);
   const [editTeamName, setEditTeamName] = useState(player.killTeamName);
 
@@ -9,6 +10,8 @@ function PlayerCard({ player, isActive, onUpdate }) {
     onUpdate(player.id, { name: editName, killTeamName: editTeamName });
     setEditing(false);
   };
+
+  const recentHistory = (player.history || []).slice(-5).reverse();
 
   return (
     <div
@@ -92,6 +95,48 @@ function PlayerCard({ player, isActive, onUpdate }) {
           <span className="asset-label">Bases: {player.bases.length}</span>
           <span className="asset-label">Camps: {player.camps.length}</span>
         </div>
+
+        {(player.history && player.history.length > 0) && (
+          <div className="player-history-section">
+            <button 
+              className="history-toggle"
+              onClick={() => setShowHistory(!showHistory)}
+            >
+              {showHistory ? '▼' : '▶'} Recent Activity ({player.history.length})
+            </button>
+            
+            {showHistory && (
+              <div className="history-list">
+                {recentHistory.map((entry, idx) => (
+                  <div key={idx} className="history-entry">
+                    <div className="history-header">
+                      <span className="history-round">R{entry.round}</span>
+                      <span className="history-phase">{entry.phase}</span>
+                    </div>
+                    <div className="history-reason">{entry.reason}</div>
+                    <div className="history-changes">
+                      {entry.spChange !== 0 && (
+                        <span className={`sp-change ${entry.spChange > 0 ? 'positive' : 'negative'}`}>
+                          {entry.spChange > 0 ? '+' : ''}{entry.spChange} SP
+                        </span>
+                      )}
+                      {entry.cpChange !== 0 && (
+                        <span className={`cp-change ${entry.cpChange > 0 ? 'positive' : 'negative'}`}>
+                          {entry.cpChange > 0 ? '+' : ''}{entry.cpChange} CP
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+                {player.history.length > 5 && (
+                  <div className="history-more">
+                    ... and {player.history.length - 5} more
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
