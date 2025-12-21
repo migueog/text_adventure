@@ -1,12 +1,18 @@
 # Dependencies
 node_modules/
+
+# Package manager lock files (keep only bun.lock)
 package-lock.json
+yarn.lock
+pnpm-lock.yaml
 
 # Build output
 dist/
 build/
+.next/
+out/
 
-# Vite cache
+# Vite cache (legacy - can remove after full migration)
 .vite/
 
 # IDE
