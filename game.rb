@@ -68,7 +68,7 @@ def is_door_locked?(room_number, equipment)
   end
 end
 
-def check_inventory(input)
+def check_inventory(input, equipment)
   if input == "inventory" 
     if equipment.length > 0
       i = 0
@@ -114,7 +114,7 @@ def input_looks_like_a_room_name?(input)
 end
 
 def move_to_new_room(current_room, new_room)
-  current_room = new_room
+  new_room
 end
 
 def parse_command(rooms, room, equipment, input)
