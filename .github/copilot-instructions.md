@@ -58,6 +58,23 @@
 - Strict TypeScript mode
 - Functional patterns where appropriate
 
+## Pull Request Standards
+
+### PR Title Format
+- Always include issue number: `[#123] Add user authentication`
+- Use clear, descriptive titles
+
+### PR Description Requirements
+- **Link to related issue** using contextual keywords:
+  - `Fixes #123` - for bug fixes
+  - `Closes #123` - for feature implementations or general tasks
+  - `Resolves #123` - for resolving issues or discussions
+  - `Implements #123` - for new features or enhancements
+  - `Addresses #123` - for partial solutions or related work
+- **Reference milestone** if applicable: `Part of Milestone: [milestone-name]`
+- Include test plan or testing notes
+- List any breaking changes
+
 ## Pre-Implementation Checklist
 Before writing ANY implementation code:
 1. ✅ Write test file first (.test.ts/.test.tsx)
