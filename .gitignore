@@ -1,12 +1,13 @@
 # Dependencies
 node_modules/
-package-lock.json
 
 # Build output
 dist/
 build/
+.next/
+out/
 
-# Vite cache
+# Vite cache (legacy - can remove after full migration)
 .vite/
 
 # IDE
