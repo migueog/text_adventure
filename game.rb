@@ -131,7 +131,7 @@ def parse_command(rooms, room, equipment, input)
   elsif input_looks_like_a_room_name?(input)
     if input_is_a_room_you_can_connect_to?(room, input)
       is_door_locked?(input, equipment)
-      move_to_new_room(room, rooms[input])
+      room = move_to_new_room(room, rooms[input])
       describe_room(room)
     else
       puts "Connection to room does not exist"
@@ -142,15 +142,24 @@ def parse_command(rooms, room, equipment, input)
   else
     puts "I did not understand."
   end
+  
+  room
 end
 
-puts "Welcome to the game!"
-
-room = rooms["START"]
-describe_room(room)
-
-loop do
-  decision = gets
-
-  parse_command(rooms, room, equipment, decision)
+def get_starting_room(rooms)
+  rooms["START"]
 end
+
+def run_game(rooms, equipment)
+  puts "Welcome to the game!"
+  
+  room = get_starting_room(rooms)
+  describe_room(room)
+  
+  loop do
+    decision = gets
+    room = parse_command(rooms, room, equipment, decision)
+  end
+end
+
+run_game(rooms, equipment)
