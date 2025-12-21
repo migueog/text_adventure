@@ -47,7 +47,7 @@ export default function Home() {
     )
   }
 
-  const currentPlayer = campaign.players[campaign.currentPlayerIndex]
+  const currentPlayer = campaign.players[campaign.currentPlayerIndex] || null
 
   return (
     <div className="app">
@@ -97,7 +97,6 @@ export default function Home() {
             currentPlayer={currentPlayer}
             players={campaign.players}
             hexes={campaign.hexes}
-            mapConfig={campaign.mapConfig}
             threatLevel={campaign.threatLevel}
             targetThreatLevel={campaign.targetThreatLevel}
             onNextPhase={campaign.nextPhase}
@@ -105,7 +104,6 @@ export default function Home() {
             onAction={campaign.performAction}
             onBattle={campaign.recordBattle}
             calculateEncampCost={campaign.calculateEncampCost}
-            selectedHex={campaign.selectedHex}
           />
           <HexDetails
             hex={campaign.selectedHex ? campaign.hexes[campaign.selectedHex] : undefined}
