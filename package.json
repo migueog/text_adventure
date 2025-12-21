@@ -5,9 +5,10 @@
   "type": "module",
   "description": "Kill Team Ctesiphus Expedition Campaign Manager",
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "preview": "vite preview",
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
     "test": "vitest",
     "test:ui": "vitest --ui",
     "test:run": "vitest run",
@@ -19,10 +20,11 @@
   },
   "dependencies": {
     "drizzle-orm": "^0.45.1",
+    "next": "^16.1.0",
     "pg": "^8.16.3",
     "phaser": "^3.80.0",
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0"
+    "react": "^19.2.3",
+    "react-dom": "^19.2.3"
   },
   "devDependencies": {
     "@testing-library/jest-dom": "^6.9.1",
