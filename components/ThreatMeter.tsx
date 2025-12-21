@@ -1,4 +1,4 @@
 'use client'
-export default function ThreatMeter(props: any) {
+export default function ThreatMeter(_props: any) {
   return <div>ThreatMeter Component - To be migrated</div>
 }

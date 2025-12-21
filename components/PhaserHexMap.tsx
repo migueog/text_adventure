@@ -1,4 +1,4 @@
 'use client'
-export default function PhaserHexMap(props: any) {
+export default function PhaserHexMap(_props: any) {
   return <div>PhaserHexMap Component - To be migrated</div>
 }

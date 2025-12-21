@@ -1,6 +1,5 @@
 'use client'
 
-import React from 'react'
 import { useCampaign } from '@/hooks/useCampaign'
 import GameSetup from '@/components/GameSetup'
 import PhaserHexMap from '@/components/PhaserHexMap'
@@ -109,7 +108,7 @@ export default function Home() {
             selectedHex={campaign.selectedHex}
           />
           <HexDetails
-            hex={campaign.hexes[campaign.selectedHex]}
+            hex={campaign.selectedHex ? campaign.hexes[campaign.selectedHex] : undefined}
             players={campaign.players}
           />
         </aside>

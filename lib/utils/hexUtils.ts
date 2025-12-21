@@ -73,7 +73,7 @@ export function hexDistance(row1: number, col1: number, row2: number, col2: numb
  * Get all neighbors of a hex
  */
 export function getNeighbors(row: number, col: number, maxRows: number, maxCols: number): HexPosition[] {
-  const directions = row % 2 === 0
+  const directions: [number, number][] = row % 2 === 0
     ? [
         [-1, -1], [-1, 0],  // top-left, top-right
         [0, -1], [0, 1],    // left, right
@@ -174,7 +174,9 @@ export function hexId(row: number, col: number): string {
  * Parse hex ID back to coordinates
  */
 export function parseHexId(id: string): OffsetCoords {
-  const [row, col] = id.split(',').map(Number)
+  const parts = id.split(',').map(Number)
+  const row = parts[0] ?? 0
+  const col = parts[1] ?? 0
   return { row, col }
 }
 
