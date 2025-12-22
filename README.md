@@ -189,39 +189,72 @@ npm run db:migrate
 
 ```
 text_adventure/
-├── src/
-│   ├── components/        # React components
-│   │   ├── ThreatMeter.jsx          # Threat level visual display
-│   │   ├── PlayerPanel.jsx          # Player cards with history
-│   │   ├── PhaseTracker.jsx         # Phase management UI
-│   │   ├── PhaserHexMap/            # Phaser hex map renderer
-│   │   ├── GameSetup.jsx            # Campaign setup screen
-│   │   ├── VictoryScreen.jsx        # End game results
-│   │   ├── DiceRoller.jsx           # D36 dice roller
-│   │   ├── EventLog.jsx             # Action history log
-│   │   └── HexDetails.jsx           # Hex information panel
-│   ├── hooks/
-│   │   └── useCampaign.js           # Main campaign state management
-│   ├── data/
-│   │   └── campaignData.js          # Game data (locations, conditions, etc.)
-│   ├── utils/
-│   │   ├── dice.js                  # Dice rolling utilities
-│   │   └── hexUtils.js              # Hex grid calculations
-│   ├── test/
-│   │   └── setup.js                 # Vitest test setup
-│   ├── App.jsx                      # Main app component
-│   ├── App.css                      # Global styles
-│   └── main.jsx                     # React entry point
+├── app/                       # Next.js app directory
+│   ├── page.tsx              # Main page component
+│   ├── layout.tsx            # Root layout
+│   └── ...                   # Other routes and layouts
+├── components/                # React components
+│   ├── ThreatMeter.jsx       # Threat level visual display
+│   ├── PlayerPanel.jsx       # Player cards with history
+│   ├── PhaseTracker.jsx      # Phase management UI
+│   ├── PhaserHexMap/         # Phaser hex map renderer
+│   ├── GameSetup.jsx         # Campaign setup screen
+│   ├── VictoryScreen.jsx     # End game results
+│   ├── DiceRoller.jsx        # D36 dice roller
+│   ├── EventLog.jsx          # Action history log
+│   └── HexDetails.jsx        # Hex information panel
+├── lib/                       # Shared libraries
+│   ├── db/                   # Database module (PostgreSQL + Drizzle ORM)
+│   │   ├── schema.ts         # Database schema definitions
+│   │   ├── client.ts         # Database client with connection pooling
+│   │   ├── migrate.ts        # Migration runner script
+│   │   ├── test-connection.ts # Connection test utility
+│   │   ├── verify-setup.ts   # Setup verification script
+│   │   ├── migrations/       # SQL migration files
+│   │   └── README.md         # Database module documentation
+│   ├── utils/                # Utility functions
+│   │   ├── dice.ts           # Dice rolling utilities
+│   │   └── hexUtils.ts       # Hex grid calculations
+│   └── data/
+│       └── campaignData.ts   # Game data (locations, conditions)
+├── hooks/                     # Custom React hooks
+│   └── useCampaign.js        # Main campaign state management
+├── types/                     # TypeScript type definitions
 ├── .github/
 │   ├── copilot-instructions.md      # Development standards
 │   ├── instructions/                # Code-specific guidelines
 │   └── issues/                      # Detailed issue specifications
-├── tsconfig.json                    # TypeScript configuration
-├── vitest.config.js                 # Test configuration
-├── index.html
-├── vite.config.js
-└── package.json
+├── DATABASE_SETUP.md          # Complete database setup guide
+├── DATABASE_SCHEMA.md         # Database schema reference
+├── DATABASE_COMMANDS.md       # Database commands quick reference
+├── TEAM_ONBOARDING.md         # Quick start for new contributors
+├── tsconfig.json              # TypeScript configuration
+├── vitest.config.js           # Test configuration
+├── next.config.mjs            # Next.js configuration
+├── drizzle.config.ts          # Drizzle ORM configuration
+└── package.json               # Project dependencies and scripts
 ```
+
+## Documentation
+
+This project has comprehensive documentation to help you get started:
+
+### For New Team Members
+- **[TEAM_ONBOARDING.md](./TEAM_ONBOARDING.md)** - Quick start guide for new contributors (5-10 minutes)
+- **[DATABASE_COMMANDS.md](./DATABASE_COMMANDS.md)** - Quick reference for all database commands
+
+### Database Setup & Management
+- **[DATABASE_SETUP.md](./DATABASE_SETUP.md)** - Complete guide for setting up database hosting
+- **[DATABASE_SCHEMA.md](./DATABASE_SCHEMA.md)** - Database schema reference and documentation
+- **[lib/db/README.md](./lib/db/README.md)** - Database module documentation
+
+### Development
+- **[.github/copilot-instructions.md](.github/copilot-instructions.md)** - Development standards and guidelines
+- **[TESTING.md](./TESTING.md)** - Testing guidelines and best practices
+
+### Project Planning
+- **[FUTURE_FEATURES.md](./FUTURE_FEATURES.md)** - Planned features and roadmap
+- **[.github/issues/](.github/issues/)** - Detailed issue specifications
 
 ## Development Standards
 
