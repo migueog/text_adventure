@@ -19,22 +19,25 @@ describe('GameSetup', () => {
   it('should have player count selector', () => {
     render(<GameSetup onStartGame={mockOnStartGame} />)
     
-    // Should have options for 2-6 players
-    const playerOptions = screen.getAllByRole('radio', { name: /player/i })
-    expect(playerOptions.length).toBeGreaterThan(0)
+    // Should have buttons for player counts
+    expect(screen.getByText('2')).toBeInTheDocument()
+    expect(screen.getByText('3')).toBeInTheDocument()
+    expect(screen.getByText('4')).toBeInTheDocument()
+    
+    // "5" and "6" appear in both player count and threat level sections
+    const playerCountSection = screen.getByText(/Number of Players/i).closest('.setting-group')
+    expect(playerCountSection).toBeInTheDocument()
   })
 
   it('should allow changing player count', () => {
     render(<GameSetup onStartGame={mockOnStartGame} />)
     
-    // Find and click different player count option
-    const fourPlayerOption = screen.getByLabelText(/4 players?/i) || 
-                            screen.getByRole('radio', { name: /4/ })
+    // Find and click the button with text "3"
+    const threePlayerButton = screen.getByText('3')
+    fireEvent.click(threePlayerButton)
     
-    if (fourPlayerOption) {
-      fireEvent.click(fourPlayerOption)
-      expect(fourPlayerOption).toBeChecked()
-    }
+    // Button should now have 'active' class
+    expect(threePlayerButton).toHaveClass('active')
   })
 
   it('should have target threat selector', () => {
@@ -48,10 +51,8 @@ describe('GameSetup', () => {
   it('should have solo mode toggle', () => {
     render(<GameSetup onStartGame={mockOnStartGame} />)
     
-    const soloToggle = screen.getByLabelText(/solo/i) || 
-                       screen.getByRole('checkbox', { name: /solo/i })
-    
-    expect(soloToggle).toBeInTheDocument()
+    const soloButton = screen.getByText(/Solo\/Co-op/i)
+    expect(soloButton).toBeInTheDocument()
   })
 
   it('should have player name inputs', () => {
@@ -106,37 +107,33 @@ describe('GameSetup', () => {
   it('should display map configuration info', () => {
     render(<GameSetup onStartGame={mockOnStartGame} />)
     
-    // Should show some map info (rows, cols, hexes, etc.)
-    const mapInfo = screen.getByText(/map|grid|hex/i)
-    expect(mapInfo).toBeInTheDocument()
+    // Should show map preview section
+    expect(screen.getByText(/Map Preview/i)).toBeInTheDocument()
   })
 
   it('should toggle solo mode', () => {
     render(<GameSetup onStartGame={mockOnStartGame} />)
     
-    const soloToggle = screen.getByLabelText(/solo/i) || 
-                       screen.getByRole('checkbox', { name: /solo/i })
+    const soloButton = screen.getByText(/Solo\/Co-op/i)
+    fireEvent.click(soloButton)
     
-    fireEvent.click(soloToggle)
-    expect(soloToggle).toBeChecked()
-    
-    fireEvent.click(soloToggle)
-    expect(soloToggle).not.toBeChecked()
+    // Button should now have 'active' class
+    expect(soloButton).toHaveClass('active')
   })
 
   it('should show appropriate number of player name fields', () => {
     render(<GameSetup onStartGame={mockOnStartGame} />)
     
-    // Change to 3 players if possible
-    const threePlayerOption = screen.queryByLabelText(/3 players?/i)
-    if (threePlayerOption) {
-      fireEvent.click(threePlayerOption)
-      
-      // Should show visible inputs for selected player count
-      const visibleInputs = screen.getAllByRole('textbox')
-        .filter(input => !input.closest('[style*="display: none"]'))
-      
-      expect(visibleInputs.length).toBeGreaterThanOrEqual(3)
-    }
+    // Default is 4 players, so should have 4 inputs
+    const inputs = screen.getAllByRole('textbox')
+    expect(inputs.length).toBe(4)
+    
+    // Change to 3 players
+    const threePlayerButton = screen.getByText('3')
+    fireEvent.click(threePlayerButton)
+    
+    // Should now show 3 inputs
+    const updatedInputs = screen.getAllByRole('textbox')
+    expect(updatedInputs.length).toBe(3)
   })
 })
