@@ -3,6 +3,10 @@ import { db, closeDb } from './client'
 import { sql } from 'drizzle-orm'
 import * as fs from 'fs'
 import * as path from 'path'
+import { config } from 'dotenv'
+
+// Load environment variables from .env file
+config()
 
 /**
  * Database Setup Verification Script

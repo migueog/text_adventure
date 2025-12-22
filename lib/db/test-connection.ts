@@ -1,5 +1,9 @@
 import { db, closeDb, getPoolStats } from './client'
 import { sql } from 'drizzle-orm'
+import { config } from 'dotenv'
+
+// Load environment variables from .env file
+config()
 
 /**
  * Database Connection Test Utility
