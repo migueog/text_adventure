@@ -13,22 +13,39 @@ This directory contains the Drizzle ORM database configuration and schema for th
 
 ### 1. Set Up Database
 
-Create a PostgreSQL database and add the connection string to your `.env` file:
+**Choose a hosting provider** (see [DATABASE_SETUP.md](../../DATABASE_SETUP.md)):
+- **Neon** (recommended): Free 10 GB, serverless-optimized
+- **Supabase**: Free 500 MB, includes auth/storage
+- **Local PostgreSQL**: For offline development
 
+**Configure connection:**
 ```bash
 cp .env.example .env
-# Edit .env and update DATABASE_URL
+# Edit .env and add your DATABASE_URL
 ```
 
-### 2. Run Migrations
+### 2. Test Connection
+
+Verify your database is accessible:
+```bash
+npm run db:test
+```
+
+### 3. Run Migrations
 
 Apply the database schema:
-
 ```bash
-npm run db:push
+npm run db:migrate
 ```
 
-### 3. Use in Your Application
+### 4. Verify Setup
+
+Ensure everything is configured correctly:
+```bash
+npm run db:verify
+```
+
+### 5. Use in Your Application
 
 Import and use the database client:
 
@@ -52,9 +69,35 @@ const newCampaign = await db.insert(campaigns).values({
 ## Available Scripts
 
 - `npm run db:generate` - Generate migration files from schema changes
-- `npm run db:push` - Apply schema directly to database
+- `npm run db:migrate` - Apply pending migrations to database
+- `npm run db:push` - Apply schema directly to database (prototyping only)
 - `npm run db:studio` - Open Drizzle Studio (visual database browser)
 - `npm run db:drop` - Drop the last migration
+- `npm run db:test` - Test database connection
+- `npm run db:verify` - Verify complete database setup
+
+### Script Usage
+
+**For Initial Setup:**
+```bash
+npm run db:test      # 1. Verify connection
+npm run db:migrate   # 2. Apply schema
+npm run db:verify    # 3. Verify everything
+```
+
+**For Schema Changes:**
+```bash
+npm run db:generate  # 1. Generate migration
+npm run db:migrate   # 2. Apply migration
+npm run db:studio    # 3. Verify changes
+```
+
+**For Troubleshooting:**
+```bash
+npm run db:test      # Test connection
+npm run db:verify    # Full verification
+VERBOSE=true npm run db:test  # Detailed connection info
+```
 
 ## Schema Overview
 
