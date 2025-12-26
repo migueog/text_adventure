@@ -305,6 +305,74 @@ describe('useCampaign hook', () => {
     })
   })
 
+  describe('Extended Campaign Mode', () => {
+    it('should initialize with extendedMode false', () => {
+      const { result } = renderHook(() => useCampaign())
+
+      expect(result.current.extendedMode).toBe(false)
+    })
+
+    it('should set extendedMode to true when enableExtendedMode is called', () => {
+      const { result } = renderHook(() => useCampaign())
+
+      act(() => {
+        result.current.startGame(2)
+      })
+
+      act(() => {
+        result.current.enableExtendedMode()
+      })
+
+      expect(result.current.extendedMode).toBe(true)
+    })
+
+    it('should keep gameEnded false when extended mode is enabled', () => {
+      const { result } = renderHook(() => useCampaign())
+
+      act(() => {
+        result.current.setTargetThreatLevel(2)
+        result.current.startGame(2)
+      })
+
+      // Manually set game as ended (simulating reaching target)
+      act(() => {
+        result.current.setThreatLevel(2)
+      })
+
+      // Initially, manually setting threat doesn't end game
+      // (end logic only runs in nextPhase)
+      expect(result.current.gameEnded).toBe(false)
+
+      // Enable extended mode
+      act(() => {
+        result.current.enableExtendedMode()
+      })
+
+      // Extended mode should be active and game not ended
+      expect(result.current.gameEnded).toBe(false)
+      expect(result.current.extendedMode).toBe(true)
+    })
+
+    it('should allow threat to exceed target when extended mode active', () => {
+      const { result } = renderHook(() => useCampaign())
+
+      act(() => {
+        result.current.setTargetThreatLevel(5)
+        result.current.startGame(2)
+        result.current.setThreatLevel(5)
+        result.current.enableExtendedMode()
+      })
+
+      // Increase threat beyond target
+      act(() => {
+        result.current.setThreatLevel(7)
+      })
+
+      expect(result.current.threatLevel).toBe(7)
+      expect(result.current.gameEnded).toBe(false)
+    })
+  })
+
   describe('battle resolution', () => {
     it('should handle battle outcomes', () => {
       const { result } = renderHook(() => useCampaign())

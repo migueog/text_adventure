@@ -1,8 +1,10 @@
 'use client'
 
+import { useState, useEffect, useCallback } from 'react'
 import dynamic from 'next/dynamic'
 import { useCampaign } from '@/hooks/useCampaign'
 import { useCampaignStore } from '@/store/campaign'
+import { generateExportData, exportCampaignJSON } from '@/lib/utils/campaignExport'
 import GameSetup from '@/components/GameSetup'
 import PlayerPanel from '@/components/PlayerPanel'
 import PhaseTracker from '@/components/PhaseTracker'
@@ -10,6 +12,7 @@ import DiceRoller from '@/components/DiceRoller'
 import EventLog from '@/components/EventLog'
 import HexDetails from '@/components/HexDetails'
 import VictoryScreen from '@/components/VictoryScreen'
+import CampaignEndModal from '@/components/CampaignEndModal'
 import ThreatMeter from '@/components/ThreatMeter'
 
 // Dynamically import Phaser component with no SSR
@@ -27,6 +30,20 @@ export default function Home() {
   // WHY: GameSetup uses Zustand for campaign creation
   const gameStarted = useCampaignStore((state) => state.gameStarted)
 
+  // WHY: Campaign end modal and victory screen state management
+  const [showEndModal, setShowEndModal] = useState(false)
+  const [showVictoryScreen, setShowVictoryScreen] = useState(false)
+
+  // WHY: Show campaign end modal when game ends
+  useEffect(() => {
+    if (campaign.gameEnded && !showVictoryScreen) {
+      setShowEndModal(true)
+    } else if (!campaign.gameEnded) {
+      // Reset modal state if game continues (extended mode)
+      setShowEndModal(false)
+    }
+  }, [campaign.gameEnded, showVictoryScreen])
+
   const handleHexClick = (hex: any) => {
     campaign.setSelectedHex(hex.id === campaign.selectedHex ? null : hex.id)
   }
@@ -35,17 +52,72 @@ export default function Home() {
     window.location.reload()
   }
 
+  // WHY: Handler for "View Final Scores" button in campaign end modal
+  const handleViewScores = useCallback(() => {
+    setShowEndModal(false)
+    setShowVictoryScreen(true)
+  }, [])
+
+  // WHY: Handler for "Continue Campaign" button - enables extended mode
+  const handleContinueCampaign = useCallback(() => {
+    campaign.enableExtendedMode()
+    setShowEndModal(false)
+  }, [campaign])
+
+  // WHY: Export campaign data as JSON file
+  const handleExportCampaign = useCallback(() => {
+    const victoryCategories = {
+      Warlord: campaign.players[0]?.name || '',
+      Explorer: campaign.players[0]?.name || '',
+      Headhunter: campaign.players[0]?.name || '',
+      Pioneer: campaign.players[0]?.name || '',
+      Trooper: campaign.players[0]?.name || ''
+    }
+
+    const exportData = generateExportData(
+      campaign.threatLevel,
+      campaign.targetThreatLevel,
+      campaign.currentRound,
+      campaign.currentPhase,
+      campaign.hexes,
+      campaign.players,
+      campaign.eventLog,
+      victoryCategories,
+      campaign.players[0]?.name || ''
+    )
+
+    exportCampaignJSON(exportData)
+  }, [campaign])
+
   // WHY: Show setup screen if game hasn't started (check Zustand store)
   if (!gameStarted) {
     return <GameSetup />
   }
 
-  // Show victory screen if game has ended
-  if (campaign.gameEnded) {
+  // WHY: Show campaign end modal when game reaches target threat
+  if (showEndModal) {
+    return (
+      <CampaignEndModal
+        threatLevel={campaign.threatLevel}
+        targetThreatLevel={campaign.targetThreatLevel}
+        currentRound={campaign.currentRound}
+        onViewScores={handleViewScores}
+        onContinue={handleContinueCampaign}
+      />
+    )
+  }
+
+  // WHY: Show victory screen after user clicks "View Final Scores"
+  if (showVictoryScreen) {
     return (
       <VictoryScreen
         players={campaign.players}
+        hexMap={campaign.hexes}
+        currentRound={campaign.currentRound}
+        threatLevel={campaign.threatLevel}
+        targetThreatLevel={campaign.targetThreatLevel}
         onRestart={handleRestart}
+        onExport={handleExportCampaign}
       />
     )
   }

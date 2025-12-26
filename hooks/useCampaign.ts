@@ -107,12 +107,13 @@ export function useCampaign() {
   const [selectedHex, setSelectedHex] = useState<string | null>(null)
   const [gameEnded, setGameEnded] = useState(false)
   const [battleCompleted, setBattleCompleted] = useState(false)
+  const [extendedMode, setExtendedMode] = useState(false)
 
   const addEvent = useCallback((message: string, type: Event['type'] = 'system') => {
     const event: Event = {
       type,
-      icon: type === 'system' ? 'ℹ️' : type === 'movement' ? '➡️' : type === 'exploration' ? '🔍' : 
-            type === 'reward' ? '🎁' : type === 'action' ? '⚡' : type === 'battle' ? '⚔️' : 
+      icon: type === 'system' ? 'ℹ️' : type === 'movement' ? '➡️' : type === 'exploration' ? '🔍' :
+            type === 'reward' ? '🎁' : type === 'action' ? '⚡' : type === 'battle' ? '⚔️' :
             type === 'warning' ? '⚠️' : '❌',
       message,
       round: currentRound,
@@ -121,6 +122,16 @@ export function useCampaign() {
     }
     setEventLog(prev => [event, ...prev])
   }, [currentRound, currentPhase])
+
+  /**
+   * Enable extended campaign mode
+   * Why: Allows campaign to continue beyond target threat level
+   */
+  const enableExtendedMode = useCallback(() => {
+    setExtendedMode(true)
+    setGameEnded(false) // Re-open the game
+    addEvent('Campaign extended beyond target threat level', 'system')
+  }, [addEvent])
 
   const startGame = useCallback((numPlayers: number, isSolo = false) => {
     const config = MAP_CONFIGS[numPlayers] || MAP_CONFIGS[4]
@@ -576,7 +587,8 @@ export function useCampaign() {
         setCurrentPhase(0)
         setBattleCompleted(false) // Reset for new round
 
-        if (newThreat >= targetThreatLevel) {
+        // Only end game if NOT in extended mode
+        if (newThreat >= targetThreatLevel && !extendedMode) {
           setGameEnded(true)
           addEvent(`Campaign ended! Final threat level: ${newThreat}`, 'system')
         } else {
@@ -584,7 +596,7 @@ export function useCampaign() {
         }
       }
     }
-  }, [currentPhase, currentPlayerIndex, players, threatLevel, targetThreatLevel, currentRound, battleCompleted, addEvent])
+  }, [currentPhase, currentPlayerIndex, players, threatLevel, targetThreatLevel, currentRound, battleCompleted, extendedMode, addEvent])
 
   const updatePlayer = useCallback((playerIndex: number, updates: Partial<Player>) => {
     setPlayers(prev => {
@@ -645,11 +657,13 @@ export function useCampaign() {
     selectedHex,
     gameEnded,
     battleCompleted,
+    extendedMode,
 
     // Setters
     setPlayerCount,
     setTargetThreatLevel,
     setSelectedHex,
+    setThreatLevel,
 
     // Actions
     startGame,
@@ -663,5 +677,6 @@ export function useCampaign() {
     addEvent,
     updatePriorities,
     checkRollOff,
+    enableExtendedMode,
   }
 }

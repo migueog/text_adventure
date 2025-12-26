@@ -1,11 +1,17 @@
 'use client'
 
-import type { Player } from '@/types/campaign'
+import type { Player, Hex } from '@/types/campaign'
 import { VICTORY_CATEGORIES } from '@/lib/data/campaignData'
+import { calculateTotalHexesExplored, calculateTotalBattles, generateNarrativeSummary } from '@/lib/utils/campaignStatistics'
 
 interface VictoryScreenProps {
   players: Player[]
+  hexMap?: Record<string, Hex>
+  currentRound?: number
+  threatLevel?: number
+  targetThreatLevel?: number
   onRestart: () => void
+  onExport?: () => void
 }
 
 interface CategoryResult {
@@ -22,7 +28,15 @@ interface OverallScore {
   points: number
 }
 
-export default function VictoryScreen({ players, onRestart }: VictoryScreenProps) {
+export default function VictoryScreen({
+  players,
+  hexMap,
+  currentRound,
+  threatLevel,
+  targetThreatLevel,
+  onRestart,
+  onExport
+}: VictoryScreenProps) {
   // Calculate winners for each category
   const results: CategoryResult[] = VICTORY_CATEGORIES.map(category => {
     const sorted = [...players].sort((a, b) => {
@@ -50,6 +64,12 @@ export default function VictoryScreen({ players, onRestart }: VictoryScreenProps
   const champion = overallScores[0]
   if (!champion) return null
 
+  // Calculate campaign statistics
+  const totalHexesExplored = hexMap ? calculateTotalHexesExplored(hexMap) : 0
+  const totalBattles = calculateTotalBattles(players)
+  const victoryCategory = results.find(r => r.winner.id === champion.player.id)?.name || 'Champion'
+  const narrativeSummary = generateNarrativeSummary(champion.player, victoryCategory)
+
   return (
     <div className="victory-screen">
       <div className="victory-header">
@@ -74,7 +94,40 @@ export default function VictoryScreen({ players, onRestart }: VictoryScreenProps
             <div className="winner-team">{champion.player.killTeamName}</div>
             <div className="winner-points">{champion.points} points</div>
           </div>
+          <div className="narrative-summary">
+            <p>{narrativeSummary}</p>
+          </div>
         </div>
+
+        {(currentRound || threatLevel) && (
+          <div className="campaign-statistics">
+            <h3>Campaign Statistics</h3>
+            <div className="stats-grid">
+              {currentRound && (
+                <div className="stat-item">
+                  <span className="stat-label">Total Rounds:</span>
+                  <span className="stat-value">{currentRound}</span>
+                </div>
+              )}
+              {(threatLevel && targetThreatLevel) && (
+                <div className="stat-item">
+                  <span className="stat-label">Final Threat:</span>
+                  <span className="stat-value">{threatLevel} / {targetThreatLevel}</span>
+                </div>
+              )}
+              {hexMap && (
+                <div className="stat-item">
+                  <span className="stat-label">Hexes Explored:</span>
+                  <span className="stat-value">{totalHexesExplored} / {Object.keys(hexMap).length}</span>
+                </div>
+              )}
+              <div className="stat-item">
+                <span className="stat-label">Total Battles:</span>
+                <span className="stat-value">{totalBattles}</span>
+              </div>
+            </div>
+          </div>
+        )}
 
         <div className="category-results">
           <h3>Category Winners</h3>
@@ -135,9 +188,16 @@ export default function VictoryScreen({ players, onRestart }: VictoryScreenProps
           </table>
         </div>
 
-        <button className="restart-btn" onClick={onRestart}>
-          Start New Campaign
-        </button>
+        <div className="victory-actions">
+          {onExport && (
+            <button className="export-btn" onClick={onExport}>
+              Export Campaign Data
+            </button>
+          )}
+          <button className="restart-btn" onClick={onRestart}>
+            Start New Campaign
+          </button>
+        </div>
       </div>
     </div>
   )
