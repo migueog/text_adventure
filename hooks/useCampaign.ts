@@ -14,6 +14,7 @@ import {
 } from '@/lib/data/campaignData'
 import { rollD36, parseValue } from '@/lib/utils/dice'
 import { hexId, hexDistance, canExploreHex, isPlayerInBlockedHex } from '@/lib/utils/hexUtils'
+import { determinePriority, needsRollOff } from '@/lib/utils/priority'
 
 // Constants for SP management
 const SP_MIN = 0
@@ -605,6 +606,16 @@ export function useCampaign() {
     return minDist
   }, [players])
 
+  const updatePriorities = useCallback(() => {
+    const playersWithPriority = determinePriority(players)
+    setPlayers(playersWithPriority)
+    addEvent('Player priorities updated', 'system')
+  }, [players, addEvent])
+
+  const checkRollOff = useCallback((): boolean => {
+    return needsRollOff(players)
+  }, [players])
+
   return {
     // State
     gameStarted,
@@ -637,5 +648,7 @@ export function useCampaign() {
     updatePlayer,
     calculateEncampCost,
     addEvent,
+    updatePriorities,
+    checkRollOff,
   }
 }

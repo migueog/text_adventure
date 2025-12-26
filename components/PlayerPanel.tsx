@@ -36,6 +36,23 @@ function PlayerCard({ player, isActive, onUpdate }: PlayerCardProps) {
         >
           {player.id + 1}
         </div>
+        {player.priority && player.priority > 0 && (
+          <div
+            className="priority-badge"
+            style={{
+              backgroundColor: player.priority === 1 ? '#4CAF50' : player.priority === 2 ? '#FFC107' : '#FF5722',
+              color: 'white',
+              padding: '0.25rem 0.5rem',
+              borderRadius: '4px',
+              fontSize: '0.75rem',
+              fontWeight: 'bold',
+              marginLeft: '0.5rem'
+            }}
+            title={`Priority ${player.priority} (${player.priority === 1 ? 'Lowest' : player.priority === 2 ? 'Second' : 'Other'} CP/SP)`}
+          >
+            P{player.priority}
+          </div>
+        )}
         {editing ? (
           <div className="player-edit-form">
             <input

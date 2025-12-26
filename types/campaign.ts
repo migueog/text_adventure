@@ -67,6 +67,7 @@ export interface Player {
   gamesLost: number
   operativesKilled: number
   history: HistoryEntry[]
+  priority?: number
 }
 
 export interface Event {
