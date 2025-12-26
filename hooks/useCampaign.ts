@@ -13,7 +13,7 @@ import {
   BattleResultInfo
 } from '@/lib/data/campaignData'
 import { rollD36, parseValue } from '@/lib/utils/dice'
-import { hexId, hexDistance, canExploreHex, isPlayerInBlockedHex } from '@/lib/utils/hexUtils'
+import { hexId, hexDistance, canExploreHex, findNearestBaseOrCamp } from '@/lib/utils/hexUtils'
 import { determinePriority, needsRollOff } from '@/lib/utils/priority'
 
 // Constants for SP management
@@ -300,6 +300,75 @@ export function useCampaign() {
       exploreHex(targetHex)
     }
   }, [hexes, currentRound, currentPhase, exploreHex, addEvent])
+
+  // WHY: REGROUP action - move to nearest base/camp for free
+  const regroupPlayer = useCallback((playerIndex: number) => {
+    setPlayers(prev => {
+      const updated = [...prev]
+      const player = updated[playerIndex]
+      if (!player) return prev
+
+      // Find nearest base or camp
+      const nearestDest = findNearestBaseOrCamp(
+        player.position,
+        player.bases || [],
+        player.camps || []
+      )
+
+      // If no valid destination, log error and return
+      if (!nearestDest) {
+        addEvent(`${player.name} has no bases or camps to regroup to!`, 'error')
+        return prev
+      }
+
+      // Move player to nearest destination (no SP cost)
+      updated[playerIndex] = {
+        ...player,
+        position: nearestDest,
+        history: addHistoryEntry(
+          player,
+          currentRound,
+          PHASES[currentPhase] || 'Unknown',
+          0,
+          0,
+          `Regrouped to ${hexId(nearestDest.row, nearestDest.col)}`
+        )
+      }
+
+      addEvent(
+        `${player.name} Regroup to ${hexId(nearestDest.row, nearestDest.col)} (free movement)`,
+        'movement'
+      )
+      return updated
+    })
+  }, [currentRound, currentPhase, addEvent])
+
+  // WHY: HOLD action - stay in current position (no cost, no movement)
+  const holdPosition = useCallback((playerIndex: number) => {
+    setPlayers(prev => {
+      const updated = [...prev]
+      const player = updated[playerIndex]
+      if (!player) return prev
+
+      updated[playerIndex] = {
+        ...player,
+        history: addHistoryEntry(
+          player,
+          currentRound,
+          PHASES[currentPhase] || 'Unknown',
+          0,
+          0,
+          `Held position at ${hexId(player.position.row, player.position.col)}`
+        )
+      }
+
+      addEvent(
+        `${player.name} Hold position at ${hexId(player.position.row, player.position.col)}`,
+        'movement'
+      )
+      return updated
+    })
+  }, [currentRound, currentPhase, addEvent])
 
   const performAction = useCallback((action: string, params: PerformActionParams = {}) => {
     const player = players[currentPlayerIndex]
@@ -668,6 +737,8 @@ export function useCampaign() {
     // Actions
     startGame,
     movePlayer,
+    regroupPlayer,
+    holdPosition,
     exploreHex,
     performAction,
     recordBattle,

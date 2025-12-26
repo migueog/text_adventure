@@ -254,3 +254,34 @@ export function isHexTomb(hex: { type: string } | undefined): boolean {
   if (!hex) return false
   return hex.type === 'tomb'
 }
+
+/**
+ * WHY: Find nearest base or camp for REGROUP action
+ * Returns null if no bases/camps exist
+ * If already at nearest, returns next nearest
+ */
+export function findNearestBaseOrCamp(
+  currentPos: HexPosition,
+  bases: HexPosition[],
+  camps: HexPosition[]
+): HexPosition | null {
+  const destinations = [...bases, ...camps]
+
+  if (destinations.length === 0) return null
+
+  // Calculate distances to all destinations
+  const withDistances = destinations.map(dest => ({
+    position: dest,
+    distance: hexDistance(currentPos.row, currentPos.col, dest.row, dest.col)
+  }))
+
+  // Filter out current position (distance 0) if at a destination
+  const validDestinations = withDistances.filter(d => d.distance > 0)
+
+  // If filtered all out, player is at their only base/camp
+  if (validDestinations.length === 0) return null
+
+  // Sort by distance and return nearest
+  validDestinations.sort((a, b) => a.distance - b.distance)
+  return validDestinations[0]?.position || null
+}
