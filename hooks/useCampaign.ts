@@ -106,6 +106,7 @@ export function useCampaign() {
   const [mapConfig, setMapConfig] = useState<MapConfig | null>(null)
   const [selectedHex, setSelectedHex] = useState<string | null>(null)
   const [gameEnded, setGameEnded] = useState(false)
+  const [battleCompleted, setBattleCompleted] = useState(false)
 
   const addEvent = useCallback((message: string, type: Event['type'] = 'system') => {
     const event: Event = {
@@ -541,9 +542,18 @@ export function useCampaign() {
     if (player) {
       addEvent(`${player.name}: ${result.name} (+${result.cpGain} CP, +${result.spGain} SP)`, 'battle')
     }
+
+    // Mark battle phase as completed
+    setBattleCompleted(true)
   }, [players, currentPlayerIndex, currentRound, currentPhase, addEvent])
 
   const nextPhase = useCallback(() => {
+    // Validate Battle phase completion (phase index 1)
+    if (currentPhase === 1 && !battleCompleted) {
+      addEvent('Cannot advance: You must record a battle result first', 'error')
+      return
+    }
+
     if (currentPhase < PHASES.length - 1) {
       setCurrentPhase(prev => prev + 1)
       addEvent(`Phase changed to ${PHASES[currentPhase + 1] || 'Unknown'}`, 'system')
@@ -552,6 +562,7 @@ export function useCampaign() {
       if (currentPlayerIndex < players.length - 1) {
         setCurrentPlayerIndex(prev => prev + 1)
         setCurrentPhase(0)
+        setBattleCompleted(false) // Reset for next player
         const nextPlayer = players[currentPlayerIndex + 1]
         if (nextPlayer) {
           addEvent(`${nextPlayer.name}'s turn`, 'system')
@@ -563,6 +574,7 @@ export function useCampaign() {
         setCurrentRound(prev => prev + 1)
         setCurrentPlayerIndex(0)
         setCurrentPhase(0)
+        setBattleCompleted(false) // Reset for new round
 
         if (newThreat >= targetThreatLevel) {
           setGameEnded(true)
@@ -572,7 +584,7 @@ export function useCampaign() {
         }
       }
     }
-  }, [currentPhase, currentPlayerIndex, players, threatLevel, targetThreatLevel, currentRound, addEvent])
+  }, [currentPhase, currentPlayerIndex, players, threatLevel, targetThreatLevel, currentRound, battleCompleted, addEvent])
 
   const updatePlayer = useCallback((playerIndex: number, updates: Partial<Player>) => {
     setPlayers(prev => {
@@ -632,6 +644,7 @@ export function useCampaign() {
     mapConfig,
     selectedHex,
     gameEnded,
+    battleCompleted,
 
     // Setters
     setPlayerCount,

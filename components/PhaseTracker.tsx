@@ -13,6 +13,7 @@ interface PhaseTrackerProps {
   hexes: Record<string, Hex>
   threatLevel: number
   targetThreatLevel: number
+  battleCompleted: boolean
   onNextPhase: () => void
   onMove: (playerIndex: number, targetHex: string, cost: number) => void
   onAction: (action: string, params?: any) => void
@@ -34,6 +35,7 @@ export default function PhaseTracker({
   hexes,
   threatLevel,
   targetThreatLevel,
+  battleCompleted,
   onNextPhase,
   onMove,
   onAction,
@@ -217,6 +219,18 @@ export default function PhaseTracker({
           <div className="battle-phase">
             <h4>Battle Phase</h4>
             <p>Record the result of your battle this round.</p>
+
+            {!battleCompleted && (
+              <div style={{ background: '#fff3cd', border: '1px solid #ffc107', padding: '0.5rem', marginBottom: '1rem', borderRadius: '4px', color: '#856404' }}>
+                ⚠️ <strong>Required:</strong> You must record a battle result before advancing to the next phase.
+              </div>
+            )}
+
+            {battleCompleted && (
+              <div style={{ background: '#d4edda', border: '1px solid #28a745', padding: '0.5rem', marginBottom: '1rem', borderRadius: '4px', color: '#155724' }}>
+                ✅ Battle result recorded. You may advance to the next phase.
+              </div>
+            )}
 
             <div className="battle-form">
               <div className="form-group">
