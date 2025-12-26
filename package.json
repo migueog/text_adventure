@@ -42,6 +42,8 @@
     "@vitest/coverage-v8": "^4.0.16",
     "dotenv": "^17.2.3",
     "drizzle-kit": "^0.31.8",
+    "eslint": "^9.39.2",
+    "eslint-config-next": "^16.1.1",
     "happy-dom": "^20.0.11",
     "jsdom": "^27.3.0",
     "tsx": "^4.21.0",
