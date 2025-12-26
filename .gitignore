@@ -11,6 +11,7 @@ dist/
 build/
 .next/
 out/
+*.tsbuildinfo
 
 # Vite cache (legacy - can remove after full migration)
 .vite/

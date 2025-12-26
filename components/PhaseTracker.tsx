@@ -119,7 +119,7 @@ export default function PhaseTracker({
       {/* Phase indicator */}
       <div className="phase-indicator">
         <div className="round-info">
-          Round {currentRound} - {currentPlayer.name}'s Turn
+          Round {currentRound} - {currentPlayer.name}&apos;s Turn
         </div>
         <div className="phase-tabs">
           {PHASES.map((phase, idx) => (
@@ -323,7 +323,7 @@ export default function PhaseTracker({
               <div className="action-item">
                 <h5>Demolish</h5>
                 <p className="action-desc">
-                  Destroy an opponent's camp.
+                  Destroy an opponent&apos;s camp.
                 </p>
                 <button
                   className="action-btn danger"
@@ -355,7 +355,7 @@ export default function PhaseTracker({
               </p>
               <p>
                 At the end of this phase, threat will increase and the next
-                player's turn will begin.
+                player&apos;s turn will begin.
               </p>
               {currentPlayer.id === players.length - 1 && (
                 <p className="warning">

@@ -65,7 +65,7 @@ export default function Home() {
           <span>Threat: {campaign.threatLevel}/{campaign.targetThreatLevel}</span>
           <span className="divider">|</span>
           <span style={{ color: currentPlayer?.color }}>
-            {currentPlayer?.name}'s Turn
+            {currentPlayer?.name}&apos;s Turn
           </span>
         </div>
       </header>
