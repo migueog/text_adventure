@@ -1,15 +1,20 @@
 import { describe, it, expect } from 'vitest';
-import { 
-  offsetToAxial, 
-  axialToOffset, 
-  hexDistance, 
+import {
+  offsetToAxial,
+  axialToOffset,
+  hexDistance,
   getNeighbors,
   getHexesInRange,
   findPath,
   hexId,
   parseHexId,
   hexToPixel,
-  hexToPixelFlat
+  hexToPixelFlat,
+  isHexBlocked,
+  canExploreHex,
+  isPlayerInBlockedHex,
+  isHexSurface,
+  isHexTomb
 } from './hexUtils';
 
 describe('hexUtils', () => {
@@ -244,7 +249,7 @@ describe('hexUtils', () => {
     it('should calculate different positions for different hexes', () => {
       const pos1 = hexToPixelFlat(0, 0, 10);
       const pos2 = hexToPixelFlat(1, 1, 10);
-      
+
       expect(pos1.x).not.toBe(pos2.x);
       expect(pos1.y).not.toBe(pos2.y);
     });
@@ -252,7 +257,7 @@ describe('hexUtils', () => {
     it('should offset odd rows horizontally', () => {
       const evenRow = hexToPixelFlat(0, 0, 10);
       const oddRow = hexToPixelFlat(1, 0, 10);
-      
+
       // Odd row should be offset horizontally
       expect(oddRow.x).toBeGreaterThan(evenRow.x);
     });
@@ -260,9 +265,117 @@ describe('hexUtils', () => {
     it('should scale with hexSize', () => {
       const pos1 = hexToPixelFlat(1, 1, 10);
       const pos2 = hexToPixelFlat(1, 1, 20);
-      
+
       expect(pos2.x).toBeGreaterThan(pos1.x);
       expect(pos2.y).toBeGreaterThan(pos1.y);
+    });
+  });
+
+  describe('isHexBlocked', () => {
+    it('should return true for blocked hex type', () => {
+      const hex = { type: 'blocked' as const };
+      expect(isHexBlocked(hex)).toBe(true);
+    });
+
+    it('should return false for surface hex', () => {
+      const hex = { type: 'surface' as const };
+      expect(isHexBlocked(hex)).toBe(false);
+    });
+
+    it('should return false for tomb hex', () => {
+      const hex = { type: 'tomb' as const };
+      expect(isHexBlocked(hex)).toBe(false);
+    });
+
+    it('should handle undefined hex', () => {
+      expect(isHexBlocked(undefined)).toBe(false);
+    });
+  });
+
+  describe('canExploreHex', () => {
+    it('should return false for already explored hex', () => {
+      const hex = { explored: true, type: 'surface' as const };
+      expect(canExploreHex(hex)).toBe(false);
+    });
+
+    it('should return false for blocked hex', () => {
+      const hex = { explored: false, type: 'blocked' as const };
+      expect(canExploreHex(hex)).toBe(false);
+    });
+
+    it('should return true for unexplored surface hex', () => {
+      const hex = { explored: false, type: 'surface' as const };
+      expect(canExploreHex(hex)).toBe(true);
+    });
+
+    it('should return true for unexplored tomb hex', () => {
+      const hex = { explored: false, type: 'tomb' as const };
+      expect(canExploreHex(hex)).toBe(true);
+    });
+
+    it('should handle undefined hex', () => {
+      expect(canExploreHex(undefined)).toBe(false);
+    });
+  });
+
+  describe('isPlayerInBlockedHex', () => {
+    it('should return true when player is in blocked hex', () => {
+      const playerPos = { row: 2, col: 3 };
+      const hex = { type: 'blocked' as const };
+      expect(isPlayerInBlockedHex(playerPos, hex)).toBe(true);
+    });
+
+    it('should return false when player is in surface hex', () => {
+      const playerPos = { row: 2, col: 3 };
+      const hex = { type: 'surface' as const };
+      expect(isPlayerInBlockedHex(playerPos, hex)).toBe(false);
+    });
+
+    it('should return false when hex is undefined', () => {
+      const playerPos = { row: 2, col: 3 };
+      expect(isPlayerInBlockedHex(playerPos, undefined)).toBe(false);
+    });
+  });
+
+  describe('isHexSurface', () => {
+    it('should return true for surface hex', () => {
+      const hex = { type: 'surface' as const };
+      expect(isHexSurface(hex)).toBe(true);
+    });
+
+    it('should return false for tomb hex', () => {
+      const hex = { type: 'tomb' as const };
+      expect(isHexSurface(hex)).toBe(false);
+    });
+
+    it('should return false for blocked hex', () => {
+      const hex = { type: 'blocked' as const };
+      expect(isHexSurface(hex)).toBe(false);
+    });
+
+    it('should handle undefined hex', () => {
+      expect(isHexSurface(undefined)).toBe(false);
+    });
+  });
+
+  describe('isHexTomb', () => {
+    it('should return true for tomb hex', () => {
+      const hex = { type: 'tomb' as const };
+      expect(isHexTomb(hex)).toBe(true);
+    });
+
+    it('should return false for surface hex', () => {
+      const hex = { type: 'surface' as const };
+      expect(isHexTomb(hex)).toBe(false);
+    });
+
+    it('should return false for blocked hex', () => {
+      const hex = { type: 'blocked' as const };
+      expect(isHexTomb(hex)).toBe(false);
+    });
+
+    it('should handle undefined hex', () => {
+      expect(isHexTomb(undefined)).toBe(false);
     });
   });
 });

@@ -13,7 +13,7 @@ import {
   BattleResultInfo
 } from '@/lib/data/campaignData'
 import { rollD36, parseValue } from '@/lib/utils/dice'
-import { hexId, hexDistance } from '@/lib/utils/hexUtils'
+import { hexId, hexDistance, canExploreHex, isPlayerInBlockedHex } from '@/lib/utils/hexUtils'
 
 // Constants for SP management
 const SP_MIN = 0
@@ -169,7 +169,17 @@ export function useCampaign() {
   const exploreHex = useCallback((hexKey: string) => {
     setHexes(prev => {
       const hex = prev[hexKey]
-      if (!hex || hex.explored) return prev
+      if (!hex) return prev
+
+      // Validate hex can be explored (not blocked, not already explored)
+      if (!canExploreHex(hex)) {
+        if (hex.type === 'blocked') {
+          addEvent('Cannot explore blocked hex', 'error')
+        } else if (hex.explored) {
+          addEvent('Hex already explored', 'warning')
+        }
+        return prev
+      }
 
       const locations = hex.type === 'surface' ? SURFACE_LOCATIONS : TOMB_LOCATIONS
       const conditions = hex.type === 'surface' ? SURFACE_CONDITIONS : TOMB_CONDITIONS

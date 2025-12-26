@@ -33,7 +33,7 @@ export interface Hex {
   id: string
   row: number
   col: number
-  type: 'surface' | 'tomb'
+  type: 'surface' | 'tomb' | 'blocked'
   location: number
   condition: number
   explored: boolean

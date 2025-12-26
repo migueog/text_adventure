@@ -209,3 +209,48 @@ export function hexToPixelFlat(row: number, col: number, hexSize: number): Pixel
 
   return { x, y }
 }
+
+/**
+ * Check if a hex is blocked (cannot be explored or moved to permanently)
+ */
+export function isHexBlocked(hex: { type: string } | undefined): boolean {
+  if (!hex) return false
+  return hex.type === 'blocked'
+}
+
+/**
+ * Check if a hex can be explored (not blocked and not already explored)
+ */
+export function canExploreHex(hex: { explored: boolean; type: string } | undefined): boolean {
+  if (!hex) return false
+  if (hex.explored) return false
+  if (hex.type === 'blocked') return false
+  return true
+}
+
+/**
+ * Check if a player is currently in a blocked hex (must move out next turn)
+ */
+export function isPlayerInBlockedHex(
+  _playerPos: { row: number; col: number },
+  hex: { type: string } | undefined
+): boolean {
+  if (!hex) return false
+  return hex.type === 'blocked'
+}
+
+/**
+ * Check if a hex is a surface hex
+ */
+export function isHexSurface(hex: { type: string } | undefined): boolean {
+  if (!hex) return false
+  return hex.type === 'surface'
+}
+
+/**
+ * Check if a hex is a tomb hex
+ */
+export function isHexTomb(hex: { type: string } | undefined): boolean {
+  if (!hex) return false
+  return hex.type === 'tomb'
+}

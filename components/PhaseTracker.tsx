@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import type { Player, Hex } from '@/types/campaign'
 import { PHASES, BATTLE_RESULTS, BattleResultInfo } from '@/lib/data/campaignData'
-import { hexDistance, hexId } from '@/lib/utils/hexUtils'
+import { hexDistance, hexId, isPlayerInBlockedHex } from '@/lib/utils/hexUtils'
 
 interface PhaseTrackerProps {
   currentPhase: string
@@ -109,13 +109,24 @@ export default function PhaseTracker({
   const scoutOptions = getScoutOptions()
 
   // Check if any player has a camp at current position (not the current player's)
-  const hasEnemyCamp = players.some(p => 
-    p.id !== currentPlayer.id && 
+  const hasEnemyCamp = players.some(p =>
+    p.id !== currentPlayer.id &&
     p.camps.some(c => c.row === currentPlayer.position.row && c.col === currentPlayer.position.col)
   )
 
+  // Check if player is in blocked hex
+  const currentHex = hexes[currentPosId]
+  const inBlockedHex = isPlayerInBlockedHex(currentPlayer.position, currentHex)
+
   return (
     <div className="phase-tracker">
+      {/* Warning for blocked hex */}
+      {inBlockedHex && currentPhaseIndex === 0 && (
+        <div className="blocked-hex-warning" style={{ backgroundColor: '#ff6b6b', color: 'white', padding: '0.5rem', marginBottom: '1rem', borderRadius: '4px' }}>
+          ⚠️ WARNING: You are in a BLOCKED HEX! You must move out this turn.
+        </div>
+      )}
+
       {/* Phase indicator */}
       <div className="phase-indicator">
         <div className="round-info">
