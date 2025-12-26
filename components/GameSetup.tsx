@@ -2,24 +2,75 @@
 
 import { useState } from 'react'
 import { MAP_CONFIGS, PLAYER_COLORS } from '@/lib/data/campaignData'
+import { useCampaignStore } from '@/store/campaign'
 
-interface GameSetupProps {
-  onStartGame: (playerCount: number, soloMode: boolean, targetThreat: number, playerNames: string[]) => void
-}
-
-export default function GameSetup({ onStartGame }: GameSetupProps) {
+/**
+ * WHY: No props needed - component manages campaign creation via Zustand
+ */
+export default function GameSetup() {
+  const [campaignName, setCampaignName] = useState('')
   const [playerCount, setPlayerCount] = useState(4)
   const [targetThreat, setTargetThreat] = useState(7)
   const [soloMode, setSoloMode] = useState(false)
   const [playerNames, setPlayerNames] = useState(
     Array(6).fill('').map((_, i) => `Player ${i + 1}`)
   )
+  const [validationError, setValidationError] = useState('')
+
+  // WHY: Access Zustand store for campaign creation
+  const createCampaign = useCampaignStore((state) => state.createCampaign)
+  const startGame = useCampaignStore((state) => state.startGame)
+  const isLoading = useCampaignStore((state) => state.isLoading)
+  const error = useCampaignStore((state) => state.error)
 
   const config = MAP_CONFIGS[playerCount]
   if (!config) return null
 
-  const handleStart = () => {
-    onStartGame(playerCount, soloMode, targetThreat, playerNames.slice(0, playerCount))
+  /**
+   * Validate campaign name
+   * WHY: Ensure campaign name meets requirements before creation
+   */
+  const validateCampaignName = (): boolean => {
+    if (!campaignName.trim()) {
+      setValidationError('Campaign name is required')
+      return false
+    }
+    if (campaignName.length < 3) {
+      setValidationError('Campaign name must be at least 3 characters')
+      return false
+    }
+    if (campaignName.length > 100) {
+      setValidationError('Campaign name cannot exceed 100 characters')
+      return false
+    }
+    setValidationError('')
+    return true
+  }
+
+  /**
+   * Handle campaign creation and game start
+   * WHY: Create campaign in database, then start game with initial state
+   */
+  const handleStart = async () => {
+    if (!validateCampaignName()) return
+
+    try {
+      // WHY: Create campaign in database first
+      await createCampaign(campaignName, {
+        playerCount,
+        targetThreatLevel: targetThreat,
+        soloMode
+      })
+
+      // WHY: Then start the game with player setup
+      startGame(
+        playerCount,
+        soloMode,
+        playerNames.slice(0, playerCount)
+      )
+    } catch (err) {
+      console.error('Failed to start campaign:', err)
+    }
   }
 
   return (
@@ -32,6 +83,24 @@ export default function GameSetup({ onStartGame }: GameSetupProps) {
       <div className="setup-content">
         <div className="setup-section">
           <h3>Campaign Settings</h3>
+
+          {/* WHY: Campaign name input - required for database storage */}
+          <div className="setting-group">
+            <label htmlFor="campaign-name">Campaign Name:</label>
+            <input
+              id="campaign-name"
+              type="text"
+              value={campaignName}
+              onChange={(e) => setCampaignName(e.target.value)}
+              placeholder="Enter campaign name (3-100 characters)"
+              className={validationError ? 'input-error' : ''}
+              maxLength={100}
+              disabled={isLoading}
+            />
+            {validationError && (
+              <p className="validation-error">{validationError}</p>
+            )}
+          </div>
 
           <div className="setting-group">
             <label>Number of Players:</label>
@@ -124,8 +193,19 @@ export default function GameSetup({ onStartGame }: GameSetupProps) {
           </div>
         </div>
 
-        <button className="start-btn" onClick={handleStart}>
-          Start Campaign
+        {/* WHY: Display API errors from campaign creation */}
+        {error && (
+          <div className="error-message">
+            <strong>Error:</strong> {error}
+          </div>
+        )}
+
+        <button
+          className="start-btn"
+          onClick={handleStart}
+          disabled={isLoading}
+        >
+          {isLoading ? 'Creating Campaign...' : 'Start Campaign'}
         </button>
       </div>
 

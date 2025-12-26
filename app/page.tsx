@@ -2,6 +2,7 @@
 
 import dynamic from 'next/dynamic'
 import { useCampaign } from '@/hooks/useCampaign'
+import { useCampaignStore } from '@/store/campaign'
 import GameSetup from '@/components/GameSetup'
 import PlayerPanel from '@/components/PlayerPanel'
 import PhaseTracker from '@/components/PhaseTracker'
@@ -17,18 +18,14 @@ const PhaserHexMap = dynamic(() => import('@/components/PhaserHexMap'), {
   loading: () => <div className="phaser-loading">Loading map...</div>
 })
 
+/**
+ * WHY: Main game page - uses both old hook and new Zustand store during migration
+ */
 export default function Home() {
   const campaign = useCampaign()
 
-  const handleStartGame = (playerCount: number, soloMode: boolean, targetThreat: number, playerNames: string[]) => {
-    campaign.setTargetThreatLevel(targetThreat)
-    campaign.startGame(playerCount, soloMode)
-
-    // Update player names
-    playerNames.forEach((name, idx) => {
-      campaign.updatePlayer(idx, { name })
-    })
-  }
+  // WHY: GameSetup uses Zustand for campaign creation
+  const gameStarted = useCampaignStore((state) => state.gameStarted)
 
   const handleHexClick = (hex: any) => {
     campaign.setSelectedHex(hex.id === campaign.selectedHex ? null : hex.id)
@@ -38,9 +35,9 @@ export default function Home() {
     window.location.reload()
   }
 
-  // Show setup screen if game hasn't started
-  if (!campaign.gameStarted) {
-    return <GameSetup onStartGame={handleStartGame} />
+  // WHY: Show setup screen if game hasn't started (check Zustand store)
+  if (!gameStarted) {
+    return <GameSetup />
   }
 
   // Show victory screen if game has ended

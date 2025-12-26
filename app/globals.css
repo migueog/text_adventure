@@ -1532,3 +1532,64 @@ input, select {
   color: #8b95a5;
   font-weight: 600;
 }
+
+/* Campaign Setup Validation Styles */
+/* WHY: Visual feedback for validation errors in GameSetup */
+
+.validation-error {
+  color: #e74c3c;
+  font-size: 12px;
+  margin-top: 4px;
+  margin-bottom: 0;
+  font-weight: 500;
+}
+
+.input-error {
+  border-color: #e74c3c !important;
+  background-color: rgba(231, 76, 60, 0.05);
+}
+
+.input-error:focus {
+  outline-color: #e74c3c;
+}
+
+.error-message {
+  background-color: rgba(231, 76, 60, 0.1);
+  border-left: 4px solid #e74c3c;
+  color: #e74c3c;
+  padding: 12px;
+  margin: 15px 0;
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+.error-message strong {
+  font-weight: 600;
+}
+
+/* Campaign name input in GameSetup */
+#campaign-name {
+  width: 100%;
+  padding: 10px;
+  font-size: 14px;
+  border: 2px solid #3a3a4a;
+  border-radius: 4px;
+  background: #2a2a3a;
+  color: #e0e0e0;
+  transition: all 0.3s ease;
+}
+
+#campaign-name:focus {
+  outline: none;
+  border-color: #3498db;
+  background: #323242;
+}
+
+#campaign-name:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+#campaign-name::placeholder {
+  color: #7a7a8a;
+}

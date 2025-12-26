@@ -15,35 +15,37 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Rendering:** Phaser 3 for hex map visualization (WebGL)
 - **Database:** Drizzle ORM with PostgreSQL (configured, not in active use)
 - **Testing:** Vitest + React Testing Library
-- **Package Manager:** npm (bun configured but not primary)
+- **Package Manager:** bun (REQUIRED - always use bun, not npm)
 
 ## Essential Commands
 
+**IMPORTANT:** Always use `bun` for all commands, never `npm`.
+
 ### Development
 ```bash
-npm run dev              # Start Next.js dev server (http://localhost:3000)
-npm run build            # Production build with Turbopack
-npm start                # Start production server
+bun run dev              # Start Next.js dev server (http://localhost:3000)
+bun run build            # Production build with Turbopack
+bun start                # Start production server
 ```
 
 ### Testing
 ```bash
-npm test                 # Run tests in watch mode
-npm run test:run         # Run tests once
-npm run test:coverage    # Run tests with coverage report
-npm run test:ui          # Open Vitest UI
+bun test                 # Run tests in watch mode
+bun run test:run         # Run tests once
+bun run test:coverage    # Run tests with coverage report
+bun run test:ui          # Open Vitest UI
 ```
 
 ### Database (Drizzle ORM)
 ```bash
-npm run db:generate      # Generate migrations
-npm run db:push          # Push schema to database
-npm run db:studio        # Open Drizzle Studio
+bun run db:generate      # Generate migrations
+bun run db:push          # Push schema to database
+bun run db:studio        # Open Drizzle Studio
 ```
 
 ### Type Checking
 ```bash
-npx tsc --noEmit         # Check TypeScript without building
+bunx tsc --noEmit        # Check TypeScript without building
 ```
 
 ## High-Level Architecture
