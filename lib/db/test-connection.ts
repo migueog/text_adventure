@@ -1,9 +1,10 @@
 import { db, closeDb, getPoolStats } from './client'
 import { sql } from 'drizzle-orm'
 import { config } from 'dotenv'
+import { resolve } from 'path'
 
-// Load environment variables from .env file
-config()
+// Load environment variables from .env.local file (Vercel uses .env.local)
+config({ path: resolve(process.cwd(), '.env.local') })
 
 /**
  * Database Connection Test Utility
