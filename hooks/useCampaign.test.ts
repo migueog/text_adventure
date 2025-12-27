@@ -730,4 +730,234 @@ describe('useCampaign hook', () => {
       })
     })
   })
+
+  describe('movement validation and restrictions', () => {
+    describe('SP validation', () => {
+      it('should not allow movement beyond available SP', () => {
+        const { result } = renderHook(() => useCampaign())
+
+        act(() => {
+          result.current.startGame(2)
+          result.current.updatePlayer(0, { supplyPoints: 2 })
+        })
+
+        const initialPosition = result.current.players[0]?.position
+        const initialSP = result.current.players[0]?.supplyPoints
+
+        // Try to move 3 hexes with only 2 SP
+        act(() => {
+          result.current.movePlayer(0, '0,3', 3)
+        })
+
+        // Movement should be blocked
+        expect(result.current.players[0]?.position).toEqual(initialPosition)
+        expect(result.current.players[0]?.supplyPoints).toBe(initialSP)
+      })
+
+      it('should allow movement exactly equal to available SP', () => {
+        const { result } = renderHook(() => useCampaign())
+
+        act(() => {
+          result.current.startGame(2)
+          result.current.updatePlayer(0, { supplyPoints: 2 })
+        })
+
+        const initialSP = result.current.players[0]?.supplyPoints || 0
+
+        // Move 2 hexes with 2 SP (exactly enough)
+        act(() => {
+          result.current.movePlayer(0, '0,2', 2)
+        })
+
+        expect(result.current.players[0]?.position).toEqual({ row: 0, col: 2 })
+        expect(result.current.players[0]?.supplyPoints).toBe(initialSP - 2)
+      })
+    })
+
+    describe('distance validation', () => {
+      it('should not allow movement beyond 3 hexes', () => {
+        const { result } = renderHook(() => useCampaign())
+
+        act(() => {
+          result.current.startGame(2)
+        })
+
+        const initialPosition = result.current.players[0]?.position
+
+        // Create validation function to check if move would be valid
+        const distance = 4 // More than max of 3
+        const hasEnoughSP = (result.current.players[0]?.supplyPoints || 0) >= distance
+
+        // If distance > 3, movement should be invalid even with enough SP
+        if (hasEnoughSP) {
+          // This move should be blocked by distance validation
+          act(() => {
+            result.current.movePlayer(0, '0,4', 4)
+          })
+
+          // Position should not change
+          expect(result.current.players[0]?.position).toEqual(initialPosition)
+        }
+      })
+
+      it('should allow movement up to 3 hexes', () => {
+        const { result } = renderHook(() => useCampaign())
+
+        act(() => {
+          result.current.startGame(2)
+        })
+
+        // Move exactly 3 hexes (max allowed)
+        act(() => {
+          result.current.movePlayer(0, '0,3', 3)
+        })
+
+        expect(result.current.players[0]?.position).toEqual({ row: 0, col: 3 })
+      })
+    })
+
+    describe('blocked hex validation', () => {
+      it('should not allow movement to blocked hex', () => {
+        const { result } = renderHook(() => useCampaign())
+
+        act(() => {
+          result.current.startGame(2)
+        })
+
+        const initialPosition = result.current.players[0]?.position
+
+        // Try to move to a hex that will be blocked
+        // First, find a blocked hex in the map
+        const blockedHex = Object.entries(result.current.hexes).find(
+          ([_, hex]) => hex.type === 'blocked'
+        )
+
+        if (blockedHex) {
+          const [hexId] = blockedHex
+          const distance = 1
+
+          act(() => {
+            result.current.movePlayer(0, hexId, distance)
+          })
+
+          // Movement should be blocked
+          expect(result.current.players[0]?.position).toEqual(initialPosition)
+        }
+      })
+
+      it('should allow movement to non-blocked hexes only', () => {
+        const { result } = renderHook(() => useCampaign())
+
+        act(() => {
+          result.current.startGame(2)
+        })
+
+        // Find a non-blocked hex
+        const nonBlockedHex = Object.entries(result.current.hexes).find(
+          ([_, hex]) => hex.type !== 'blocked'
+        )
+
+        if (nonBlockedHex) {
+          const [hexId] = nonBlockedHex
+          const parts = hexId.split(',').map(Number)
+          const targetRow = parts[0] ?? 0
+          const targetCol = parts[1] ?? 0
+
+          act(() => {
+            result.current.movePlayer(0, hexId, 1)
+          })
+
+          // Should successfully move to non-blocked hex
+          expect(result.current.players[0]?.position).toEqual({ row: targetRow, col: targetCol })
+        }
+      })
+    })
+
+    describe('hex capacity validation', () => {
+      it('should not allow movement to hex with 2+ players already present', () => {
+        const { result } = renderHook(() => useCampaign())
+
+        act(() => {
+          result.current.startGame(3) // 3 players
+        })
+
+        // Move players 0 and 1 to the same hex
+        act(() => {
+          result.current.updatePlayer(0, { position: { row: 1, col: 1 } })
+          result.current.updatePlayer(1, { position: { row: 1, col: 1 } })
+        })
+
+        // Now try to move player 2 to that same hex (would be 3 players)
+        const player2InitialPosition = result.current.players[2]?.position
+
+        act(() => {
+          result.current.movePlayer(2, '1,1', 1)
+        })
+
+        // Movement should be blocked (max 2 per hex)
+        expect(result.current.players[2]?.position).toEqual(player2InitialPosition)
+      })
+
+      it('should allow movement to hex with only 1 player present', () => {
+        const { result } = renderHook(() => useCampaign())
+
+        act(() => {
+          result.current.startGame(2)
+        })
+
+        // Move player 0 to 1,1
+        act(() => {
+          result.current.updatePlayer(0, { position: { row: 1, col: 1 } })
+        })
+
+        // Player 1 should be able to move to same hex (total would be 2)
+        act(() => {
+          result.current.movePlayer(1, '1,1', 1)
+        })
+
+        // Should successfully move
+        expect(result.current.players[1]?.position).toEqual({ row: 1, col: 1 })
+      })
+
+      it('should allow movement to empty hex', () => {
+        const { result } = renderHook(() => useCampaign())
+
+        act(() => {
+          result.current.startGame(2)
+        })
+
+        // Move to hex that has no other players
+        act(() => {
+          result.current.movePlayer(0, '2,2', 1)
+        })
+
+        expect(result.current.players[0]?.position).toEqual({ row: 2, col: 2 })
+      })
+    })
+
+    describe('movement error messages', () => {
+      it('should add error event when movement validation fails', () => {
+        const { result } = renderHook(() => useCampaign())
+
+        act(() => {
+          result.current.startGame(2)
+          result.current.updatePlayer(0, { supplyPoints: 1 })
+        })
+
+        const initialLogLength = result.current.eventLog.length
+
+        // Try to move beyond available SP
+        act(() => {
+          result.current.movePlayer(0, '0,3', 3)
+        })
+
+        // Should have error event
+        expect(result.current.eventLog.length).toBeGreaterThan(initialLogLength)
+
+        const errorEvent = result.current.eventLog.find(e => e.type === 'error')
+        expect(errorEvent).toBeDefined()
+        expect(errorEvent?.message).toContain('SP')
+      })
+    })
+  })
 })

@@ -276,6 +276,30 @@ export function useCampaign() {
       const player = updated[playerIndex]
       if (!player) return prev
 
+      // WHY: Validate maximum distance (3 hexes)
+      if (cost > 3) {
+        addEvent(`${player.name} cannot move more than 3 hexes! (attempted: ${cost})`, 'error')
+        return prev
+      }
+
+      // WHY: Validate blocked hex
+      const targetHexData = hexes[targetHex]
+      if (targetHexData && targetHexData.type === 'blocked') {
+        addEvent(`${player.name} cannot move to blocked hex!`, 'error')
+        return prev
+      }
+
+      // WHY: Validate hex capacity (max 2 players per hex)
+      const playersInTargetHex = updated.filter(p => {
+        const pHexId = hexId(p.position.row, p.position.col)
+        return pHexId === targetHex && p.id !== player.id
+      })
+      if (playersInTargetHex.length >= 2) {
+        addEvent(`${player.name} cannot move to ${targetHex} - already has 2 kill teams!`, 'error')
+        return prev
+      }
+
+      // WHY: Validate SP availability
       if (player.supplyPoints < cost) {
         addEvent(`${player.name} doesn't have enough SP to move!`, 'error')
         return prev
