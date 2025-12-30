@@ -13,6 +13,7 @@ import EventLog from '@/components/EventLog'
 import HexDetails from '@/components/HexDetails'
 import VictoryScreen from '@/components/VictoryScreen'
 import CampaignEndModal from '@/components/CampaignEndModal'
+import ExplorationResultModal from '@/components/ExplorationResultModal'
 import ThreatMeter from '@/components/ThreatMeter'
 
 // Dynamically import Phaser component with no SSR
@@ -174,6 +175,7 @@ export default function Home() {
             hexes={campaign.hexes}
             threatLevel={campaign.threatLevel}
             targetThreatLevel={campaign.targetThreatLevel}
+            battleCompleted={campaign.battleCompleted}
             onNextPhase={campaign.nextPhase}
             onMove={campaign.movePlayer}
             onAction={campaign.performAction}
@@ -190,6 +192,14 @@ export default function Home() {
       <footer className="app-footer">
         <EventLog events={campaign.eventLog} />
       </footer>
+
+      {/* Exploration Result Modal */}
+      {campaign.explorationResult && (
+        <ExplorationResultModal
+          result={campaign.explorationResult}
+          onClose={campaign.clearExplorationResult}
+        />
+      )}
     </div>
   )
 }

@@ -1593,3 +1593,203 @@ input, select {
 #campaign-name::placeholder {
   color: #7a7a8a;
 }
+
+/* ========================================
+   Exploration Result Modal
+   ======================================== */
+
+/**
+ * Modal overlay backdrop
+ * WHY: Semi-transparent overlay to focus attention on modal
+ */
+.exploration-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  animation: fadeIn 0.2s ease-in;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/**
+ * Modal container
+ * WHY: White card containing exploration results
+ */
+.exploration-modal {
+  background: white;
+  border-radius: 12px;
+  padding: 2rem;
+  max-width: 600px;
+  width: 90%;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+  animation: slideUp 0.3s ease-out;
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+/**
+ * Modal header
+ * WHY: Title and hex information
+ */
+.exploration-modal-header {
+  text-align: center;
+  margin-bottom: 1.5rem;
+  border-bottom: 2px solid #e9ecef;
+  padding-bottom: 1rem;
+}
+
+.exploration-modal-title {
+  font-size: 2rem;
+  font-weight: bold;
+  margin: 0 0 0.5rem 0;
+  color: #2c3e50;
+}
+
+.exploration-modal-subtitle {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #5a6c7d;
+  margin: 0.25rem 0;
+}
+
+.exploration-modal-player {
+  font-size: 1rem;
+  color: #7a8a9a;
+  margin: 0.25rem 0 0 0;
+}
+
+/**
+ * Modal body
+ * WHY: Contains location and condition sections
+ */
+.exploration-modal-body {
+  margin: 1.5rem 0;
+}
+
+/**
+ * Exploration section (location or condition)
+ * WHY: Card for each discovery with colored border
+ */
+.exploration-section {
+  background: #f8f9fa;
+  border-left: 4px solid #007bff;
+  padding: 1.5rem;
+  margin: 1rem 0;
+  border-radius: 4px;
+  transition: transform 0.2s ease;
+}
+
+.exploration-section:hover {
+  transform: translateX(4px);
+}
+
+.exploration-section.location {
+  border-left-color: #28a745;
+  background: linear-gradient(135deg, #f8f9fa 0%, #e8f5e9 100%);
+}
+
+.exploration-section.condition {
+  border-left-color: #ffc107;
+  background: linear-gradient(135deg, #f8f9fa 0%, #fff8e1 100%);
+}
+
+.exploration-section-title {
+  font-size: 0.875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #6c757d;
+  margin: 0 0 0.5rem 0;
+}
+
+.exploration-section-name {
+  font-size: 1.5rem;
+  font-weight: bold;
+  color: #2c3e50;
+  margin: 0 0 0.75rem 0;
+}
+
+.exploration-section-description {
+  font-size: 1rem;
+  line-height: 1.6;
+  color: #495057;
+  margin: 0 0 0.75rem 0;
+}
+
+/**
+ * Effect badge
+ * WHY: Highlight special effects of location/condition
+ */
+.effect-badge {
+  display: inline-block;
+  background: #e9ecef;
+  padding: 0.5rem 1rem;
+  border-radius: 12px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #495057;
+  margin-top: 0.5rem;
+  border: 1px solid #dee2e6;
+}
+
+.exploration-section.location .effect-badge {
+  background: #d4edda;
+  color: #155724;
+  border-color: #c3e6cb;
+}
+
+.exploration-section.condition .effect-badge {
+  background: #fff3cd;
+  color: #856404;
+  border-color: #ffeaa7;
+}
+
+/**
+ * Roll result display
+ * WHY: Show the D36 roll that determined this result
+ */
+.exploration-roll-result {
+  font-size: 0.875rem;
+  color: #6c757d;
+  margin: 0.75rem 0 0 0;
+  font-style: italic;
+}
+
+/**
+ * Modal footer
+ * WHY: Contains Continue button
+ */
+.exploration-modal-footer {
+  text-align: center;
+  margin-top: 1.5rem;
+  padding-top: 1.5rem;
+  border-top: 2px solid #e9ecef;
+}
+
+.exploration-modal-footer .btn {
+  min-width: 150px;
+  padding: 0.75rem 2rem;
+  font-size: 1.125rem;
+  font-weight: 600;
+}

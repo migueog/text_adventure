@@ -108,6 +108,15 @@ export function useCampaign() {
   const [gameEnded, setGameEnded] = useState(false)
   const [battleCompleted, setBattleCompleted] = useState(false)
   const [extendedMode, setExtendedMode] = useState(false)
+  const [explorationResult, setExplorationResult] = useState<{
+    hexId: string
+    hexNumber: number
+    location: { name: string; description: string; effect: string }
+    condition: { name: string; description: string; effect: string }
+    locationRoll: number
+    conditionRoll: number
+    playerName: string
+  } | null>(null)
 
   const addEvent = useCallback((message: string, type: Event['type'] = 'system') => {
     const event: Event = {
@@ -179,6 +188,14 @@ export function useCampaign() {
     addEvent(`Campaign started with ${numPlayers} players. Target threat level: ${targetThreatLevel}.`, 'system')
   }, [targetThreatLevel, addEvent])
 
+  /**
+   * Clear the exploration result modal state
+   * WHY: Allows closing the exploration result modal after user reviews it
+   */
+  const clearExplorationResult = useCallback(() => {
+    setExplorationResult(null)
+  }, [])
+
   const exploreHex = useCallback((hexKey: string) => {
     setHexes(prev => {
       const hex = prev[hexKey]
@@ -204,6 +221,27 @@ export function useCampaign() {
       const condition = conditions[conditionRoll] || conditions[11]
 
       addEvent(`Explored hex ${hexKey}: ${location?.name || 'Unknown'} (${condition?.name || 'Clear'})`, 'exploration')
+
+      // Set exploration result for modal display
+      const hexNumber = hex.row * (mapConfig?.cols || 5) + hex.col + 1
+      const currentPlayer = players[currentPlayerIndex]
+      setExplorationResult({
+        hexId: hexKey,
+        hexNumber,
+        location: {
+          name: location?.name || 'Unknown',
+          description: location?.description || '',
+          effect: location?.effect || ''
+        },
+        condition: {
+          name: condition?.name || 'Clear',
+          description: condition?.description || '',
+          effect: condition?.effect || ''
+        },
+        locationRoll,
+        conditionRoll,
+        playerName: currentPlayer?.name || 'Unknown Player'
+      })
 
       // Handle immediate exploration effects
       let spGain = 0
@@ -268,7 +306,7 @@ export function useCampaign() {
         }
       }
     })
-  }, [currentPlayerIndex, currentRound, currentPhase, soloMode, addEvent])
+  }, [currentPlayerIndex, currentRound, currentPhase, soloMode, addEvent, players, mapConfig])
 
   const movePlayer = useCallback((playerIndex: number, targetHex: string, cost: number) => {
     setPlayers(prev => {
@@ -751,6 +789,7 @@ export function useCampaign() {
     gameEnded,
     battleCompleted,
     extendedMode,
+    explorationResult,
 
     // Setters
     setPlayerCount,
@@ -773,5 +812,6 @@ export function useCampaign() {
     updatePriorities,
     checkRollOff,
     enableExtendedMode,
+    clearExplorationResult,
   }
 }
