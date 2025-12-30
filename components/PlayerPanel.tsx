@@ -7,14 +7,18 @@ import { hexId } from '@/lib/utils/hexUtils'
 interface PlayerCardProps {
   player: Player
   isActive: boolean
+  currentPhase: string
   onUpdate: (playerId: number, updates: Partial<Player>) => void
 }
 
-function PlayerCard({ player, isActive, onUpdate }: PlayerCardProps) {
+function PlayerCard({ player, isActive, currentPhase, onUpdate }: PlayerCardProps) {
   const [editing, setEditing] = useState(false)
   const [showHistory, setShowHistory] = useState(false)
   const [editName, setEditName] = useState(player.name)
   const [editTeamName, setEditTeamName] = useState(player.killTeamName)
+
+  // WHY: Determine if player is waiting for their turn during Movement Phase
+  const isWaiting = !isActive && currentPhase === 'Movement'
 
   const handleSave = () => {
     onUpdate(player.id, { name: editName, killTeamName: editTeamName })
@@ -26,8 +30,11 @@ function PlayerCard({ player, isActive, onUpdate }: PlayerCardProps) {
 
   return (
     <div
-      className={`player-card ${isActive ? 'active' : ''}`}
-      style={{ borderLeftColor: player.color }}
+      className={`player-card ${isActive ? 'active' : ''} ${isWaiting ? 'waiting' : ''}`}
+      style={{
+        borderLeftColor: player.color,
+        borderColor: isActive ? player.color : 'transparent'
+      }}
     >
       <div className="player-header">
         <div
@@ -77,6 +84,22 @@ function PlayerCard({ player, isActive, onUpdate }: PlayerCardProps) {
           </div>
         )}
       </div>
+
+      {/* WHY: Show active player badge during Movement Phase */}
+      {isActive && currentPhase === 'Movement' && (
+        <div className="player-active-badge">
+          <span className="active-icon">▶️</span>
+          <span className="active-text">YOUR TURN TO MOVE</span>
+        </div>
+      )}
+
+      {/* WHY: Show waiting state badge for non-active players during Movement Phase */}
+      {isWaiting && (
+        <div className="player-waiting-badge">
+          <span className="waiting-icon">⏳</span>
+          <span className="waiting-text">Waiting for turn...</span>
+        </div>
+      )}
 
       <div className="player-stats">
         <div className="stat">
@@ -173,12 +196,14 @@ function PlayerCard({ player, isActive, onUpdate }: PlayerCardProps) {
 interface PlayerPanelProps {
   players: Player[]
   currentPlayerIndex: number
+  currentPhase: string
   onUpdatePlayer: (playerId: number, updates: Partial<Player>) => void
 }
 
 export default function PlayerPanel({
   players,
   currentPlayerIndex,
+  currentPhase,
   onUpdatePlayer
 }: PlayerPanelProps) {
   return (
@@ -190,6 +215,7 @@ export default function PlayerPanel({
             key={player.id}
             player={player}
             isActive={player.id === currentPlayerIndex}
+            currentPhase={currentPhase}
             onUpdate={onUpdatePlayer}
           />
         ))}

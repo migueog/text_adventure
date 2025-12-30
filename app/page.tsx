@@ -145,6 +145,7 @@ export default function Home() {
           <PlayerPanel
             players={campaign.players}
             currentPlayerIndex={campaign.currentPlayerIndex}
+            currentPhase={campaign.currentPhase}
             onUpdatePlayer={campaign.updatePlayer}
           />
           <ThreatMeter
@@ -176,6 +177,8 @@ export default function Home() {
             threatLevel={campaign.threatLevel}
             targetThreatLevel={campaign.targetThreatLevel}
             battleCompleted={campaign.battleCompleted}
+            movementOrder={campaign.movementOrder}
+            movementIndex={campaign.movementIndex}
             onNextPhase={campaign.nextPhase}
             onMove={campaign.movePlayer}
             onAction={campaign.performAction}

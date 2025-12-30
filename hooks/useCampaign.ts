@@ -118,6 +118,10 @@ export function useCampaign() {
     playerName: string
   } | null>(null)
 
+  // WHY: Track movement order and index for priority-based sequential movement
+  const [movementOrder, setMovementOrder] = useState<number[]>([])
+  const [movementIndex, setMovementIndex] = useState(0)
+
   const addEvent = useCallback((message: string, type: Event['type'] = 'system') => {
     const event: Event = {
       type,
@@ -185,7 +189,18 @@ export function useCampaign() {
     setGameStarted(true)
     setGameEnded(false)
     setEventLog([])
+
+    // WHY: Calculate initial movement order based on priority
+    const initialOrder = isSolo ? [0] : determinePriority(newPlayers).map(p => p.id)
+    setMovementOrder(initialOrder)
+    setMovementIndex(0)
+
     addEvent(`Campaign started with ${numPlayers} players. Target threat level: ${targetThreatLevel}.`, 'system')
+    // WHY: Show movement order for first round
+    if (!isSolo) {
+      const orderNames = initialOrder.map(i => newPlayers[i]?.name || `Player ${i + 1}`).join(' → ')
+      addEvent(`Movement order: ${orderNames}`, 'system')
+    }
   }, [targetThreatLevel, addEvent])
 
   /**
@@ -689,6 +704,30 @@ export function useCampaign() {
     setBattleCompleted(true)
   }, [players, currentPlayerIndex, currentRound, currentPhase, addEvent])
 
+  /**
+   * Calculate movement order based on player priority
+   * WHY: Official rules state players move in priority order (lowest CP → SP)
+   * @returns Array of player indices in movement order
+   */
+  const calculateMovementOrder = useCallback((): number[] => {
+    // WHY: Solo mode doesn't need priority calculation
+    if (soloMode) return [0]
+
+    // WHY: determinePriority sorts by CP then SP, assigns priority values
+    const playersWithPriority = determinePriority(players)
+    const order = playersWithPriority.map(p => p.id)
+
+    // WHY: Update player state with priority values for UI display
+    setPlayers(playersWithPriority)
+
+    // WHY: Warn if tied players detected (future: show roll-off modal)
+    if (needsRollOff(players)) {
+      addEvent('Priority tied - using player order', 'warning')
+    }
+
+    return order
+  }, [players, soloMode, addEvent])
+
   const nextPhase = useCallback(() => {
     // Validate Battle phase completion (phase index 1)
     if (currentPhase === 1 && !battleCompleted) {
@@ -718,16 +757,24 @@ export function useCampaign() {
         setCurrentPhase(0)
         setBattleCompleted(false) // Reset for new round
 
+        // WHY: Recalculate priority for new round (CP/SP may have changed)
+        const newOrder = calculateMovementOrder()
+        setMovementOrder(newOrder)
+        setMovementIndex(0)
+
         // Only end game if NOT in extended mode
         if (newThreat >= targetThreatLevel && !extendedMode) {
           setGameEnded(true)
           addEvent(`Campaign ended! Final threat level: ${newThreat}`, 'system')
         } else {
           addEvent(`Round ${currentRound + 1} begins. Threat level: ${newThreat}`, 'system')
+          // WHY: Log movement order for transparency
+          const orderNames = newOrder.map(i => players[i]?.name || `Player ${i}`).join(' → ')
+          addEvent(`Movement order: ${orderNames}`, 'system')
         }
       }
     }
-  }, [currentPhase, currentPlayerIndex, players, threatLevel, targetThreatLevel, currentRound, battleCompleted, extendedMode, addEvent])
+  }, [currentPhase, currentPlayerIndex, players, threatLevel, targetThreatLevel, currentRound, battleCompleted, extendedMode, addEvent, calculateMovementOrder])
 
   const updatePlayer = useCallback((playerIndex: number, updates: Partial<Player>) => {
     setPlayers(prev => {
@@ -790,6 +837,8 @@ export function useCampaign() {
     battleCompleted,
     extendedMode,
     explorationResult,
+    movementOrder,
+    movementIndex,
 
     // Setters
     setPlayerCount,
@@ -813,5 +862,6 @@ export function useCampaign() {
     checkRollOff,
     enableExtendedMode,
     clearExplorationResult,
+    calculateMovementOrder,
   }
 }

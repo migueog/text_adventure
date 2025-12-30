@@ -14,6 +14,8 @@ interface PhaseTrackerProps {
   threatLevel: number
   targetThreatLevel: number
   battleCompleted: boolean
+  movementOrder: number[]
+  movementIndex: number
   onNextPhase: () => void
   onMove: (playerIndex: number, targetHex: string, cost: number) => void
   onAction: (action: string, params?: any) => void
@@ -36,6 +38,8 @@ export default function PhaseTracker({
   threatLevel,
   targetThreatLevel,
   battleCompleted,
+  movementOrder,
+  movementIndex,
   onNextPhase,
   onMove,
   onAction,
@@ -145,6 +149,44 @@ export default function PhaseTracker({
           ))}
         </div>
       </div>
+
+      {/* Movement Order Banner - Only shown during Movement Phase */}
+      {currentPhase === 'Movement' && movementOrder.length > 1 && (
+        <div className="movement-order-banner">
+          <div className="movement-order-title">Movement Order:</div>
+          <div className="movement-order-list">
+            {movementOrder.map((playerId, index) => {
+              const player = players[playerId]
+              if (!player) return null
+
+              const isCurrent = index === movementIndex
+              const isCompleted = index < movementIndex
+              const isWaiting = index > movementIndex
+
+              return (
+                <div
+                  key={player.id}
+                  className={`movement-order-item ${
+                    isCurrent ? 'current' : ''
+                  } ${isCompleted ? 'completed' : ''} ${
+                    isWaiting ? 'waiting' : ''
+                  }`}
+                >
+                  <span className="movement-position">{index + 1}.</span>
+                  <span
+                    className="movement-player-indicator"
+                    style={{ backgroundColor: player.color }}
+                  />
+                  <span className="movement-player-name">{player.name}</span>
+                  {isCurrent && <span className="movement-current-badge">YOUR TURN</span>}
+                  {isCompleted && <span className="movement-check">✓</span>}
+                  {isWaiting && <span className="movement-waiting">Waiting...</span>}
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Threat meter */}
       <div className="threat-meter">

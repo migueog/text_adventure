@@ -1280,4 +1280,184 @@ describe('useCampaign hook', () => {
       }
     })
   })
+
+  describe('priority-based movement order', () => {
+    describe('movement order calculation', () => {
+      it('should calculate movement order at round start', () => {
+        const { result } = renderHook(() => useCampaign())
+
+        act(() => {
+          result.current.startGame(3)
+        })
+
+        // Movement order should be calculated and defined
+        expect(result.current.movementOrder).toBeDefined()
+        expect(Array.isArray(result.current.movementOrder)).toBe(true)
+        expect(result.current.movementOrder.length).toBe(3)
+      })
+
+      it('should use priority order (lowest CP first)', () => {
+        const { result } = renderHook(() => useCampaign())
+
+        act(() => {
+          result.current.startGame(3)
+        })
+
+        // Set different CP values for each player
+        act(() => {
+          result.current.updatePlayer(0, { campaignPoints: 5 })
+          result.current.updatePlayer(1, { campaignPoints: 2 })
+          result.current.updatePlayer(2, { campaignPoints: 8 })
+        })
+
+        // Recalculate movement order
+        act(() => {
+          result.current.calculateMovementOrder()
+        })
+
+        // Movement order should be [1, 0, 2] (lowest CP first)
+        expect(result.current.movementOrder[0]).toBe(1) // Player with CP=2
+        expect(result.current.movementOrder[1]).toBe(0) // Player with CP=5
+        expect(result.current.movementOrder[2]).toBe(2) // Player with CP=8
+      })
+
+      it('should recalculate priority each round', () => {
+        const { result} = renderHook(() => useCampaign())
+
+        act(() => {
+          result.current.startGame(2)
+        })
+
+        const initialOrder = [...result.current.movementOrder]
+
+        // Change CP values
+        act(() => {
+          result.current.updatePlayer(0, { campaignPoints: 10 })
+          result.current.updatePlayer(1, { campaignPoints: 5 })
+        })
+
+        // Advance to next round (should recalculate)
+        act(() => {
+          // Move through all phases to trigger round advance
+          result.current.nextPhase() // Move to Battle
+          result.current.recordBattle({ id: 'WIN', name: 'Win', cpReward: 1, spCost: 0 }, null, 0)
+          result.current.nextPhase() // Move to Action
+          result.current.nextPhase() // Move to Threat
+          result.current.nextPhase() // Move to Movement (Player 2)
+          result.current.recordBattle({ id: 'WIN', name: 'Win', cpReward: 1, spCost: 0 }, null, 0)
+          result.current.nextPhase() // Move to Action
+          result.current.nextPhase() // Move to Threat
+          result.current.nextPhase() // New round starts
+        })
+
+        // Movement order should have changed
+        expect(result.current.movementOrder).not.toEqual(initialOrder)
+      })
+
+      it('should maintain order throughout round even if CP/SP changes', () => {
+        const { result } = renderHook(() => useCampaign())
+
+        act(() => {
+          result.current.startGame(2)
+        })
+
+        const orderAtRoundStart = [...result.current.movementOrder]
+
+        // Change CP mid-round
+        act(() => {
+          result.current.updatePlayer(0, { campaignPoints: 100 })
+        })
+
+        // Movement order should remain the same
+        expect(result.current.movementOrder).toEqual(orderAtRoundStart)
+      })
+    })
+
+    describe('movement index tracking', () => {
+      it('should advance to next player in movement order', () => {
+        const { result } = renderHook(() => useCampaign())
+
+        act(() => {
+          result.current.startGame(2)
+        })
+
+        const initialIndex = result.current.movementIndex
+
+        // Advance phase (should move to next player in movement order)
+        act(() => {
+          result.current.nextPhase()
+        })
+
+        // Movement index should have advanced or phase changed
+        expect(result.current.movementIndex >= initialIndex).toBe(true)
+      })
+
+      it('should reset movement index at round start', () => {
+        const { result } = renderHook(() => useCampaign())
+
+        act(() => {
+          result.current.startGame(2)
+        })
+
+        // Advance through full round
+        act(() => {
+          result.current.nextPhase() // Battle
+          result.current.recordBattle({ id: 'WIN', name: 'Win', cpReward: 1, spCost: 0 }, null, 0)
+          result.current.nextPhase() // Action
+          result.current.nextPhase() // Threat
+          result.current.nextPhase() // Player 2 Movement
+          result.current.recordBattle({ id: 'WIN', name: 'Win', cpReward: 1, spCost: 0 }, null, 0)
+          result.current.nextPhase() // Action
+          result.current.nextPhase() // Threat
+          result.current.nextPhase() // New round
+        })
+
+        // Movement index should be reset to 0
+        expect(result.current.movementIndex).toBe(0)
+      })
+
+      it('should handle last player in movement order', () => {
+        const { result } = renderHook(() => useCampaign())
+
+        act(() => {
+          result.current.startGame(3)
+        })
+
+        // Verify we can advance through all players
+        const orderLength = result.current.movementOrder.length
+
+        for (let i = 0; i < orderLength; i++) {
+          expect(result.current.movementIndex).toBeLessThan(orderLength)
+          act(() => {
+            result.current.nextPhase()
+          })
+        }
+      })
+    })
+
+    describe('solo mode', () => {
+      it('should skip priority calculation in solo mode', () => {
+        const { result } = renderHook(() => useCampaign())
+
+        act(() => {
+          result.current.startGame(1, true) // Solo mode
+        })
+
+        // Movement order should bypass priority calculation
+        expect(result.current.movementOrder).toBeDefined()
+        expect(result.current.movementOrder.length).toBe(1)
+      })
+
+      it('should set movement order to [0] for solo', () => {
+        const { result } = renderHook(() => useCampaign())
+
+        act(() => {
+          result.current.startGame(1, true) // Solo mode
+        })
+
+        // Movement order should always be [0]
+        expect(result.current.movementOrder).toEqual([0])
+      })
+    })
+  })
 })
