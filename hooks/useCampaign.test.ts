@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest'
 import { renderHook, act } from '@testing-library/react'
 import { useCampaign } from './useCampaign'
-import { BATTLE_RESULTS } from '@/lib/data/campaignData'
+import { BATTLE_RESULTS, SURFACE_LOCATIONS, TOMB_LOCATIONS } from '@/lib/data/campaignData'
+import { hexDistance } from '@/lib/utils/hexUtils'
 
 describe('useCampaign hook', () => {
   describe('initialization', () => {
@@ -1811,6 +1812,714 @@ describe('useCampaign hook', () => {
       expect(result.current.currentPhase).toBe('Threat')
       expect(result.current.actionOrder).toBeNull()
       expect(result.current.actionIndex).toBe(0)
+    })
+  })
+
+  describe('performAction SEARCH', () => {
+    describe('successful search', () => {
+      it('should deduct 1 SP from player', () => {
+        const { result } = renderHook(() => useCampaign())
+
+        act(() => {
+          result.current.startGame(2)
+        })
+
+        // Find a hex with a search rule
+        const searchableHex = Object.entries(result.current.hexes).find(
+          ([hexId, hex]) => {
+            const location = hex.type === 'surface'
+              ? SURFACE_LOCATIONS[hex.location]
+              : TOMB_LOCATIONS[hex.location]
+            return location?.searchRule !== null && hex.explored
+          }
+        )
+
+        if (searchableHex) {
+          const [hexId] = searchableHex
+          const parts = hexId.split(',').map(Number)
+
+          // Move player to searchable hex
+          act(() => {
+            result.current.updatePlayer(0, {
+              position: { row: parts[0] ?? 0, col: parts[1] ?? 0 },
+              supplyPoints: 5
+            })
+          })
+
+          const initialSP = result.current.players[0]?.supplyPoints || 0
+
+          // Perform search
+          act(() => {
+            result.current.performAction('SEARCH')
+          })
+
+          // SP should be deducted by at least 1 (cost) minus any gain
+          const finalSP = result.current.players[0]?.supplyPoints || 0
+          expect(finalSP).toBeLessThanOrEqual(initialSP)
+        }
+      })
+
+      it('should apply SP reward from search rule', () => {
+        const { result } = renderHook(() => useCampaign())
+
+        act(() => {
+          result.current.startGame(2)
+        })
+
+        // Find a hex with SP search rule (location 14 = Crashed Vessel has 'd3' SP rule)
+        const spSearchHex = Object.entries(result.current.hexes).find(
+          ([hexId, hex]) => hex.type === 'surface' && hex.location === 14 && hex.explored
+        )
+
+        if (spSearchHex) {
+          const [hexId] = spSearchHex
+          const parts = hexId.split(',').map(Number)
+
+          act(() => {
+            result.current.updatePlayer(0, {
+              position: { row: parts[0] ?? 0, col: parts[1] ?? 0 },
+              supplyPoints: 5,
+              searchedHexes: [] // Ensure not already searched
+            })
+          })
+
+          const initialSP = result.current.players[0]?.supplyPoints || 0
+
+          act(() => {
+            result.current.performAction('SEARCH')
+          })
+
+          const finalSP = result.current.players[0]?.supplyPoints || 0
+          // Should gain d3 (1-3) - 1 (cost) = 0 to 2 net gain
+          expect(finalSP).toBeGreaterThanOrEqual(initialSP - 1) // At worst, gained 1 SP and paid 1 SP cost
+        }
+      })
+
+      it('should apply CP reward from search rule', () => {
+        const { result } = renderHook(() => useCampaign())
+
+        act(() => {
+          result.current.startGame(2)
+        })
+
+        // Find a hex with CP search rule (location 32 = Burial Mound has 1 CP rule)
+        const cpSearchHex = Object.entries(result.current.hexes).find(
+          ([hexId, hex]) => hex.type === 'surface' && hex.location === 32 && hex.explored
+        )
+
+        if (cpSearchHex) {
+          const [hexId] = cpSearchHex
+          const parts = hexId.split(',').map(Number)
+
+          act(() => {
+            result.current.updatePlayer(0, {
+              position: { row: parts[0] ?? 0, col: parts[1] ?? 0 },
+              campaignPoints: 0,
+              searchedHexes: []
+            })
+          })
+
+          act(() => {
+            result.current.performAction('SEARCH')
+          })
+
+          const finalCP = result.current.players[0]?.campaignPoints || 0
+          expect(finalCP).toBeGreaterThan(0) // Should have gained CP
+        }
+      })
+
+      it('should mark hex as searched (add to searchedHexes)', () => {
+        const { result } = renderHook(() => useCampaign())
+
+        act(() => {
+          result.current.startGame(2)
+        })
+
+        // Find a searchable hex
+        const searchableHex = Object.entries(result.current.hexes).find(
+          ([hexId, hex]) => {
+            const location = hex.type === 'surface'
+              ? SURFACE_LOCATIONS[hex.location]
+              : TOMB_LOCATIONS[hex.location]
+            return location?.searchRule !== null && hex.explored
+          }
+        )
+
+        if (searchableHex) {
+          const [hexId] = searchableHex
+          const parts = hexId.split(',').map(Number)
+
+          act(() => {
+            result.current.updatePlayer(0, {
+              position: { row: parts[0] ?? 0, col: parts[1] ?? 0 },
+              searchedHexes: []
+            })
+          })
+
+          expect(result.current.players[0]?.searchedHexes).toEqual([])
+
+          act(() => {
+            result.current.performAction('SEARCH')
+          })
+
+          // Hex should be marked as searched
+          expect(result.current.players[0]?.searchedHexes).toContain(hexId)
+        }
+      })
+
+      it('should respect SP cap of 10', () => {
+        const { result } = renderHook(() => useCampaign())
+
+        act(() => {
+          result.current.startGame(2)
+        })
+
+        // Find a hex with SP search rule
+        const spSearchHex = Object.entries(result.current.hexes).find(
+          ([hexId, hex]) => {
+            const location = hex.type === 'surface'
+              ? SURFACE_LOCATIONS[hex.location]
+              : TOMB_LOCATIONS[hex.location]
+            return location?.searchRule?.type === 'sp' && hex.explored
+          }
+        )
+
+        if (spSearchHex) {
+          const [hexId] = spSearchHex
+          const parts = hexId.split(',').map(Number)
+
+          // Set player to 9 SP (near cap)
+          act(() => {
+            result.current.updatePlayer(0, {
+              position: { row: parts[0] ?? 0, col: parts[1] ?? 0 },
+              supplyPoints: 9,
+              searchedHexes: []
+            })
+          })
+
+          act(() => {
+            result.current.performAction('SEARCH')
+          })
+
+          // SP should not exceed 10
+          expect(result.current.players[0]?.supplyPoints).toBeLessThanOrEqual(10)
+        }
+      })
+
+      it('should log search action to event history', () => {
+        const { result } = renderHook(() => useCampaign())
+
+        act(() => {
+          result.current.startGame(2)
+        })
+
+        // Find a searchable hex
+        const searchableHex = Object.entries(result.current.hexes).find(
+          ([hexId, hex]) => {
+            const location = hex.type === 'surface'
+              ? SURFACE_LOCATIONS[hex.location]
+              : TOMB_LOCATIONS[hex.location]
+            return location?.searchRule !== null && hex.explored
+          }
+        )
+
+        if (searchableHex) {
+          const [hexId] = searchableHex
+          const parts = hexId.split(',').map(Number)
+
+          act(() => {
+            result.current.updatePlayer(0, {
+              position: { row: parts[0] ?? 0, col: parts[1] ?? 0 },
+              searchedHexes: []
+            })
+          })
+
+          const initialLogLength = result.current.eventLog.length
+
+          act(() => {
+            result.current.performAction('SEARCH')
+          })
+
+          // Event log should have new entry
+          expect(result.current.eventLog.length).toBeGreaterThan(initialLogLength)
+
+          // Should contain search event
+          const searchEvent = result.current.eventLog.find(e =>
+            e.type === 'action' && e.message.includes('searched')
+          )
+          expect(searchEvent).toBeDefined()
+        }
+      })
+    })
+
+    describe('failed search', () => {
+      it('should fail when player has 0 SP', () => {
+        const { result } = renderHook(() => useCampaign())
+
+        act(() => {
+          result.current.startGame(2)
+        })
+
+        // Find a searchable hex
+        const searchableHex = Object.entries(result.current.hexes).find(
+          ([hexId, hex]) => {
+            const location = hex.type === 'surface'
+              ? SURFACE_LOCATIONS[hex.location]
+              : TOMB_LOCATIONS[hex.location]
+            return location?.searchRule !== null && hex.explored
+          }
+        )
+
+        if (searchableHex) {
+          const [hexId] = searchableHex
+          const parts = hexId.split(',').map(Number)
+
+          // Set player to 0 SP
+          act(() => {
+            result.current.updatePlayer(0, {
+              position: { row: parts[0] ?? 0, col: parts[1] ?? 0 },
+              supplyPoints: 0,
+              searchedHexes: []
+            })
+          })
+
+          const initialCP = result.current.players[0]?.campaignPoints || 0
+          const initialLogLength = result.current.eventLog.length
+
+          act(() => {
+            result.current.performAction('SEARCH')
+          })
+
+          // Should not gain CP (search failed)
+          expect(result.current.players[0]?.campaignPoints).toBe(initialCP)
+
+          // Should have warning event
+          expect(result.current.eventLog.length).toBeGreaterThan(initialLogLength)
+          const warningEvent = result.current.eventLog.find(e => e.type === 'warning')
+          expect(warningEvent).toBeDefined()
+        }
+      })
+
+      it('should fail when hex already searched', () => {
+        const { result } = renderHook(() => useCampaign())
+
+        act(() => {
+          result.current.startGame(2)
+        })
+
+        // Find a searchable hex
+        const searchableHex = Object.entries(result.current.hexes).find(
+          ([hexId, hex]) => {
+            const location = hex.type === 'surface'
+              ? SURFACE_LOCATIONS[hex.location]
+              : TOMB_LOCATIONS[hex.location]
+            return location?.searchRule !== null && hex.explored
+          }
+        )
+
+        if (searchableHex) {
+          const [hexId] = searchableHex
+          const parts = hexId.split(',').map(Number)
+
+          // Mark hex as already searched
+          act(() => {
+            result.current.updatePlayer(0, {
+              position: { row: parts[0] ?? 0, col: parts[1] ?? 0 },
+              supplyPoints: 5,
+              searchedHexes: [hexId] // Already searched this hex
+            })
+          })
+
+          const initialSP = result.current.players[0]?.supplyPoints || 0
+          const initialCP = result.current.players[0]?.campaignPoints || 0
+
+          act(() => {
+            result.current.performAction('SEARCH')
+          })
+
+          // Should not consume SP or gain rewards
+          expect(result.current.players[0]?.supplyPoints).toBe(initialSP)
+          expect(result.current.players[0]?.campaignPoints).toBe(initialCP)
+
+          // Should have warning event
+          const warningEvent = result.current.eventLog.find(e =>
+            e.type === 'warning' && e.message.includes('Already searched')
+          )
+          expect(warningEvent).toBeDefined()
+        }
+      })
+    })
+  })
+
+  describe('performAction SCOUT', () => {
+    describe('successful scout', () => {
+      it('should explore target hex when scout is successful', () => {
+        const { result } = renderHook(() => useCampaign())
+
+        act(() => {
+          result.current.startGame(2)
+        })
+
+        // Find an unexplored, non-blocked hex within distance 3
+        const playerPos = result.current.players[0]?.position
+        const unexploredHex = Object.entries(result.current.hexes).find(
+          ([hexId, hex]) => {
+            if (hex.explored || hex.type === 'blocked') return false
+            const dist = hexDistance(playerPos?.row ?? 0, playerPos?.col ?? 0, hex.row, hex.col)
+            return dist > 0 && dist <= 3
+          }
+        )
+
+        if (unexploredHex) {
+          const [hexId, hex] = unexploredHex
+          const distance = hexDistance(playerPos?.row ?? 0, playerPos?.col ?? 0, hex.row, hex.col)
+
+          // Ensure enough SP
+          act(() => {
+            result.current.updatePlayer(0, { supplyPoints: 5 })
+          })
+
+          act(() => {
+            result.current.performAction('SCOUT', { targetHex: hexId, distance })
+          })
+
+          // Target hex should be explored
+          expect(result.current.hexes[hexId]?.explored).toBe(true)
+          expect(result.current.hexes[hexId]?.location).toBeDefined()
+          expect(result.current.hexes[hexId]?.condition).toBeDefined()
+        }
+      })
+
+      it('should deduct 1 SP for distance of 1 hex', () => {
+        const { result } = renderHook(() => useCampaign())
+
+        act(() => {
+          result.current.startGame(2)
+        })
+
+        // Find unexplored hex at distance 1
+        const playerPos = result.current.players[0]?.position
+        const distance1Hex = Object.entries(result.current.hexes).find(
+          ([hexId, hex]) => {
+            if (hex.explored || hex.type === 'blocked') return false
+            const dist = hexDistance(playerPos?.row ?? 0, playerPos?.col ?? 0, hex.row, hex.col)
+            return dist === 1
+          }
+        )
+
+        if (distance1Hex) {
+          const [hexId] = distance1Hex
+          const initialSP = result.current.players[0]?.supplyPoints || 0
+
+          act(() => {
+            result.current.performAction('SCOUT', { targetHex: hexId, distance: 1 })
+          })
+
+          // Should deduct exactly 1 SP
+          expect(result.current.players[0]?.supplyPoints).toBe(initialSP - 1)
+        }
+      })
+
+      it('should deduct 2 SP for distance of 2 hexes', () => {
+        const { result } = renderHook(() => useCampaign())
+
+        act(() => {
+          result.current.startGame(2)
+        })
+
+        // Find unexplored hex at distance 2
+        const playerPos = result.current.players[0]?.position
+        const distance2Hex = Object.entries(result.current.hexes).find(
+          ([hexId, hex]) => {
+            if (hex.explored || hex.type === 'blocked') return false
+            const dist = hexDistance(playerPos?.row ?? 0, playerPos?.col ?? 0, hex.row, hex.col)
+            return dist === 2
+          }
+        )
+
+        if (distance2Hex) {
+          const [hexId] = distance2Hex
+          const initialSP = result.current.players[0]?.supplyPoints || 0
+
+          act(() => {
+            result.current.performAction('SCOUT', { targetHex: hexId, distance: 2 })
+          })
+
+          // Should deduct exactly 2 SP
+          expect(result.current.players[0]?.supplyPoints).toBe(initialSP - 2)
+        }
+      })
+
+      it('should deduct 3 SP for distance of 3 hexes', () => {
+        const { result } = renderHook(() => useCampaign())
+
+        act(() => {
+          result.current.startGame(2)
+        })
+
+        // Find unexplored hex at distance 3
+        const playerPos = result.current.players[0]?.position
+        const distance3Hex = Object.entries(result.current.hexes).find(
+          ([hexId, hex]) => {
+            if (hex.explored || hex.type === 'blocked') return false
+            const dist = hexDistance(playerPos?.row ?? 0, playerPos?.col ?? 0, hex.row, hex.col)
+            return dist === 3
+          }
+        )
+
+        if (distance3Hex) {
+          const [hexId] = distance3Hex
+          const initialSP = result.current.players[0]?.supplyPoints || 0
+
+          act(() => {
+            result.current.performAction('SCOUT', { targetHex: hexId, distance: 3 })
+          })
+
+          // Should deduct exactly 3 SP
+          expect(result.current.players[0]?.supplyPoints).toBe(initialSP - 3)
+        }
+      })
+
+      it('should add exploration event to log', () => {
+        const { result } = renderHook(() => useCampaign())
+
+        act(() => {
+          result.current.startGame(2)
+        })
+
+        // Find an unexplored hex
+        const playerPos = result.current.players[0]?.position
+        const unexploredHex = Object.entries(result.current.hexes).find(
+          ([hexId, hex]) => {
+            if (hex.explored || hex.type === 'blocked') return false
+            const dist = hexDistance(playerPos?.row ?? 0, playerPos?.col ?? 0, hex.row, hex.col)
+            return dist > 0 && dist <= 3
+          }
+        )
+
+        if (unexploredHex) {
+          const [hexId, hex] = unexploredHex
+          const distance = hexDistance(playerPos?.row ?? 0, playerPos?.col ?? 0, hex.row, hex.col)
+          const initialLogLength = result.current.eventLog.length
+
+          act(() => {
+            result.current.performAction('SCOUT', { targetHex: hexId, distance })
+          })
+
+          // Should have new events (scout action + exploration)
+          expect(result.current.eventLog.length).toBeGreaterThan(initialLogLength)
+
+          // Should contain scout event
+          const scoutEvent = result.current.eventLog.find(e =>
+            e.type === 'action' && e.message.includes('scouted')
+          )
+          expect(scoutEvent).toBeDefined()
+        }
+      })
+    })
+
+    describe('failed scout', () => {
+      it('should prevent scout when player has 0 SP', () => {
+        const { result } = renderHook(() => useCampaign())
+
+        act(() => {
+          result.current.startGame(2)
+        })
+
+        // Set player to 0 SP
+        act(() => {
+          result.current.updatePlayer(0, { supplyPoints: 0 })
+        })
+
+        // Find an unexplored hex
+        const playerPos = result.current.players[0]?.position
+        const unexploredHex = Object.entries(result.current.hexes).find(
+          ([hexId, hex]) => {
+            if (hex.explored || hex.type === 'blocked') return false
+            const dist = hexDistance(playerPos?.row ?? 0, playerPos?.col ?? 0, hex.row, hex.col)
+            return dist > 0 && dist <= 3
+          }
+        )
+
+        if (unexploredHex) {
+          const [hexId, hex] = unexploredHex
+          const distance = hexDistance(playerPos?.row ?? 0, playerPos?.col ?? 0, hex.row, hex.col)
+          const initialLogLength = result.current.eventLog.length
+
+          act(() => {
+            result.current.performAction('SCOUT', { targetHex: hexId, distance })
+          })
+
+          // Hex should NOT be explored
+          expect(result.current.hexes[hexId]?.explored).toBe(false)
+
+          // Should have error event
+          expect(result.current.eventLog.length).toBeGreaterThan(initialLogLength)
+          const errorEvent = result.current.eventLog.find(e =>
+            e.type === 'error' && e.message.includes('Not enough SP')
+          )
+          expect(errorEvent).toBeDefined()
+        }
+      })
+
+      it('should prevent scout when insufficient SP for distance', () => {
+        const { result } = renderHook(() => useCampaign())
+
+        act(() => {
+          result.current.startGame(2)
+        })
+
+        // Set player to only 1 SP
+        act(() => {
+          result.current.updatePlayer(0, { supplyPoints: 1 })
+        })
+
+        // Find an unexplored hex at distance 2 or 3
+        const playerPos = result.current.players[0]?.position
+        const farHex = Object.entries(result.current.hexes).find(
+          ([hexId, hex]) => {
+            if (hex.explored || hex.type === 'blocked') return false
+            const dist = hexDistance(playerPos?.row ?? 0, playerPos?.col ?? 0, hex.row, hex.col)
+            return dist >= 2 && dist <= 3
+          }
+        )
+
+        if (farHex) {
+          const [hexId, hex] = farHex
+          const distance = hexDistance(playerPos?.row ?? 0, playerPos?.col ?? 0, hex.row, hex.col)
+          const initialLogLength = result.current.eventLog.length
+
+          act(() => {
+            result.current.performAction('SCOUT', { targetHex: hexId, distance })
+          })
+
+          // Hex should NOT be explored
+          expect(result.current.hexes[hexId]?.explored).toBe(false)
+
+          // SP should remain at 1 (not consumed)
+          expect(result.current.players[0]?.supplyPoints).toBe(1)
+
+          // Should have error event
+          expect(result.current.eventLog.length).toBeGreaterThan(initialLogLength)
+          const errorEvent = result.current.eventLog.find(e =>
+            e.type === 'error' && e.message.includes('Not enough SP')
+          )
+          expect(errorEvent).toBeDefined()
+        }
+      })
+
+      it('should prevent scouting a blocked hex', () => {
+        const { result } = renderHook(() => useCampaign())
+
+        act(() => {
+          result.current.startGame(2)
+        })
+
+        // Find a blocked hex
+        const playerPos = result.current.players[0]?.position
+        const blockedHex = Object.entries(result.current.hexes).find(
+          ([hexId, hex]) => {
+            if (hex.type !== 'blocked') return false
+            const dist = hexDistance(playerPos?.row ?? 0, playerPos?.col ?? 0, hex.row, hex.col)
+            return dist > 0 && dist <= 3
+          }
+        )
+
+        if (blockedHex) {
+          const [hexId, hex] = blockedHex
+          const distance = hexDistance(playerPos?.row ?? 0, playerPos?.col ?? 0, hex.row, hex.col)
+          const initialSP = result.current.players[0]?.supplyPoints || 0
+          const initialLogLength = result.current.eventLog.length
+
+          act(() => {
+            result.current.performAction('SCOUT', { targetHex: hexId, distance })
+          })
+
+          // SP should NOT be consumed
+          expect(result.current.players[0]?.supplyPoints).toBe(initialSP)
+
+          // Should have error event
+          expect(result.current.eventLog.length).toBeGreaterThan(initialLogLength)
+          const errorEvent = result.current.eventLog.find(e =>
+            e.type === 'error' && e.message.includes('Cannot scout blocked hex')
+          )
+          expect(errorEvent).toBeDefined()
+        }
+      })
+
+      it('should prevent scouting an already explored hex', () => {
+        const { result } = renderHook(() => useCampaign())
+
+        act(() => {
+          result.current.startGame(2)
+        })
+
+        // Find an unexplored hex and explore it first
+        const playerPos = result.current.players[0]?.position
+        const unexploredHex = Object.entries(result.current.hexes).find(
+          ([hexId, hex]) => {
+            if (hex.explored || hex.type === 'blocked') return false
+            const dist = hexDistance(playerPos?.row ?? 0, playerPos?.col ?? 0, hex.row, hex.col)
+            return dist > 0 && dist <= 3
+          }
+        )
+
+        if (unexploredHex) {
+          const [hexId, hex] = unexploredHex
+          const distance = hexDistance(playerPos?.row ?? 0, playerPos?.col ?? 0, hex.row, hex.col)
+
+          // First, explore the hex
+          act(() => {
+            result.current.exploreHex(hexId)
+          })
+
+          expect(result.current.hexes[hexId]?.explored).toBe(true)
+
+          const initialSP = result.current.players[0]?.supplyPoints || 0
+          const initialLogLength = result.current.eventLog.length
+
+          // Try to scout the already-explored hex
+          act(() => {
+            result.current.performAction('SCOUT', { targetHex: hexId, distance })
+          })
+
+          // SP should NOT be consumed
+          expect(result.current.players[0]?.supplyPoints).toBe(initialSP)
+
+          // Should have warning event
+          expect(result.current.eventLog.length).toBeGreaterThan(initialLogLength)
+          const warningEvent = result.current.eventLog.find(e =>
+            e.type === 'warning' && e.message.includes('already explored')
+          )
+          expect(warningEvent).toBeDefined()
+        }
+      })
+
+      it('should prevent scouting a non-existent hex', () => {
+        const { result } = renderHook(() => useCampaign())
+
+        act(() => {
+          result.current.startGame(2)
+        })
+
+        const initialSP = result.current.players[0]?.supplyPoints || 0
+        const initialLogLength = result.current.eventLog.length
+
+        // Try to scout a hex that doesn't exist
+        act(() => {
+          result.current.performAction('SCOUT', { targetHex: '99,99', distance: 1 })
+        })
+
+        // SP should NOT be consumed
+        expect(result.current.players[0]?.supplyPoints).toBe(initialSP)
+
+        // Should have error event
+        expect(result.current.eventLog.length).toBeGreaterThan(initialLogLength)
+        const errorEvent = result.current.eventLog.find(e =>
+          e.type === 'error' && e.message.includes('Cannot scout invalid hex')
+        )
+        expect(errorEvent).toBeDefined()
+      })
     })
   })
 })

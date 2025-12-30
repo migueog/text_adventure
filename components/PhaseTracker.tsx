@@ -1,9 +1,10 @@
 'use client'
 
 import { useState } from 'react'
-import type { Player, Hex } from '@/types/campaign'
-import { PHASES, BATTLE_RESULTS, BattleResultInfo } from '@/lib/data/campaignData'
+import type { Player, Hex, SearchRule } from '@/types/campaign'
+import { PHASES, BATTLE_RESULTS, BattleResultInfo, SURFACE_LOCATIONS, TOMB_LOCATIONS } from '@/lib/data/campaignData'
 import { hexDistance, hexId, isPlayerInBlockedHex } from '@/lib/utils/hexUtils'
+import ScoutConfirmDialog from './ScoutConfirmDialog'
 
 interface PhaseTrackerProps {
   currentPhase: string
@@ -117,6 +118,22 @@ function ActionQueueBanner({
   )
 }
 
+// WHY: Format search rule for preview display
+function formatSearchRulePreview(rule: SearchRule | null): string {
+  if (!rule) return 'Nothing to search'
+
+  switch (rule.type) {
+    case 'sp':
+      const spAmount = rule.amount === 'd3' ? 'D3' : rule.amount === 'd3+1' ? 'D3+1' : rule.amount
+      return `Search to find ${spAmount} SP`
+    case 'cp':
+      return `Search to find ${rule.amount} CP`
+    case 'both':
+      const bothSpAmount = typeof rule.sp === 'string' ? rule.sp.toUpperCase() : rule.sp
+      return `Search to find ${bothSpAmount} SP and ${rule.cp} CP`
+  }
+}
+
 export default function PhaseTracker({
   currentPhase,
   currentRound,
@@ -138,6 +155,7 @@ export default function PhaseTracker({
 }: PhaseTrackerProps) {
   const [moveTarget, setMoveTarget] = useState<Hex | null>(null)
   const [scoutTarget, setScoutTarget] = useState<Hex | null>(null)
+  const [showScoutConfirm, setShowScoutConfirm] = useState(false)
   const [battleResult, setBattleResult] = useState<string>('WIN')
   const [operativesKilled, setOperativesKilled] = useState(0)
 
@@ -164,7 +182,10 @@ export default function PhaseTracker({
   const getScoutOptions = (): MovementOption[] => {
     const options: MovementOption[] = []
     Object.values(hexes).forEach(hex => {
+      // WHY: Skip already explored and blocked hexes
       if (hex.explored) return
+      if (hex.type === 'blocked') return
+
       const dist = hexDistance(currentRow, currentCol, hex.row, hex.col)
       if (dist > 0 && dist <= 3) {
         options.push({ hex, distance: dist, cost: dist })
@@ -174,6 +195,19 @@ export default function PhaseTracker({
   }
 
   const encampCost = calculateEncampCost(currentPlayer.id)
+
+  // WHY: Get current player's hex and search status
+  const playerPosId = hexId(currentPlayer.position.row, currentPlayer.position.col)
+  const playerCurrentHex = hexes[playerPosId]
+  const currentLocation = playerCurrentHex
+    ? (playerCurrentHex.type === 'surface'
+        ? SURFACE_LOCATIONS[playerCurrentHex.location]
+        : TOMB_LOCATIONS[playerCurrentHex.location])
+    : null
+
+  const alreadySearched = currentPlayer.searchedHexes?.includes(playerPosId) || false
+  const hasSearchRule = currentLocation?.searchRule !== null && currentLocation?.searchRule !== undefined
+  const canSearch = currentPlayer.supplyPoints >= 1 && hasSearchRule && !alreadySearched
 
   const handleMove = () => {
     if (moveTarget) {
@@ -186,11 +220,25 @@ export default function PhaseTracker({
 
   const handleScout = () => {
     if (scoutTarget) {
+      // WHY: Show confirmation dialog instead of executing immediately
+      setShowScoutConfirm(true)
+    }
+  }
+
+  // WHY: Execute scout after user confirms
+  const handleScoutConfirm = () => {
+    if (scoutTarget) {
       const dist = hexDistance(currentRow, currentCol, scoutTarget.row, scoutTarget.col)
       const targetId = hexId(scoutTarget.row, scoutTarget.col)
       onAction('SCOUT', { targetHex: targetId, distance: dist })
       setScoutTarget(null)
+      setShowScoutConfirm(false)
     }
+  }
+
+  // WHY: Cancel confirmation and return to selection
+  const handleScoutCancel = () => {
+    setShowScoutConfirm(false)
   }
 
   const handleBattle = () => {
@@ -450,22 +498,45 @@ export default function PhaseTracker({
                 </div>
                 {scoutTarget && (
                   <button className="action-btn" onClick={handleScout}>
-                    Scout {hexId(scoutTarget.row, scoutTarget.col)}
+                    Preview Scout {hexId(scoutTarget.row, scoutTarget.col)}
                   </button>
                 )}
               </div>
 
               {/* Search */}
               <div className="action-item">
-                <h5>Search</h5>
-                <p className="action-desc">
-                  Search current hex for resources.
-                </p>
+                <h5>Search (1 SP)</h5>
+
+                {/* Search Preview */}
+                {currentLocation?.searchRule && !alreadySearched ? (
+                  <p className="action-desc search-preview">
+                    {formatSearchRulePreview(currentLocation.searchRule)}
+                  </p>
+                ) : alreadySearched ? (
+                  <p className="action-desc search-unavailable">
+                    Already searched this location
+                  </p>
+                ) : (
+                  <p className="action-desc search-unavailable">
+                    Nothing to search here
+                  </p>
+                )}
+
                 <button
                   className="action-btn"
                   onClick={() => onAction('SEARCH')}
+                  disabled={!canSearch}
+                  title={
+                    currentPlayer.supplyPoints < 1
+                      ? 'Requires 1 SP'
+                      : !hasSearchRule
+                      ? 'Nothing to search at this location'
+                      : alreadySearched
+                      ? 'Already searched'
+                      : 'Perform search'
+                  }
                 >
-                  Search
+                  {canSearch ? 'Search' : 'Cannot Search'}
                 </button>
               </div>
 
@@ -545,6 +616,17 @@ export default function PhaseTracker({
             Next Phase →
           </button>
         </div>
+      )}
+
+      {/* Scout confirmation dialog */}
+      {showScoutConfirm && scoutTarget && (
+        <ScoutConfirmDialog
+          targetHex={scoutTarget}
+          distance={hexDistance(currentRow, currentCol, scoutTarget.row, scoutTarget.col)}
+          currentSP={currentPlayer.supplyPoints}
+          onConfirm={handleScoutConfirm}
+          onCancel={handleScoutCancel}
+        />
       )}
     </div>
   )

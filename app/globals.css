@@ -650,6 +650,18 @@ input, select {
   cursor: not-allowed;
 }
 
+/* Search Action Styles */
+.search-preview {
+  color: var(--accent-blue);
+  font-weight: 500;
+  font-style: italic;
+}
+
+.search-unavailable {
+  color: var(--text-muted);
+  font-style: italic;
+}
+
 .other-options {
   display: flex;
   gap: 0.5rem;
@@ -2135,4 +2147,93 @@ input, select {
   .player-waiting-badge .waiting-icon {
     font-size: 0.875rem;
   }
+}
+
+/* Scout Confirmation Dialog */
+.scout-confirm-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.scout-confirm-dialog {
+  background: var(--bg-secondary);
+  border: 2px solid var(--border-color);
+  border-radius: 8px;
+  padding: 1.5rem;
+  max-width: 400px;
+  width: 90%;
+}
+
+.scout-confirm-dialog h3 {
+  color: var(--accent-blue);
+  margin-bottom: 1rem;
+}
+
+.scout-details {
+  margin: 1rem 0;
+}
+
+.scout-detail-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.scout-error {
+  color: var(--accent-red);
+  font-weight: 600;
+}
+
+.scout-warning {
+  color: var(--accent-yellow);
+  font-weight: 600;
+}
+
+.scout-actions {
+  display: flex;
+  gap: 1rem;
+  margin-top: 1.5rem;
+}
+
+.scout-btn {
+  flex: 1;
+  padding: 0.75rem;
+  border-radius: 6px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.scout-btn.cancel {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+}
+
+.scout-btn.cancel:hover {
+  background: var(--border-color);
+}
+
+.scout-btn.confirm {
+  background: var(--accent-blue);
+  border: 1px solid var(--accent-blue);
+  color: white;
+}
+
+.scout-btn.confirm:hover:not(:disabled) {
+  background: #2980b9;
+}
+
+.scout-btn.confirm:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }

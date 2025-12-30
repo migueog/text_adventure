@@ -1,11 +1,28 @@
 // Type definitions for the campaign manager
 
+// WHY: Define search rule type system for location-based search rewards
+export type SearchRule =
+  | { type: 'sp', amount: 'd3' | 'd3+1' | number }
+  | { type: 'cp', amount: number }
+  | { type: 'both', sp: 'd3' | 'd3+1' | number, cp: number }
+  | null  // WHY: null means no search available at this location
+
+// WHY: Rich result object for UI display and logging
+export interface SearchResult {
+  success: boolean
+  spGained: number
+  cpGained: number
+  description: string
+  roll?: number  // WHY: For d3/d3+1 rolls, show the dice result
+}
+
 export interface Location {
   name: string
   description: string
   effect: string
   value?: number | string
   modifier?: number
+  searchRule: SearchRule  // WHY: One-time search reward for this location
 }
 
 export interface Condition {
@@ -72,6 +89,7 @@ export interface Player {
   history: HistoryEntry[]
   priority?: number
   battleResult: BattleResult | null  // WHY: Current round's battle result (null = no battle this round)
+  searchedHexes: string[]  // WHY: Track which hexes this player has searched (one-time use)
 }
 
 export interface Event {

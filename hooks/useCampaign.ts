@@ -17,6 +17,7 @@ import { hexId, hexDistance, canExploreHex, findNearestBaseOrCamp } from '@/lib/
 import { determinePriority, needsRollOff } from '@/lib/utils/priority'
 import { calculateActionPhaseOrder } from '@/lib/utils/actionPhaseUtils'
 import { calculateResupply } from '@/lib/utils/resupply'
+import { resolveSearchRule, canPerformSearch } from '@/lib/utils/search'
 
 // Constants for SP management
 const SP_MIN = 0
@@ -86,6 +87,7 @@ const createPlayer = (id: number, name: string, color: string, startHex: HexPosi
   camps: [],
   history: [],
   battleResult: null,
+  searchedHexes: [],  // WHY: Track which hexes this player has searched (one-time use)
 })
 
 interface PerformActionParams {
@@ -484,6 +486,41 @@ export function useCampaign() {
     })
   }, [currentRound, currentPhase, addEvent])
 
+  /**
+   * WHY: Validate scout action parameters and target hex
+   * Returns null if valid, error message string if invalid
+   */
+  function validateScout(
+    targetHex: string | undefined,
+    distance: number | undefined,
+    hexes: Record<string, Hex>,
+    playerSP: number
+  ): string | null {
+    if (!targetHex || !distance) {
+      return 'Invalid scout parameters'
+    }
+
+    const targetHexData = hexes[targetHex]
+
+    if (!targetHexData) {
+      return `Cannot scout invalid hex ${targetHex}`
+    }
+
+    if (targetHexData.type === 'blocked') {
+      return `Cannot scout blocked hex ${targetHex}`
+    }
+
+    if (targetHexData.explored) {
+      return `Cannot scout ${targetHex} - already explored`
+    }
+
+    if (playerSP < distance) {
+      return `Not enough SP to scout (need ${distance}, have ${playerSP})`
+    }
+
+    return null // Valid
+  }
+
   const performAction = useCallback((action: string, params: PerformActionParams = {}) => {
     const player = players[currentPlayerIndex]
     if (!player) return
@@ -550,14 +587,16 @@ export function useCampaign() {
 
       case 'SCOUT': {
         const { targetHex, distance } = params
-        if (!targetHex || !distance) return
 
-        const cost = distance
-
-        if (player.supplyPoints < cost) {
-          addEvent(`Not enough SP to scout (need ${cost}, have ${player.supplyPoints})`, 'error')
+        // WHY: Validate all scout preconditions
+        const validationError = validateScout(targetHex, distance, hexes, player.supplyPoints)
+        if (validationError) {
+          const errorType = validationError.includes('already explored') ? 'warning' : 'error'
+          addEvent(`${player.name}: ${validationError}`, errorType)
           return
         }
+
+        const cost = distance!
 
         setPlayers(prev => {
           const updated = [...prev]
@@ -565,7 +604,7 @@ export function useCampaign() {
           if (!currentPlayer) return prev
 
           const newSP = clampSP(currentPlayer.supplyPoints - cost)
-          
+
           updated[currentPlayerIndex] = {
             ...currentPlayer,
             supplyPoints: newSP,
@@ -574,48 +613,65 @@ export function useCampaign() {
           return updated
         })
 
-        exploreHex(targetHex)
+        exploreHex(targetHex!)
         addEvent(`${player.name} scouted ${targetHex} (cost: ${cost} SP)`, 'action')
         break
       }
 
       case 'SEARCH': {
-        const hex = hexes[playerPosId]
-        let spGain = 0
-        let cpGain = 0
-        let reward = null
-
-        const location = hex?.location ? (hex.type === 'surface' ? SURFACE_LOCATIONS[hex.location] : TOMB_LOCATIONS[hex.location]) : null
-
-        if (location?.effect === 'searchSP') {
-          spGain = parseValue(location.value || 'D3')
-          reward = `+${spGain} SP`
-        } else if (location?.effect === 'searchCP') {
-          cpGain = typeof location.value === 'number' ? location.value : parseValue(location.value || '1')
-          reward = `+${cpGain} CP`
+        const hexKey = hexId(player.position.row, player.position.col)
+        const hex = hexes[hexKey]
+        if (!hex) {
+          addEvent(`${player.name} cannot search - invalid hex`, 'warning')
+          break
         }
 
-        if (spGain > 0 || cpGain > 0) {
-          setPlayers(prev => {
-            const updated = [...prev]
-            const currentPlayer = updated[currentPlayerIndex]
-            if (!currentPlayer) return prev
+        // WHY: Validate search is allowed
+        const validation = canPerformSearch(player, hex, hexKey)
+        if (!validation.canSearch) {
+          addEvent(`${player.name} cannot search: ${validation.reason}`, 'warning')
+          break
+        }
 
-            const newSP = clampSP(currentPlayer.supplyPoints + spGain)
-            const newCP = currentPlayer.campaignPoints + cpGain
-            
-            updated[currentPlayerIndex] = {
-              ...currentPlayer,
-              supplyPoints: newSP,
-              campaignPoints: newCP,
-              history: addHistoryEntry(currentPlayer, currentRound, PHASES[currentPhase] || 'Unknown', spGain, cpGain, 'Search action')
-            }
-            return updated
-          })
-          addEvent(`${player.name} searched and found: ${reward}`, 'action')
-        } else {
+        // WHY: Get location and resolve search rule
+        const location = hex.type === 'surface'
+          ? SURFACE_LOCATIONS[hex.location]
+          : TOMB_LOCATIONS[hex.location]
+
+        const result = resolveSearchRule(location?.searchRule)
+        if (!result) {
           addEvent(`${player.name} searched but found nothing`, 'action')
+          break
         }
+
+        // WHY: Deduct 1 SP cost
+        const spCost = 1
+        const finalSP = clampSP(player.supplyPoints - spCost + result.spGained)
+        const finalCP = player.campaignPoints + result.cpGained
+
+        setPlayers(prev => {
+          const updated = [...prev]
+          const currentPlayer = updated[currentPlayerIndex]
+          if (!currentPlayer) return prev
+
+          updated[currentPlayerIndex] = {
+            ...currentPlayer,
+            supplyPoints: finalSP,
+            campaignPoints: finalCP,
+            searchedHexes: [...currentPlayer.searchedHexes, hexKey],  // WHY: Mark hex as searched (one-time use)
+            history: addHistoryEntry(
+              currentPlayer,
+              currentRound,
+              PHASES[currentPhase] || 'Unknown',
+              -spCost + result.spGained,
+              result.cpGained,
+              `Search: ${result.description}`
+            )
+          }
+          return updated
+        })
+
+        addEvent(`${player.name} searched ${location.name}: ${result.description}`, 'action')
         break
       }
 
