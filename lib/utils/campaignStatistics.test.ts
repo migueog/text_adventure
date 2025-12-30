@@ -60,7 +60,8 @@ describe('campaignStatistics', () => {
           bases: [],
           camps: [],
           history: [],
-          priority: 1
+          priority: 1,
+          battleResult: null
         },
         {
           id: 1,
@@ -78,7 +79,8 @@ describe('campaignStatistics', () => {
           bases: [],
           camps: [],
           history: [],
-          priority: 2
+          priority: 2,
+          battleResult: null
         }
       ]
 
@@ -113,7 +115,8 @@ describe('campaignStatistics', () => {
           bases: [],
           camps: [],
           history: [],
-          priority: 1
+          priority: 1,
+          battleResult: null
         }
       ]
 
@@ -140,7 +143,8 @@ describe('campaignStatistics', () => {
       bases: [],
       camps: [],
       history: [],
-      priority: 1
+      priority: 1,
+      battleResult: null
     }
 
     it('should generate summary for Warlord victory', () => {

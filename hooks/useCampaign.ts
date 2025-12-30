@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import type { Player, Hex, MapConfig, Event, HexPosition } from '@/types/campaign'
 import { 
   MAP_CONFIGS, 
@@ -15,6 +15,7 @@ import {
 import { rollD36, parseValue } from '@/lib/utils/dice'
 import { hexId, hexDistance, canExploreHex, findNearestBaseOrCamp } from '@/lib/utils/hexUtils'
 import { determinePriority, needsRollOff } from '@/lib/utils/priority'
+import { calculateActionPhaseOrder } from '@/lib/utils/actionPhaseUtils'
 
 // Constants for SP management
 const SP_MIN = 0
@@ -83,6 +84,7 @@ const createPlayer = (id: number, name: string, color: string, startHex: HexPosi
   bases: [startHex],
   camps: [],
   history: [],
+  battleResult: null,
 })
 
 interface PerformActionParams {
@@ -121,6 +123,10 @@ export function useCampaign() {
   // WHY: Track movement order and index for priority-based sequential movement
   const [movementOrder, setMovementOrder] = useState<number[]>([])
   const [movementIndex, setMovementIndex] = useState(0)
+
+  // WHY: Track action order and index for battle result-based turn ordering
+  const [actionOrder, setActionOrder] = useState<number[] | null>(null)
+  const [actionIndex, setActionIndex] = useState(0)
 
   const addEvent = useCallback((message: string, type: Event['type'] = 'system') => {
     const event: Event = {
@@ -202,6 +208,36 @@ export function useCampaign() {
       addEvent(`Movement order: ${orderNames}`, 'system')
     }
   }, [targetThreatLevel, addEvent])
+
+  // WHY: Reset battleResult fields at Battle Phase start (new round)
+  useEffect(() => {
+    if (currentPhase === 1 && PHASES[currentPhase] === 'Battle') {  // Battle Phase index is 1
+      setPlayers(prev => prev.map(p => ({ ...p, battleResult: null })))
+    }
+  }, [currentPhase])
+
+  // WHY: Calculate action order when entering Action Phase
+  useEffect(() => {
+    if (currentPhase === 2 && PHASES[currentPhase] === 'Action' && actionOrder === null) {  // Action Phase index is 2
+      const order = calculateActionPhaseOrder(players, determinePriority)
+      setActionOrder(order)
+      setActionIndex(0)
+
+      // Log action order for transparency
+      if (order.length > 0) {
+        const orderNames = order.map(i => players[i]?.name || `Player ${i}`).join(' → ')
+        addEvent(`Action order: ${orderNames}`, 'system')
+      }
+    }
+  }, [currentPhase, actionOrder, players, addEvent])
+
+  // WHY: Reset action order when leaving Action Phase
+  useEffect(() => {
+    if (currentPhase !== 2 && actionOrder !== null) {  // Not in Action Phase
+      setActionOrder(null)
+      setActionIndex(0)
+    }
+  }, [currentPhase, actionOrder])
 
   /**
    * Clear the exploration result modal state
@@ -681,6 +717,13 @@ export function useCampaign() {
       const newSP = clampSP(player.supplyPoints + result.spGain)
       const newCP = player.campaignPoints + result.cpGain
 
+      // WHY: Map result name to BattleResult type for Action Phase turn ordering
+      const battleResult =
+        result.name === 'Victory' ? 'WIN' :
+        result.name === 'Defeat' ? 'LOSS' :
+        result.name === 'Draw' ? 'DRAW' :
+        result.name === 'Bye (No Opponent)' ? 'BYE' : null
+
       updated[currentPlayerIndex] = {
         ...player,
         supplyPoints: newSP,
@@ -689,6 +732,7 @@ export function useCampaign() {
         gamesWon: result.name === 'Victory' ? player.gamesWon + 1 : player.gamesWon,
         gamesLost: result.name === 'Defeat' ? player.gamesLost + 1 : player.gamesLost,
         operativesKilled: player.operativesKilled + operativesKilled,
+        battleResult,  // WHY: Store for Action Phase turn ordering
         history: addHistoryEntry(player, currentRound, PHASES[currentPhase] || 'Unknown', result.spGain, result.cpGain, `Battle result: ${result.name}`)
       }
 
@@ -818,6 +862,15 @@ export function useCampaign() {
     return needsRollOff(players)
   }, [players])
 
+  // WHY: Advance to next player in Action Phase turn order
+  const advanceActionTurn = useCallback(() => {
+    setActionIndex(prev => {
+      if (!actionOrder) return 0
+      const nextIndex = prev + 1
+      return nextIndex >= actionOrder.length ? 0 : nextIndex
+    })
+  }, [actionOrder])
+
   return {
     // State
     gameStarted,
@@ -839,6 +892,8 @@ export function useCampaign() {
     explorationResult,
     movementOrder,
     movementIndex,
+    actionOrder,
+    actionIndex,
 
     // Setters
     setPlayerCount,
@@ -863,5 +918,6 @@ export function useCampaign() {
     enableExtendedMode,
     clearExplorationResult,
     calculateMovementOrder,
+    advanceActionTurn,
   }
 }

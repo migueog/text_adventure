@@ -115,7 +115,8 @@ const createPlayer = (
   gamesLost: 0,
   bases: [startHex],
   camps: [],
-  history: []
+  history: [],
+  battleResult: null
 })
 
 /**

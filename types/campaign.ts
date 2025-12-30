@@ -51,6 +51,9 @@ export interface HistoryEntry {
   cpAfter: number
 }
 
+// WHY: Track current round's battle result for Action Phase turn ordering
+export type BattleResult = 'WIN' | 'DRAW' | 'LOSS' | 'BYE'
+
 export interface Player {
   id: number
   name: string
@@ -68,6 +71,7 @@ export interface Player {
   operativesKilled: number
   history: HistoryEntry[]
   priority?: number
+  battleResult: BattleResult | null  // WHY: Current round's battle result (null = no battle this round)
 }
 
 export interface Event {
@@ -94,7 +98,5 @@ export interface CampaignState {
   mapConfig: MapConfig | null
   eventLog: Event[]
 }
-
-export type BattleResult = 'win' | 'loss' | 'draw' | 'bye'
 
 export type ActionType = 'scout' | 'resupply' | 'search' | 'encamp' | 'demolish'

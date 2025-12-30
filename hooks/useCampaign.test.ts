@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { renderHook, act } from '@testing-library/react'
 import { useCampaign } from './useCampaign'
+import { BATTLE_RESULTS } from '@/lib/data/campaignData'
 
 describe('useCampaign hook', () => {
   describe('initialization', () => {
@@ -1458,6 +1459,358 @@ describe('useCampaign hook', () => {
         // Movement order should always be [0]
         expect(result.current.movementOrder).toEqual([0])
       })
+    })
+  })
+
+  describe('Action Phase Turn Order', () => {
+    describe('recordBattle', () => {
+      it('should set battleResult field on player', () => {
+        const { result } = renderHook(() => useCampaign())
+
+        act(() => {
+          result.current.startGame(3)
+        })
+
+        const winResult = { name: 'Victory', cpGain: 1, spGain: 0 }
+
+        act(() => {
+          result.current.recordBattle(winResult, null, 0)
+        })
+
+        const player = result.current.players[result.current.currentPlayerIndex]
+        expect(player.battleResult).toBe('WIN')
+        expect(player.gamesWon).toBe(1)
+      })
+
+      it('should update cumulative stats (gamesWon/gamesLost)', () => {
+        const { result } = renderHook(() => useCampaign())
+
+        act(() => {
+          result.current.startGame(2)
+        })
+
+        const lossResult = { name: 'Defeat', cpGain: 0, spGain: 1 }
+
+        act(() => {
+          result.current.recordBattle(lossResult, null, 0)
+        })
+
+        const player = result.current.players[result.current.currentPlayerIndex]
+        expect(player.battleResult).toBe('LOSS')
+        expect(player.gamesLost).toBe(1)
+        expect(player.gamesPlayed).toBe(1)
+      })
+    })
+
+    describe('Battle Phase start', () => {
+      it('should reset all battleResult fields to null', () => {
+        const { result } = renderHook(() => useCampaign())
+
+        act(() => {
+          result.current.startGame(3)
+        })
+
+        // Record some battles
+        const winResult = { name: 'Victory', cpGain: 1, spGain: 0 }
+        act(() => {
+          result.current.recordBattle(winResult, null, 0)
+        })
+
+        // Advance to next round's Battle Phase
+        act(() => {
+          result.current.nextPhase() // Movement → Battle
+        })
+
+        // All battleResult fields should be null
+        result.current.players.forEach(p => {
+          expect(p.battleResult).toBeNull()
+        })
+      })
+    })
+
+    describe('Action Phase start', () => {
+      it('should calculate actionOrder automatically', () => {
+        const { result } = renderHook(() => useCampaign())
+
+        act(() => {
+          result.current.startGame(3)
+        })
+
+        // Advance to Battle Phase and record battles
+        act(() => {
+          result.current.nextPhase() // Movement → Battle
+        })
+
+        const winResult = { name: 'Victory', cpGain: 1, spGain: 0 }
+        const lossResult = { name: 'Defeat', cpGain: 0, spGain: 1 }
+
+        act(() => {
+          result.current.recordBattle(winResult, null, 0)
+        })
+        act(() => {
+          result.current.nextPhase() // Next player
+        })
+        act(() => {
+          result.current.recordBattle(lossResult, null, 0)
+        })
+
+        // Advance to Action Phase
+        act(() => {
+          result.current.nextPhase() // Battle → Action
+        })
+
+        expect(result.current.actionOrder).toBeDefined()
+        expect(Array.isArray(result.current.actionOrder)).toBe(true)
+        expect(result.current.actionOrder!.length).toBe(3)
+      })
+
+      it('should set actionIndex to 0', () => {
+        const { result } = renderHook(() => useCampaign())
+
+        act(() => {
+          result.current.startGame(2)
+        })
+
+        // Advance to Action Phase
+        act(() => {
+          result.current.nextPhase() // Movement → Battle
+          result.current.nextPhase() // Battle → Action
+        })
+
+        expect(result.current.actionIndex).toBe(0)
+      })
+    })
+
+    describe('advanceActionTurn', () => {
+      it('should increment actionIndex', () => {
+        const { result } = renderHook(() => useCampaign())
+
+        act(() => {
+          result.current.startGame(3)
+        })
+
+        // Setup action order
+        act(() => {
+          result.current.nextPhase() // Movement → Battle
+          result.current.nextPhase() // Battle → Action
+        })
+
+        expect(result.current.actionIndex).toBe(0)
+
+        act(() => {
+          result.current.advanceActionTurn()
+        })
+
+        expect(result.current.actionIndex).toBe(1)
+      })
+
+      it('should wrap to 0 after last player', () => {
+        const { result } = renderHook(() => useCampaign())
+
+        act(() => {
+          result.current.startGame(2)
+        })
+
+        // Setup action order
+        act(() => {
+          result.current.nextPhase() // Movement → Battle
+          result.current.nextPhase() // Battle → Action
+        })
+
+        expect(result.current.actionIndex).toBe(0)
+
+        // Advance to last player
+        act(() => {
+          result.current.advanceActionTurn()
+        })
+        expect(result.current.actionIndex).toBe(1)
+
+        // Should wrap to 0
+        act(() => {
+          result.current.advanceActionTurn()
+        })
+        expect(result.current.actionIndex).toBe(0)
+      })
+    })
+
+    describe('Action Phase end', () => {
+      it('should reset actionOrder to null', () => {
+        const { result } = renderHook(() => useCampaign())
+
+        act(() => {
+          result.current.startGame(2)
+        })
+
+        // Advance to Action Phase
+        act(() => {
+          result.current.nextPhase() // Movement → Battle
+          result.current.nextPhase() // Battle → Action
+        })
+
+        expect(result.current.actionOrder).toBeDefined()
+
+        // Advance to Threat Phase
+        act(() => {
+          result.current.nextPhase() // Action → Threat
+        })
+
+        expect(result.current.actionOrder).toBeNull()
+      })
+    })
+  })
+
+  // WHY: End-to-end test verifying complete battle-to-action flow
+  describe('Full Flow Integration', () => {
+    it('should handle complete round with battle results and action order', () => {
+      const { result } = renderHook(() => useCampaign())
+
+      // 1. Create campaign with 4 players
+      act(() => {
+        result.current.setPlayerCount(4)
+        result.current.setTargetThreatLevel(5)
+      })
+
+      act(() => {
+        result.current.startGame()
+      })
+
+      expect(result.current.players).toHaveLength(4)
+
+      // Set different CP/SP for priority testing
+      act(() => {
+        const players = result.current.players
+        result.current.updatePlayer(players[0].id, { campaignPoints: 10, supplyPoints: 5 })
+        result.current.updatePlayer(players[1].id, { campaignPoints: 5, supplyPoints: 3 })
+        result.current.updatePlayer(players[2].id, { campaignPoints: 8, supplyPoints: 4 })
+        result.current.updatePlayer(players[3].id, { campaignPoints: 5, supplyPoints: 6 })
+      })
+
+      // 2. Advance to Battle Phase and verify battleResult reset
+      act(() => {
+        result.current.nextPhase() // Movement → Battle
+      })
+
+      expect(result.current.currentPhase).toBe('Battle')
+      result.current.players.forEach(player => {
+        expect(player.battleResult).toBeNull()
+      })
+
+      // 3. Record battles: Player 0 = WIN, Player 1 = LOSS, Player 2 = DRAW, Player 3 = WIN
+      act(() => {
+        result.current.recordBattle(BATTLE_RESULTS.victory)
+      })
+      expect(result.current.players[0].battleResult).toBe('WIN')
+
+      // Move to next player and record loss
+      act(() => {
+        result.current.nextPhase() // Battle → Action
+        result.current.nextPhase() // Action → Threat
+        result.current.nextPhase() // Threat → Movement (next player)
+        result.current.nextPhase() // Movement → Battle
+      })
+
+      act(() => {
+        result.current.recordBattle(BATTLE_RESULTS.defeat)
+      })
+      expect(result.current.players[1].battleResult).toBe('LOSS')
+
+      // Move to player 2 and record draw
+      act(() => {
+        result.current.nextPhase() // Battle → Action
+        result.current.nextPhase() // Action → Threat
+        result.current.nextPhase() // Threat → Movement (next player)
+        result.current.nextPhase() // Movement → Battle
+      })
+
+      act(() => {
+        result.current.recordBattle(BATTLE_RESULTS.draw)
+      })
+      expect(result.current.players[2].battleResult).toBe('DRAW')
+
+      // Move to player 3 and record win
+      act(() => {
+        result.current.nextPhase() // Battle → Action
+        result.current.nextPhase() // Action → Threat
+        result.current.nextPhase() // Threat → Movement (next player)
+        result.current.nextPhase() // Movement → Battle
+      })
+
+      act(() => {
+        result.current.recordBattle(BATTLE_RESULTS.victory)
+      })
+      expect(result.current.players[3].battleResult).toBe('WIN')
+
+      // 4. Advance to Action Phase and verify order calculated
+      act(() => {
+        result.current.nextPhase() // Battle → Action
+      })
+
+      expect(result.current.currentPhase).toBe('Action')
+      expect(result.current.actionOrder).not.toBeNull()
+      expect(result.current.actionIndex).toBe(0)
+
+      // 5. Verify grouping: Winners first, Draws second, Losses last
+      const order = result.current.actionOrder!
+      const players = result.current.players
+
+      // Find indices of each group in the order
+      const winnerIndices = order.filter(idx => players[idx].battleResult === 'WIN')
+      const drawIndices = order.filter(idx => players[idx].battleResult === 'DRAW')
+      const lossIndices = order.filter(idx => players[idx].battleResult === 'LOSS')
+
+      // Winners: Player 0 (CP:10) and Player 3 (CP:5) → Player 3 should go first (lower CP)
+      expect(winnerIndices).toHaveLength(2)
+      expect(winnerIndices[0]).toBe(3) // CP:5
+      expect(winnerIndices[1]).toBe(0) // CP:10
+
+      // Draws: Player 2 only
+      expect(drawIndices).toHaveLength(1)
+      expect(drawIndices[0]).toBe(2)
+
+      // Losses: Player 1 only
+      expect(lossIndices).toHaveLength(1)
+      expect(lossIndices[0]).toBe(1)
+
+      // Verify order is Winners → Draws → Losses
+      const firstWinnerPos = order.indexOf(winnerIndices[0])
+      const firstDrawPos = order.indexOf(drawIndices[0])
+      const firstLossPos = order.indexOf(lossIndices[0])
+
+      expect(firstWinnerPos).toBeLessThan(firstDrawPos)
+      expect(firstDrawPos).toBeLessThan(firstLossPos)
+
+      // 6. Advance action turns and verify actionIndex increments
+      expect(result.current.actionIndex).toBe(0)
+
+      act(() => {
+        result.current.advanceActionTurn()
+      })
+      expect(result.current.actionIndex).toBe(1)
+
+      act(() => {
+        result.current.advanceActionTurn()
+      })
+      expect(result.current.actionIndex).toBe(2)
+
+      act(() => {
+        result.current.advanceActionTurn()
+      })
+      expect(result.current.actionIndex).toBe(3)
+
+      // Should wrap back to 0
+      act(() => {
+        result.current.advanceActionTurn()
+      })
+      expect(result.current.actionIndex).toBe(0)
+
+      // 7. Advance to Threat Phase and verify actionOrder reset
+      act(() => {
+        result.current.nextPhase() // Action → Threat
+      })
+
+      expect(result.current.currentPhase).toBe('Threat')
+      expect(result.current.actionOrder).toBeNull()
+      expect(result.current.actionIndex).toBe(0)
     })
   })
 })

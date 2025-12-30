@@ -25,7 +25,8 @@ describe('campaignExport', () => {
         bases: [{ row: 0, col: 0 }],
         camps: [],
         history: [],
-        priority: 1
+        priority: 1,
+        battleResult: null
       }
     ]
 

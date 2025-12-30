@@ -25,7 +25,8 @@ function createTestPlayer(
     bases: [{ row: 0, col: 0 }],
     camps: [],
     history: [],
-    priority: 0
+    priority: 0,
+    battleResult: null
   }
 }
 

@@ -16,6 +16,8 @@ interface PhaseTrackerProps {
   battleCompleted: boolean
   movementOrder: number[]
   movementIndex: number
+  actionOrder: number[] | null
+  actionIndex: number
   onNextPhase: () => void
   onMove: (playerIndex: number, targetHex: string, cost: number) => void
   onAction: (action: string, params?: any) => void
@@ -29,6 +31,92 @@ interface MovementOption {
   cost: number
 }
 
+// WHY: Helper component to render a single group (Winners/Draws/Losses) in the action queue
+function ActionGroup({
+  label,
+  playerIndices,
+  currentPlayerId,
+  players
+}: {
+  label: string
+  playerIndices: number[]
+  currentPlayerId: number | undefined
+  players: Player[]
+}) {
+  // WHY: Don't render empty groups to save space
+  if (playerIndices.length === 0) return null
+
+  return (
+    <div className="action-group">
+      <span className="group-label">{label}</span>
+      <div className="player-chips">
+        {playerIndices.map(idx => {
+          const player = players[idx]
+          if (!player) return null
+
+          return (
+            <div
+              key={idx}
+              className={`player-chip ${idx === currentPlayerId ? 'active' : 'waiting'}`}
+              style={{ backgroundColor: player.color }}
+            >
+              {player.name[0]}
+              {idx === currentPlayerId && ' ✓'}
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+// WHY: Visual action queue showing battle result-based turn order
+function ActionQueueBanner({
+  players,
+  actionOrder,
+  actionIndex
+}: {
+  players: Player[]
+  actionOrder: number[]
+  actionIndex: number
+}) {
+  // WHY: Group players by battle result for visual organization
+  const winners = actionOrder.filter(idx => players[idx]?.battleResult === 'WIN')
+  const draws = actionOrder.filter(idx => {
+    const result = players[idx]?.battleResult
+    return result === 'DRAW' || result === 'BYE' || result === null
+  })
+  const losses = actionOrder.filter(idx => players[idx]?.battleResult === 'LOSS')
+
+  const currentPlayerId = actionOrder[actionIndex]
+
+  return (
+    <div className="action-queue-banner">
+      <h3>Action Order</h3>
+      <div className="action-queue-groups">
+        <ActionGroup
+          label="WINNERS"
+          playerIndices={winners}
+          currentPlayerId={currentPlayerId}
+          players={players}
+        />
+        <ActionGroup
+          label="DRAWS"
+          playerIndices={draws}
+          currentPlayerId={currentPlayerId}
+          players={players}
+        />
+        <ActionGroup
+          label="LOSSES"
+          playerIndices={losses}
+          currentPlayerId={currentPlayerId}
+          players={players}
+        />
+      </div>
+    </div>
+  )
+}
+
 export default function PhaseTracker({
   currentPhase,
   currentRound,
@@ -40,6 +128,8 @@ export default function PhaseTracker({
   battleCompleted,
   movementOrder,
   movementIndex,
+  actionOrder,
+  actionIndex,
   onNextPhase,
   onMove,
   onAction,
@@ -308,6 +398,16 @@ export default function PhaseTracker({
         {currentPhaseIndex === 2 && (
           <div className="action-phase">
             <h4>Action Phase</h4>
+
+            {/* WHY: Show action queue when order is calculated */}
+            {actionOrder && (
+              <ActionQueueBanner
+                players={players}
+                actionOrder={actionOrder}
+                actionIndex={actionIndex}
+              />
+            )}
+
             <p>Choose one action to perform:</p>
 
             <div className="action-list">

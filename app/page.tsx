@@ -179,6 +179,8 @@ export default function Home() {
             battleCompleted={campaign.battleCompleted}
             movementOrder={campaign.movementOrder}
             movementIndex={campaign.movementIndex}
+            actionOrder={campaign.actionOrder}
+            actionIndex={campaign.actionIndex}
             onNextPhase={campaign.nextPhase}
             onMove={campaign.movePlayer}
             onAction={campaign.performAction}
