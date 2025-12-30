@@ -46,6 +46,14 @@ export interface HexPosition {
   col: number
 }
 
+/**
+ * WHY: Options for Encamp action with camp removal support
+ */
+export interface EncampOptions {
+  cost: number
+  campToRemove?: HexPosition  // Optional: camp to remove when at 2-camp limit
+}
+
 export interface Hex {
   id: string
   row: number

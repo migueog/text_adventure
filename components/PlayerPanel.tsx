@@ -1,17 +1,19 @@
 'use client'
 
 import { useState } from 'react'
-import type { Player } from '@/types/campaign'
+import type { Player, Hex } from '@/types/campaign'
 import { hexId } from '@/lib/utils/hexUtils'
+import { SURFACE_LOCATIONS, TOMB_LOCATIONS } from '@/lib/data/campaignData'
 
 interface PlayerCardProps {
   player: Player
   isActive: boolean
   currentPhase: string
+  hexes: Record<string, Hex>
   onUpdate: (playerId: number, updates: Partial<Player>) => void
 }
 
-function PlayerCard({ player, isActive, currentPhase, onUpdate }: PlayerCardProps) {
+function PlayerCard({ player, isActive, currentPhase, hexes, onUpdate }: PlayerCardProps) {
   const [editing, setEditing] = useState(false)
   const [showHistory, setShowHistory] = useState(false)
   const [editName, setEditName] = useState(player.name)
@@ -144,8 +146,36 @@ function PlayerCard({ player, isActive, currentPhase, onUpdate }: PlayerCardProp
 
         <div className="player-assets">
           <span className="asset-label">Bases: {player.bases.length}</span>
-          <span className="asset-label">Camps: {player.camps.length}</span>
+          <span className="asset-label">Camps: {player.camps.length}/2</span>
         </div>
+
+        {/* Camp List */}
+        {player.camps.length > 0 && (
+          <div className="player-section">
+            <div className="structure-list">
+              {player.camps.map((camp, idx) => {
+                const campHexId = hexId(camp.row, camp.col)
+                const campHex = hexes[campHexId]
+                return (
+                  <div key={idx} className="structure-item">
+                    <span className="structure-emoji">⛺</span>
+                    <div className="structure-info">
+                      <strong>Camp {idx + 1}</strong>
+                      <div className="structure-hex">{campHexId}</div>
+                      {campHex?.location && (
+                        <div className="structure-location">
+                          {campHex.type === 'surface'
+                            ? SURFACE_LOCATIONS[campHex.location]?.name
+                            : TOMB_LOCATIONS[campHex.location]?.name}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
 
         {(player.history && player.history.length > 0) && (
           <div className="player-history-section">
@@ -197,6 +227,7 @@ interface PlayerPanelProps {
   players: Player[]
   currentPlayerIndex: number
   currentPhase: string
+  hexes: Record<string, Hex>
   onUpdatePlayer: (playerId: number, updates: Partial<Player>) => void
 }
 
@@ -204,6 +235,7 @@ export default function PlayerPanel({
   players,
   currentPlayerIndex,
   currentPhase,
+  hexes,
   onUpdatePlayer
 }: PlayerPanelProps) {
   return (
@@ -213,6 +245,7 @@ export default function PlayerPanel({
         {players.map((player) => (
           <PlayerCard
             key={player.id}
+            hexes={hexes}
             player={player}
             isActive={player.id === currentPlayerIndex}
             currentPhase={currentPhase}

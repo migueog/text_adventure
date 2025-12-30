@@ -1,10 +1,11 @@
 'use client'
 
 import { useState } from 'react'
-import type { Player, Hex, SearchRule } from '@/types/campaign'
-import { PHASES, BATTLE_RESULTS, BattleResultInfo, SURFACE_LOCATIONS, TOMB_LOCATIONS } from '@/lib/data/campaignData'
+import type { Player, Hex, SearchRule, HexPosition } from '@/types/campaign'
+import { PHASES, BATTLE_RESULTS, BattleResultInfo, SURFACE_LOCATIONS, TOMB_LOCATIONS, SURFACE_CONDITIONS, TOMB_CONDITIONS } from '@/lib/data/campaignData'
 import { hexDistance, hexId, isPlayerInBlockedHex } from '@/lib/utils/hexUtils'
 import ScoutConfirmDialog from './ScoutConfirmDialog'
+import CampSelectionModal from './CampSelectionModal'
 
 interface PhaseTrackerProps {
   currentPhase: string
@@ -156,6 +157,8 @@ export default function PhaseTracker({
   const [moveTarget, setMoveTarget] = useState<Hex | null>(null)
   const [scoutTarget, setScoutTarget] = useState<Hex | null>(null)
   const [showScoutConfirm, setShowScoutConfirm] = useState(false)
+  const [showCampSelection, setShowCampSelection] = useState(false)
+  const [pendingEncampCost, setPendingEncampCost] = useState<number>(0)
   const [battleResult, setBattleResult] = useState<string>('WIN')
   const [operativesKilled, setOperativesKilled] = useState(0)
 
@@ -164,6 +167,8 @@ export default function PhaseTracker({
   const currentPosId = hexId(currentPlayer.position.row, currentPlayer.position.col)
   const currentRow = currentPlayer.position.row
   const currentCol = currentPlayer.position.col
+  const currentHexId = hexId(currentRow, currentCol)
+  const currentHex = hexes[currentHexId]
   const currentPhaseIndex = PHASES.indexOf(currentPhase)
 
   // Calculate movement options
@@ -241,6 +246,23 @@ export default function PhaseTracker({
     setShowScoutConfirm(false)
   }
 
+  // WHY: Handle camp selection for removal
+  const handleCampRemoval = (campToRemove: HexPosition) => {
+    setShowCampSelection(false)
+    onAction('ENCAMP', {
+      options: {
+        cost: pendingEncampCost,
+        campToRemove
+      }
+    })
+  }
+
+  // WHY: Cancel camp selection
+  const handleCampSelectionCancel = () => {
+    setShowCampSelection(false)
+    setPendingEncampCost(0)
+  }
+
   const handleBattle = () => {
     const result = BATTLE_RESULTS[battleResult]
     if (result) {
@@ -259,7 +281,6 @@ export default function PhaseTracker({
   )
 
   // Check if player is in blocked hex
-  const currentHex = hexes[currentPosId]
   const inBlockedHex = isPlayerInBlockedHex(currentPlayer.position, currentHex)
 
   return (
@@ -543,17 +564,57 @@ export default function PhaseTracker({
               {/* Encamp */}
               <div className="action-item">
                 <h5>Encamp</h5>
-                <p className="action-desc">
-                  Build a camp here. Cost: {encampCost} SP (distance to nearest base/camp)
-                </p>
+
+                <div className="encamp-info">
+                  <div className="encamp-cost-row">
+                    <span>Base Cost:</span>
+                    <strong>{encampCost} SP</strong>
+                  </div>
+
+                  {currentHex?.location !== undefined &&
+                   (currentHex.type === 'surface'
+                     ? SURFACE_LOCATIONS[currentHex.location]?.effect === 'freeEncamp'
+                     : TOMB_LOCATIONS[currentHex.location]?.effect === 'freeEncamp') && (
+                    <div className="encamp-modifier free">
+                      Free Encamp: 0 SP (Landing Site)
+                    </div>
+                  )}
+
+                  {currentHex?.condition !== undefined &&
+                   (currentHex.type === 'surface'
+                     ? SURFACE_CONDITIONS[currentHex.condition]?.effect === 'cheapEncamp'
+                     : TOMB_CONDITIONS[currentHex.condition]?.effect === 'cheapEncamp') && (
+                    <div className="encamp-modifier cheap">
+                      Cheap Encamp: -1 SP (Stable Conditions)
+                    </div>
+                  )}
+
+                  <div className="encamp-camps">
+                    <span>Your Camps:</span>
+                    <strong className={currentPlayer.camps.length >= 2 ? 'camp-limit-warn' : ''}>
+                      {currentPlayer.camps.length}/2
+                    </strong>
+                  </div>
+                </div>
+
                 <button
                   className="action-btn"
-                  onClick={() => onAction('ENCAMP', { cost: encampCost })}
+                  onClick={() => {
+                    const cost = encampCost
+                    // WHY: If player has 2 camps, show removal modal first
+                    if (currentPlayer.camps.length >= 2) {
+                      setPendingEncampCost(cost)
+                      setShowCampSelection(true)
+                    } else {
+                      // WHY: Build camp directly if under limit
+                      onAction('ENCAMP', { options: { cost } })
+                    }
+                  }}
                   disabled={
                     currentPlayer.supplyPoints < encampCost
                   }
                 >
-                  Build Camp ({encampCost} SP)
+                  {currentPlayer.camps.length >= 2 ? 'Replace Camp' : 'Build Camp'} ({encampCost} SP)
                 </button>
               </div>
 
@@ -626,6 +687,15 @@ export default function PhaseTracker({
           currentSP={currentPlayer.supplyPoints}
           onConfirm={handleScoutConfirm}
           onCancel={handleScoutCancel}
+        />
+      )}
+
+      {showCampSelection && (
+        <CampSelectionModal
+          camps={currentPlayer.camps}
+          hexes={hexes}
+          onSelectCamp={handleCampRemoval}
+          onCancel={handleCampSelectionCancel}
         />
       )}
     </div>

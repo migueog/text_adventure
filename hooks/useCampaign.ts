@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useCallback, useEffect } from 'react'
-import type { Player, Hex, MapConfig, Event, HexPosition } from '@/types/campaign'
+import type { Player, Hex, MapConfig, Event, HexPosition, EncampOptions } from '@/types/campaign'
 import { 
   MAP_CONFIGS, 
   SURFACE_LOCATIONS, 
@@ -94,6 +94,7 @@ interface PerformActionParams {
   targetHex?: string
   distance?: number
   cost?: number
+  options?: EncampOptions  // WHY: Encamp action with camp removal support
 }
 
 export function useCampaign() {
@@ -521,6 +522,63 @@ export function useCampaign() {
     return null // Valid
   }
 
+  /**
+   * WHY: Validate encamp action parameters and enforce camp limit
+   * Returns error message or null if valid
+   */
+  function validateEncamp(
+    currentHex: HexPosition,
+    hexes: Record<string, Hex>,
+    players: Player[],
+    currentPlayerIndex: number,
+    campToRemove: HexPosition | undefined
+  ): string | null {
+    const currentHexId = hexId(currentHex.row, currentHex.col)
+    const hex = hexes[currentHexId]
+    const player = players[currentPlayerIndex]
+
+    if (!hex || !player) {
+      return 'Invalid hex or player'
+    }
+
+    // WHY: Cannot camp in blocked hexes
+    if (hex.type === 'blocked') {
+      return `Cannot build camp in blocked hex ${currentHexId}`
+    }
+
+    // WHY: Cannot camp where opponent has base
+    for (let i = 0; i < players.length; i++) {
+      if (i === currentPlayerIndex) continue
+      const opponent = players[i]!
+
+      if (opponent.bases.some(b => b.row === currentHex.row && b.col === currentHex.col)) {
+        return `Cannot build camp - opponent has base at ${currentHexId}`
+      }
+
+      if (opponent.camps.some(c => c.row === currentHex.row && c.col === currentHex.col)) {
+        return `Cannot build camp - opponent has camp at ${currentHexId}`
+      }
+    }
+
+    // WHY: Enforce 2-camp maximum
+    const campCount = player.camps.length
+    if (campCount >= 2 && !campToRemove) {
+      return 'Cannot build camp - maximum 2 camps allowed. Remove one first.'
+    }
+
+    // WHY: Validate campToRemove exists if provided
+    if (campToRemove) {
+      const campExists = player.camps.some(
+        c => c.row === campToRemove.row && c.col === campToRemove.col
+      )
+      if (!campExists) {
+        return `Cannot remove camp at ${hexId(campToRemove.row, campToRemove.col)} - not found`
+      }
+    }
+
+    return null // Valid
+  }
+
   const performAction = useCallback((action: string, params: PerformActionParams = {}) => {
     const player = players[currentPlayerIndex]
     if (!player) return
@@ -676,37 +734,31 @@ export function useCampaign() {
       }
 
       case 'ENCAMP': {
-        const { cost } = params
-        if (cost === undefined) return
+        const { options } = params
+        if (!options) return
 
-        const hex = hexes[playerPosId]
+        const { cost, campToRemove } = options
 
-        // Check if camp or base already exists
-        const hasStructure = players.some(p => 
-          p.bases.some(b => b.row === player.position.row && b.col === player.position.col) ||
-          p.camps.some(c => c.row === player.position.row && c.col === player.position.col)
+        // WHY: Validate all encamp preconditions
+        const validationError = validateEncamp(
+          player.position,
+          hexes,
+          players,
+          currentPlayerIndex,
+          campToRemove
         )
 
-        if (hasStructure) {
-          addEvent(`Cannot build camp here - already occupied`, 'error')
+        if (validationError) {
+          addEvent(`${player.name}: ${validationError}`, 'error')
           return
         }
 
+        // WHY: Check sufficient SP AFTER validation
         if (player.supplyPoints < cost) {
-          addEvent(`Not enough SP to encamp (need ${cost})`, 'error')
-          return
-        }
-
-        // Apply location modifier
-        let actualCost = cost
-        const location = hex?.location ? (hex.type === 'surface' ? SURFACE_LOCATIONS[hex.location] : TOMB_LOCATIONS[hex.location]) : null
-        const condition = hex?.condition ? (hex.type === 'surface' ? SURFACE_CONDITIONS[hex.condition] : TOMB_CONDITIONS[hex.condition]) : null
-
-        if (location?.effect === 'freeEncamp') actualCost = 0
-        if (condition?.effect === 'cheapEncamp') actualCost = Math.max(0, actualCost - 1)
-
-        if (player.supplyPoints < actualCost) {
-          addEvent(`Not enough SP to encamp (need ${actualCost}, have ${player.supplyPoints})`, 'error')
+          addEvent(
+            `${player.name}: Not enough SP to build camp (need ${cost}, have ${player.supplyPoints})`,
+            'error'
+          )
           return
         }
 
@@ -715,18 +767,43 @@ export function useCampaign() {
           const currentPlayer = updated[currentPlayerIndex]
           if (!currentPlayer) return prev
 
-          const newSP = clampSP(currentPlayer.supplyPoints - actualCost)
-          
+          let newCamps = [...currentPlayer.camps]
+
+          // WHY: Remove old camp before adding new one (if specified)
+          if (campToRemove) {
+            newCamps = newCamps.filter(
+              c => !(c.row === campToRemove.row && c.col === campToRemove.col)
+            )
+            addEvent(
+              `${player.name} removed camp at ${hexId(campToRemove.row, campToRemove.col)}`,
+              'action'
+            )
+          }
+
+          // WHY: Add new camp at current position
+          newCamps.push({ row: player.position.row, col: player.position.col })
+
           updated[currentPlayerIndex] = {
             ...currentPlayer,
-            supplyPoints: newSP,
-            camps: [...currentPlayer.camps, player.position],
-            history: addHistoryEntry(currentPlayer, currentRound, PHASES[currentPhase] || 'Unknown', -actualCost, 0, `Built camp at hex ${playerPosId}`)
+            camps: newCamps,
+            supplyPoints: clampSP(currentPlayer.supplyPoints - cost),
+            history: addHistoryEntry(
+              currentPlayer,
+              currentRound,
+              PHASES[currentPhase] || 'Unknown',
+              -cost,
+              0,
+              `Built camp at ${playerPosId}${campToRemove ? ` (removed camp at ${hexId(campToRemove.row, campToRemove.col)})` : ''}`
+            )
           }
+
           return updated
         })
 
-        addEvent(`${player.name} built a camp (cost: ${actualCost} SP)`, 'action')
+        addEvent(
+          `${player.name} built camp at ${playerPosId} (cost: ${cost} SP)`,
+          'action'
+        )
         break
       }
 

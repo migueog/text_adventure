@@ -231,10 +231,19 @@ export default class HexMapScene extends Phaser.Scene {
         color: '#2ecc71',
       }).setOrigin(0.5)
     } else if (hasCamp) {
-      this.add.text(x - HEX_SIZE * 0.5, y - 5, '⛺', {
+      // WHY: Find which player owns this camp to use their color
+      const campOwner = this.players.find(p =>
+        p.camps.some(c => c.row === row && c.col === col)
+      )
+      const campColor = campOwner?.color || '#3498db'
+
+      // WHY: Use player color with stroke for better visibility
+      const campMarker = this.add.text(x - HEX_SIZE * 0.5, y - 5, '⛺', {
         fontSize: '12px',
-        color: '#3498db',
-      }).setOrigin(0.5)
+        color: campColor,
+      })
+      campMarker.setOrigin(0.5)
+      campMarker.setStroke('#000000', 2)
     }
 
     // Store reference

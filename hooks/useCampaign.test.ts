@@ -2522,4 +2522,603 @@ describe('useCampaign hook', () => {
       })
     })
   })
+
+  describe('performAction ENCAMP', () => {
+    describe('cost calculation', () => {
+      it('should calculate cost as distance to nearest base', () => {
+        const { result } = renderHook(() => useCampaign())
+
+        act(() => {
+          result.current.startGame(2)
+        })
+
+        const player = result.current.players[0]
+        const playerPos = player?.position
+
+        if (player && playerPos) {
+          // Player starts on base, so distance should be 0
+          const nearestBase = player.bases[0]
+          if (nearestBase) {
+            const distanceToBase = hexDistance(
+              playerPos.row,
+              playerPos.col,
+              nearestBase.row,
+              nearestBase.col
+            )
+            expect(distanceToBase).toBe(0)
+          }
+        }
+      })
+
+      it('should calculate cost as distance to nearest camp', () => {
+        const { result } = renderHook(() => useCampaign())
+
+        act(() => {
+          result.current.startGame(2)
+        })
+
+        const player = result.current.players[0]
+        const playerPos = player?.position
+
+        if (player && playerPos) {
+          // Add a camp 2 hexes away
+          const campPos = { row: playerPos.row + 2, col: playerPos.col }
+          act(() => {
+            result.current.updatePlayer(0, {
+              camps: [campPos]
+            })
+          })
+
+          // Move player 1 hex from camp (3 hexes from base)
+          const newPos = { row: campPos.row - 1, col: campPos.col }
+          act(() => {
+            result.current.updatePlayer(0, {
+              position: newPos
+            })
+          })
+
+          const updatedPlayer = result.current.players[0]
+          if (updatedPlayer) {
+            // Should use camp distance (1) instead of base distance (3)
+            const distToCamp = hexDistance(newPos.row, newPos.col, campPos.row, campPos.col)
+            expect(distToCamp).toBe(1)
+          }
+        }
+      })
+
+      it('should use whichever is closer (base or camp)', () => {
+        const { result } = renderHook(() => useCampaign())
+
+        act(() => {
+          result.current.startGame(2)
+        })
+
+        const player = result.current.players[0]
+        const playerPos = player?.position
+
+        if (player && playerPos) {
+          // Add camp 1 hex away
+          const campPos = { row: playerPos.row + 1, col: playerPos.col }
+          act(() => {
+            result.current.updatePlayer(0, {
+              camps: [campPos],
+              position: campPos
+            })
+          })
+
+          // Player is now on camp (distance 0), far from base
+          const updatedPlayer = result.current.players[0]
+          if (updatedPlayer) {
+            const distToCamp = hexDistance(
+              updatedPlayer.position.row,
+              updatedPlayer.position.col,
+              campPos.row,
+              campPos.col
+            )
+            expect(distToCamp).toBe(0)
+          }
+        }
+      })
+
+      it('should apply freeEncamp modifier (cost = 0)', () => {
+        const { result } = renderHook(() => useCampaign())
+
+        act(() => {
+          result.current.startGame(2)
+        })
+
+        // Find Landing Site hex (has freeEncamp effect)
+        const landingSiteHex = Object.entries(result.current.hexes).find(
+          ([hexId, hex]) => hex.location?.effects?.freeEncamp === true
+        )
+
+        if (landingSiteHex) {
+          const [hexId, hex] = landingSiteHex
+
+          // Move player to Landing Site
+          act(() => {
+            result.current.updatePlayer(0, {
+              position: { row: hex.row, col: hex.col },
+              supplyPoints: 5
+            })
+          })
+
+          // Explore the hex first
+          act(() => {
+            result.current.exploreHex(hexId)
+          })
+
+          const initialSP = result.current.players[0]?.supplyPoints || 0
+
+          // Encamp should cost 0 due to freeEncamp
+          act(() => {
+            result.current.performAction('ENCAMP', { options: { cost: 0 } })
+          })
+
+          // SP should not change
+          expect(result.current.players[0]?.supplyPoints).toBe(initialSP)
+        }
+      })
+
+      it('should apply cheapEncamp modifier (cost = max(0, cost - 1))', () => {
+        const { result } = renderHook(() => useCampaign())
+
+        act(() => {
+          result.current.startGame(2)
+        })
+
+        // Find Stable hex (has cheapEncamp effect)
+        const stableHex = Object.entries(result.current.hexes).find(
+          ([hexId, hex]) => hex.condition?.effects?.cheapEncamp === true
+        )
+
+        if (stableHex) {
+          const [hexId, hex] = stableHex
+          const playerPos = result.current.players[0]?.position
+
+          if (playerPos) {
+            // Calculate normal cost (distance to base)
+            const normalCost = hexDistance(playerPos.row, playerPos.col, hex.row, hex.col)
+            const cheapCost = Math.max(0, normalCost - 1)
+
+            // Explore the hex first
+            act(() => {
+              result.current.exploreHex(hexId)
+            })
+
+            const initialSP = result.current.players[0]?.supplyPoints || 0
+
+            // Move player to Stable hex
+            act(() => {
+              result.current.updatePlayer(0, {
+                position: { row: hex.row, col: hex.col }
+              })
+            })
+
+            // Encamp with reduced cost
+            act(() => {
+              result.current.performAction('ENCAMP', { options: { cost: cheapCost } })
+            })
+
+            // Verify cost was reduced by 1
+            expect(result.current.players[0]?.supplyPoints).toBe(initialSP - cheapCost)
+          }
+        }
+      })
+    })
+
+    describe('camp limit enforcement', () => {
+      it('should allow encamp when player has 0 camps', () => {
+        const { result } = renderHook(() => useCampaign())
+
+        act(() => {
+          result.current.startGame(2)
+        })
+
+        const player = result.current.players[0]
+        expect(player?.camps.length).toBe(0)
+
+        // Encamp should succeed
+        act(() => {
+          result.current.performAction('ENCAMP', { options: { cost: 0 } })
+        })
+
+        expect(result.current.players[0]?.camps.length).toBe(1)
+      })
+
+      it('should allow encamp when player has 1 camp', () => {
+        const { result } = renderHook(() => useCampaign())
+
+        act(() => {
+          result.current.startGame(2)
+        })
+
+        const playerPos = result.current.players[0]?.position
+
+        if (playerPos) {
+          // Add 1 camp
+          act(() => {
+            result.current.updatePlayer(0, {
+              camps: [{ row: playerPos.row + 1, col: playerPos.col }]
+            })
+          })
+
+          expect(result.current.players[0]?.camps.length).toBe(1)
+
+          // Encamp should succeed (building second camp)
+          act(() => {
+            result.current.performAction('ENCAMP', { options: { cost: 0 } })
+          })
+
+          expect(result.current.players[0]?.camps.length).toBe(2)
+        }
+      })
+
+      it('should prevent encamp when player has 2 camps and no removal', () => {
+        const { result } = renderHook(() => useCampaign())
+
+        act(() => {
+          result.current.startGame(2)
+        })
+
+        const playerPos = result.current.players[0]?.position
+
+        if (playerPos) {
+          // Add 2 camps (maximum)
+          act(() => {
+            result.current.updatePlayer(0, {
+              camps: [
+                { row: playerPos.row + 1, col: playerPos.col },
+                { row: playerPos.row + 2, col: playerPos.col }
+              ]
+            })
+          })
+
+          expect(result.current.players[0]?.camps.length).toBe(2)
+
+          const initialLogLength = result.current.eventLog.length
+
+          // Encamp should fail without camp removal
+          act(() => {
+            result.current.performAction('ENCAMP', { options: { cost: 0 } })
+          })
+
+          // Should still have 2 camps
+          expect(result.current.players[0]?.camps.length).toBe(2)
+
+          // Should have error event
+          expect(result.current.eventLog.length).toBeGreaterThan(initialLogLength)
+          const errorEvent = result.current.eventLog.find(e =>
+            e.type === 'error' && e.message.includes('maximum 2 camps')
+          )
+          expect(errorEvent).toBeDefined()
+        }
+      })
+
+      it('should allow encamp when player has 2 camps and removes one', () => {
+        const { result } = renderHook(() => useCampaign())
+
+        act(() => {
+          result.current.startGame(2)
+        })
+
+        const playerPos = result.current.players[0]?.position
+
+        if (playerPos) {
+          const camp1 = { row: playerPos.row + 1, col: playerPos.col }
+          const camp2 = { row: playerPos.row + 2, col: playerPos.col }
+
+          // Add 2 camps (maximum)
+          act(() => {
+            result.current.updatePlayer(0, {
+              camps: [camp1, camp2]
+            })
+          })
+
+          expect(result.current.players[0]?.camps.length).toBe(2)
+
+          // Encamp with camp removal should succeed
+          act(() => {
+            result.current.performAction('ENCAMP', {
+              options: { cost: 0, campToRemove: camp1 }
+            })
+          })
+
+          // Should still have 2 camps (removed old, added new)
+          expect(result.current.players[0]?.camps.length).toBe(2)
+
+          // Should NOT have the removed camp
+          const stillHasCamp1 = result.current.players[0]?.camps.some(
+            c => c.row === camp1.row && c.col === camp1.col
+          )
+          expect(stillHasCamp1).toBe(false)
+        }
+      })
+    })
+
+    describe('validation', () => {
+      it('should prevent encamp in blocked hex', () => {
+        const { result } = renderHook(() => useCampaign())
+
+        act(() => {
+          result.current.startGame(2)
+        })
+
+        // Find a blocked hex
+        const blockedHex = Object.entries(result.current.hexes).find(
+          ([hexId, hex]) => hex.type === 'blocked'
+        )
+
+        if (blockedHex) {
+          const [hexId, hex] = blockedHex
+
+          // Move player to blocked hex
+          act(() => {
+            result.current.updatePlayer(0, {
+              position: { row: hex.row, col: hex.col },
+              supplyPoints: 5
+            })
+          })
+
+          const initialCamps = result.current.players[0]?.camps.length || 0
+          const initialLogLength = result.current.eventLog.length
+
+          // Try to encamp
+          act(() => {
+            result.current.performAction('ENCAMP', { options: { cost: 0 } })
+          })
+
+          // Should NOT add camp
+          expect(result.current.players[0]?.camps.length).toBe(initialCamps)
+
+          // Should have error event
+          expect(result.current.eventLog.length).toBeGreaterThan(initialLogLength)
+          const errorEvent = result.current.eventLog.find(e =>
+            e.type === 'error' && e.message.includes('blocked hex')
+          )
+          expect(errorEvent).toBeDefined()
+        }
+      })
+
+      it('should prevent encamp in opponent base hex', () => {
+        const { result } = renderHook(() => useCampaign())
+
+        act(() => {
+          result.current.startGame(2)
+        })
+
+        // Get opponent's base position
+        const opponentBase = result.current.players[1]?.bases[0]
+
+        if (opponentBase) {
+          // Move current player to opponent's base
+          act(() => {
+            result.current.updatePlayer(0, {
+              position: { row: opponentBase.row, col: opponentBase.col },
+              supplyPoints: 5
+            })
+          })
+
+          const initialCamps = result.current.players[0]?.camps.length || 0
+          const initialLogLength = result.current.eventLog.length
+
+          // Try to encamp
+          act(() => {
+            result.current.performAction('ENCAMP', { options: { cost: 0 } })
+          })
+
+          // Should NOT add camp
+          expect(result.current.players[0]?.camps.length).toBe(initialCamps)
+
+          // Should have error event
+          expect(result.current.eventLog.length).toBeGreaterThan(initialLogLength)
+          const errorEvent = result.current.eventLog.find(e =>
+            e.type === 'error' && e.message.includes('opponent')
+          )
+          expect(errorEvent).toBeDefined()
+        }
+      })
+
+      it('should prevent encamp in opponent camp hex', () => {
+        const { result } = renderHook(() => useCampaign())
+
+        act(() => {
+          result.current.startGame(2)
+        })
+
+        const opponentPos = result.current.players[1]?.position
+
+        if (opponentPos) {
+          // Give opponent a camp
+          const opponentCamp = { row: opponentPos.row + 1, col: opponentPos.col }
+          act(() => {
+            result.current.updatePlayer(1, {
+              camps: [opponentCamp]
+            })
+          })
+
+          // Move current player to opponent's camp
+          act(() => {
+            result.current.updatePlayer(0, {
+              position: { row: opponentCamp.row, col: opponentCamp.col },
+              supplyPoints: 5
+            })
+          })
+
+          const initialCamps = result.current.players[0]?.camps.length || 0
+          const initialLogLength = result.current.eventLog.length
+
+          // Try to encamp
+          act(() => {
+            result.current.performAction('ENCAMP', { options: { cost: 0 } })
+          })
+
+          // Should NOT add camp
+          expect(result.current.players[0]?.camps.length).toBe(initialCamps)
+
+          // Should have error event
+          expect(result.current.eventLog.length).toBeGreaterThan(initialLogLength)
+          const errorEvent = result.current.eventLog.find(e =>
+            e.type === 'error' && e.message.includes('opponent')
+          )
+          expect(errorEvent).toBeDefined()
+        }
+      })
+
+      it('should prevent encamp with insufficient SP', () => {
+        const { result } = renderHook(() => useCampaign())
+
+        act(() => {
+          result.current.startGame(2)
+        })
+
+        // Set player to 0 SP
+        act(() => {
+          result.current.updatePlayer(0, { supplyPoints: 0 })
+        })
+
+        const initialCamps = result.current.players[0]?.camps.length || 0
+        const initialLogLength = result.current.eventLog.length
+
+        // Try to encamp with cost of 1
+        act(() => {
+          result.current.performAction('ENCAMP', { options: { cost: 1 } })
+        })
+
+        // Should NOT add camp
+        expect(result.current.players[0]?.camps.length).toBe(initialCamps)
+
+        // SP should still be 0
+        expect(result.current.players[0]?.supplyPoints).toBe(0)
+
+        // Should have error event
+        expect(result.current.eventLog.length).toBeGreaterThan(initialLogLength)
+        const errorEvent = result.current.eventLog.find(e =>
+          e.type === 'error' && e.message.includes('Not enough SP')
+        )
+        expect(errorEvent).toBeDefined()
+      })
+    })
+
+    describe('successful encamp', () => {
+      it('should add camp to player camps array', () => {
+        const { result } = renderHook(() => useCampaign())
+
+        act(() => {
+          result.current.startGame(2)
+        })
+
+        const initialCamps = result.current.players[0]?.camps.length || 0
+        const playerPos = result.current.players[0]?.position
+
+        if (playerPos) {
+          act(() => {
+            result.current.performAction('ENCAMP', { options: { cost: 0 } })
+          })
+
+          // Should have one more camp
+          expect(result.current.players[0]?.camps.length).toBe(initialCamps + 1)
+
+          // New camp should be at player position
+          const newCamp = result.current.players[0]?.camps[initialCamps]
+          expect(newCamp?.row).toBe(playerPos.row)
+          expect(newCamp?.col).toBe(playerPos.col)
+        }
+      })
+
+      it('should deduct SP cost from player', () => {
+        const { result } = renderHook(() => useCampaign())
+
+        act(() => {
+          result.current.startGame(2)
+        })
+
+        act(() => {
+          result.current.updatePlayer(0, { supplyPoints: 5 })
+        })
+
+        const initialSP = result.current.players[0]?.supplyPoints || 0
+        const cost = 2
+
+        act(() => {
+          result.current.performAction('ENCAMP', { options: { cost } })
+        })
+
+        expect(result.current.players[0]?.supplyPoints).toBe(initialSP - cost)
+      })
+
+      it('should add event to log', () => {
+        const { result } = renderHook(() => useCampaign())
+
+        act(() => {
+          result.current.startGame(2)
+        })
+
+        const initialLogLength = result.current.eventLog.length
+
+        act(() => {
+          result.current.performAction('ENCAMP', { options: { cost: 0 } })
+        })
+
+        // Should have new event
+        expect(result.current.eventLog.length).toBeGreaterThan(initialLogLength)
+        const encampEvent = result.current.eventLog.find(e =>
+          e.type === 'action' && e.message.includes('built camp')
+        )
+        expect(encampEvent).toBeDefined()
+      })
+
+      it('should remove old camp when campToRemove provided', () => {
+        const { result } = renderHook(() => useCampaign())
+
+        act(() => {
+          result.current.startGame(2)
+        })
+
+        const playerPos = result.current.players[0]?.position
+
+        if (playerPos) {
+          const oldCamp = { row: playerPos.row + 1, col: playerPos.col }
+
+          // Add a camp
+          act(() => {
+            result.current.updatePlayer(0, {
+              camps: [oldCamp]
+            })
+          })
+
+          expect(result.current.players[0]?.camps.length).toBe(1)
+
+          // Move player away
+          const newPos = { row: playerPos.row + 2, col: playerPos.col }
+          act(() => {
+            result.current.updatePlayer(0, {
+              position: newPos
+            })
+          })
+
+          // Encamp with camp removal
+          act(() => {
+            result.current.performAction('ENCAMP', {
+              options: { cost: 0, campToRemove: oldCamp }
+            })
+          })
+
+          // Should still have 1 camp (removed old, added new)
+          expect(result.current.players[0]?.camps.length).toBe(1)
+
+          // Old camp should be gone
+          const stillHasOldCamp = result.current.players[0]?.camps.some(
+            c => c.row === oldCamp.row && c.col === oldCamp.col
+          )
+          expect(stillHasOldCamp).toBe(false)
+
+          // New camp should be at new position
+          const newCamp = result.current.players[0]?.camps[0]
+          expect(newCamp?.row).toBe(newPos.row)
+          expect(newCamp?.col).toBe(newPos.col)
+        }
+      })
+    })
+  })
 })

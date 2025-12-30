@@ -2237,3 +2237,183 @@ input, select {
   opacity: 0.5;
   cursor: not-allowed;
 }
+
+/* Camp Selection Modal */
+.camp-selection-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.camp-selection-modal {
+  background: var(--bg-secondary);
+  border: 2px solid var(--border-color);
+  border-radius: 8px;
+  padding: 1.5rem;
+  max-width: 450px;
+  width: 90%;
+}
+
+.camp-selection-modal h3 {
+  color: var(--accent-blue);
+  margin-bottom: 0.5rem;
+}
+
+.camp-selection-hint {
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  margin-bottom: 1rem;
+}
+
+.camp-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin: 1rem 0;
+}
+
+.camp-item {
+  background: var(--bg-tertiary);
+  border: 2px solid var(--border-color);
+  border-radius: 6px;
+  padding: 1rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-align: left;
+}
+
+.camp-item:hover {
+  border-color: var(--accent-red);
+  background: var(--bg-secondary);
+}
+
+.camp-item-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.camp-emoji {
+  font-size: 1.5rem;
+}
+
+.camp-item-details {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.camp-item-details div {
+  margin-bottom: 0.25rem;
+}
+
+.camp-selection-actions {
+  margin-top: 1.5rem;
+}
+
+.camp-btn {
+  width: 100%;
+  padding: 0.75rem;
+  border-radius: 6px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.camp-btn.cancel {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+}
+
+.camp-btn.cancel:hover {
+  background: var(--border-color);
+}
+
+/* Encamp Action Info */
+.encamp-info {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 1rem;
+  margin-bottom: 1rem;
+}
+
+.encamp-cost-row {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 0.5rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.encamp-modifier {
+  font-size: 0.85rem;
+  padding: 0.5rem;
+  border-radius: 4px;
+  margin-bottom: 0.5rem;
+}
+
+.encamp-modifier.free {
+  background: rgba(46, 204, 113, 0.15);
+  color: #2ecc71;
+}
+
+.encamp-modifier.cheap {
+  background: rgba(52, 152, 219, 0.15);
+  color: var(--accent-blue);
+}
+
+.encamp-camps {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 0.5rem;
+}
+
+.camp-limit-warn {
+  color: var(--accent-yellow);
+}
+
+/* Structure List (Camps/Bases in PlayerPanel) */
+.structure-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.structure-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+}
+
+.structure-emoji {
+  font-size: 1.5rem;
+}
+
+.structure-info {
+  flex: 1;
+  font-size: 0.85rem;
+}
+
+.structure-hex {
+  color: var(--text-secondary);
+  font-family: monospace;
+}
+
+.structure-location {
+  color: var(--accent-blue);
+  margin-top: 0.25rem;
+}

@@ -146,6 +146,7 @@ export default function Home() {
             players={campaign.players}
             currentPlayerIndex={campaign.currentPlayerIndex}
             currentPhase={campaign.currentPhase}
+            hexes={campaign.hexes}
             onUpdatePlayer={campaign.updatePlayer}
           />
           <ThreatMeter
