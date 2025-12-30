@@ -16,6 +16,7 @@ import { rollD36, parseValue } from '@/lib/utils/dice'
 import { hexId, hexDistance, canExploreHex, findNearestBaseOrCamp } from '@/lib/utils/hexUtils'
 import { determinePriority, needsRollOff } from '@/lib/utils/priority'
 import { calculateActionPhaseOrder } from '@/lib/utils/actionPhaseUtils'
+import { calculateResupply } from '@/lib/utils/resupply'
 
 // Constants for SP management
 const SP_MIN = 0
@@ -492,33 +493,24 @@ export function useCampaign() {
     switch (action) {
       case 'RESUPPLY': {
         const hex = hexes[playerPosId]
-        let spGain = 1
-
-        // Check if on own base
-        const isOnOwnBase = player.bases.some(base => 
-          base.row === player.position.row && base.col === player.position.col
-        )
-        
-        // Check if on own camp
-        const isOnOwnCamp = player.camps.some(camp => 
-          camp.row === player.position.row && camp.col === player.position.col
-        )
-
-        if (isOnOwnBase) {
-          spGain = 10
-        } else if (isOnOwnCamp) {
-          spGain = Math.floor(Math.random() * 3) + 4 // D3+3
+        if (!hex) {
+          addEvent(`${player.name} cannot resupply - invalid hex`, 'warning')
+          break
         }
 
-        // Apply condition modifiers
-        if (hex?.condition && SURFACE_CONDITIONS[hex.condition]?.effect === 'bonusResupply') spGain += 1
-        if (hex?.condition && TOMB_CONDITIONS[hex.condition]?.effect === 'bonusResupply') spGain += 1
-        if (hex?.condition && SURFACE_CONDITIONS[hex.condition]?.effect === 'reducedResupply') spGain -= 1
-        if (hex?.condition && TOMB_CONDITIONS[hex.condition]?.effect === 'reducedResupply') spGain -= 1
+        // WHY: Use new calculateResupply utility for location-based rewards
+        const resupplyResult = calculateResupply(player, hex)
+        let spGain = resupplyResult.amount
 
-        // Ensure we don't exceed max SP
+        // WHY: Apply condition modifiers as additional game mechanic
+        if (hex.condition && SURFACE_CONDITIONS[hex.condition]?.effect === 'bonusResupply') spGain += 1
+        if (hex.condition && TOMB_CONDITIONS[hex.condition]?.effect === 'bonusResupply') spGain += 1
+        if (hex.condition && SURFACE_CONDITIONS[hex.condition]?.effect === 'reducedResupply') spGain -= 1
+        if (hex.condition && TOMB_CONDITIONS[hex.condition]?.effect === 'reducedResupply') spGain -= 1
+
+        // WHY: Cap at maximum SP (10)
         const actualGain = Math.max(0, Math.min(spGain, SP_MAX - player.supplyPoints))
-        
+
         if (actualGain === 0) {
           addEvent(`${player.name} is already at max SP (10)`, 'system')
           break
@@ -530,16 +522,29 @@ export function useCampaign() {
           if (!currentPlayer) return prev
 
           const newSP = clampSP(currentPlayer.supplyPoints + actualGain)
-          
+
           updated[currentPlayerIndex] = {
             ...currentPlayer,
             supplyPoints: newSP,
-            history: addHistoryEntry(currentPlayer, currentRound, PHASES[currentPhase] || 'Unknown', actualGain, 0, 'Resupply action')
+            history: addHistoryEntry(
+              currentPlayer,
+              currentRound,
+              PHASES[currentPhase] || 'Unknown',
+              actualGain,
+              0,
+              resupplyResult.type === 'camp' && resupplyResult.roll
+                ? `Resupply at camp (rolled ${resupplyResult.roll}, +${resupplyResult.amount} base)`
+                : `Resupply at ${resupplyResult.type}`
+            )
           }
           return updated
         })
 
-        addEvent(`${player.name} resupplied: +${actualGain} SP`, 'action')
+        // WHY: Create informative event log message
+        const locationMsg = resupplyResult.type === 'camp' && resupplyResult.roll
+          ? `camp (D3=${resupplyResult.roll}, base +${resupplyResult.amount})`
+          : resupplyResult.type
+        addEvent(`${player.name} resupplied at ${locationMsg}: +${actualGain} SP`, 'action')
         break
       }
 
