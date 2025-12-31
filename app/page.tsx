@@ -187,6 +187,7 @@ export default function Home() {
             onAction={campaign.performAction}
             onBattle={campaign.recordBattle}
             calculateEncampCost={campaign.calculateEncampCost}
+            validateDemolish={campaign.validateDemolish}
           />
           <HexDetails
             hex={campaign.selectedHex ? campaign.hexes[campaign.selectedHex] : undefined}

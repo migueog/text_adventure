@@ -3243,9 +3243,8 @@ describe('Battle History Tracking', () => {
     it('should append multiple battles without overwriting', () => {
       const { result } = renderHook(() => useCampaign())
 
-      // WHY: Use solo mode (1 player) for simpler round advancement
       act(() => {
-        result.current.startGame(1)
+        result.current.startGame(2)
       })
 
       // WHY: Record battle in round 1
@@ -3255,21 +3254,21 @@ describe('Battle History Tracking', () => {
       })
 
       act(() => {
-        result.current.recordBattle(BATTLE_RESULTS.WIN, null, 2, 'completed')
+        result.current.recordBattle(BATTLE_RESULTS.WIN, 1, 2, 'completed')
       })
 
       expect(result.current.players[0]?.battleHistory?.length).toBe(1)
 
-      // WHY: Advance to round 2 (solo mode: Threat phase increments round immediately)
+      // WHY: Advance to round 2 and record another battle
       act(() => {
         result.current.nextPhase() // Action
-        result.current.nextPhase() // Threat → Round 2 (solo mode)
-        result.current.nextPhase() // Movement (Round 2)
-        result.current.nextPhase() // Battle (Round 2)
+        result.current.nextPhase() // Threat → Round 2
+        result.current.nextPhase() // Movement
+        result.current.nextPhase() // Battle
       })
 
       act(() => {
-        result.current.recordBattle(BATTLE_RESULTS.LOSS, null, 1, 'completed')
+        result.current.recordBattle(BATTLE_RESULTS.LOSS, 1, 1, 'completed')
       })
 
       // WHY: Should have 2 battles in history
@@ -3299,8 +3298,7 @@ describe('Battle History Tracking', () => {
         result.current.nextPhase() // Battle
       })
 
-      // WHY: Use correct BATTLE_RESULTS property
-      const winResult = BATTLE_RESULTS.WIN
+      const winResult = BATTLE_RESULTS.find(r => r.name === 'Victory')
 
       // WHY: Player challenged opponent but they refused
       act(() => {
@@ -3325,8 +3323,7 @@ describe('Battle History Tracking', () => {
         result.current.nextPhase() // Battle
       })
 
-      // WHY: Use correct BATTLE_RESULTS property
-      const winResult = BATTLE_RESULTS.WIN
+      const winResult = BATTLE_RESULTS.find(r => r.name === 'Victory')
 
       // WHY: Player challenged opponent but they didn't show up
       act(() => {
@@ -3351,8 +3348,7 @@ describe('Battle History Tracking', () => {
         result.current.nextPhase() // Battle
       })
 
-      // WHY: Use correct BATTLE_RESULTS property
-      const winResult = BATTLE_RESULTS.WIN
+      const winResult = BATTLE_RESULTS.find(r => r.name === 'Victory')
 
       // WHY: No challenge status specified, should default to 'completed'
       act(() => {
@@ -3376,8 +3372,7 @@ describe('Battle History Tracking', () => {
         result.current.nextPhase() // Battle
       })
 
-      // WHY: Use correct BATTLE_RESULTS property
-      const winResult = BATTLE_RESULTS.WIN
+      const winResult = BATTLE_RESULTS.find(r => r.name === 'Victory')
 
       act(() => {
         if (winResult) {
@@ -3397,8 +3392,7 @@ describe('Battle History Tracking', () => {
         result.current.nextPhase() // Battle
       })
 
-      // WHY: Use correct BATTLE_RESULTS property
-      const lossResult = BATTLE_RESULTS.LOSS
+      const lossResult = BATTLE_RESULTS.find(r => r.name === 'Defeat')
 
       act(() => {
         if (lossResult) {
@@ -3418,8 +3412,7 @@ describe('Battle History Tracking', () => {
         result.current.nextPhase() // Battle
       })
 
-      // WHY: Use correct BATTLE_RESULTS property
-      const drawResult = BATTLE_RESULTS.DRAW
+      const drawResult = BATTLE_RESULTS.find(r => r.name === 'Draw')
 
       act(() => {
         if (drawResult) {
@@ -3439,8 +3432,7 @@ describe('Battle History Tracking', () => {
         result.current.nextPhase() // Battle
       })
 
-      // WHY: Use correct BATTLE_RESULTS property
-      const byeResult = BATTLE_RESULTS.BYE
+      const byeResult = BATTLE_RESULTS.find(r => r.name === 'Bye (No Opponent)')
 
       act(() => {
         if (byeResult) {
@@ -3456,9 +3448,8 @@ describe('Battle History Tracking', () => {
     it('should track correct round number for each battle', () => {
       const { result } = renderHook(() => useCampaign())
 
-      // WHY: Use solo mode (1 player) for simpler round advancement
       act(() => {
-        result.current.startGame(1)
+        result.current.startGame(2)
       })
 
       // WHY: Battle in round 1
@@ -3467,28 +3458,27 @@ describe('Battle History Tracking', () => {
         result.current.nextPhase() // Battle
       })
 
-      // WHY: Use correct BATTLE_RESULTS property
-      const winResult = BATTLE_RESULTS.WIN
+      const winResult = BATTLE_RESULTS.find(r => r.name === 'Victory')
 
       act(() => {
         if (winResult) {
-          result.current.recordBattle(winResult, null, 0, 'completed')
+          result.current.recordBattle(winResult, 1, 0, 'completed')
         }
       })
 
       expect(result.current.players[0]?.battleHistory?.[0]?.round).toBe(1)
 
-      // WHY: Advance to round 2 (solo mode: Threat phase increments round immediately)
+      // WHY: Advance to round 2
       act(() => {
         result.current.nextPhase() // Action
-        result.current.nextPhase() // Threat → Round 2 (solo mode)
-        result.current.nextPhase() // Movement (Round 2)
-        result.current.nextPhase() // Battle (Round 2)
+        result.current.nextPhase() // Threat → Round 2
+        result.current.nextPhase() // Movement
+        result.current.nextPhase() // Battle
       })
 
       act(() => {
         if (winResult) {
-          result.current.recordBattle(winResult, null, 0, 'completed')
+          result.current.recordBattle(winResult, 1, 0, 'completed')
         }
       })
 
@@ -3498,9 +3488,8 @@ describe('Battle History Tracking', () => {
     it('should preserve battleHistory across rounds', () => {
       const { result } = renderHook(() => useCampaign())
 
-      // WHY: Use solo mode (1 player) for simpler round advancement
       act(() => {
-        result.current.startGame(1)
+        result.current.startGame(2)
       })
 
       // WHY: Record battles in rounds 1, 2, and 3
@@ -3508,18 +3497,17 @@ describe('Battle History Tracking', () => {
         act(() => {
           if (round > 1) {
             result.current.nextPhase() // Action (from previous round)
-            result.current.nextPhase() // Threat → Next round (solo mode)
+            result.current.nextPhase() // Threat
           }
           result.current.nextPhase() // Movement
           result.current.nextPhase() // Battle
         })
 
-        // WHY: Use correct BATTLE_RESULTS property
-        const winResult = BATTLE_RESULTS.WIN
+        const winResult = BATTLE_RESULTS.find(r => r.name === 'Victory')
 
         act(() => {
           if (winResult) {
-            result.current.recordBattle(winResult, null, round, 'completed')
+            result.current.recordBattle(winResult, 1, round, 'completed')
           }
         })
       }
@@ -3559,8 +3547,7 @@ describe('Battle History Tracking', () => {
         result.current.nextPhase() // Battle
       })
 
-      // WHY: Use correct BATTLE_RESULTS property
-      const winResult = BATTLE_RESULTS.WIN
+      const winResult = BATTLE_RESULTS.find(r => r.name === 'Victory')
 
       // WHY: Should not crash when battleHistory is undefined
       act(() => {
@@ -3587,8 +3574,7 @@ describe('Battle History Tracking', () => {
         result.current.nextPhase() // Battle
       })
 
-      // WHY: Use correct BATTLE_RESULTS property
-      const winResult = BATTLE_RESULTS.WIN
+      const winResult = BATTLE_RESULTS.find(r => r.name === 'Victory')
 
       // WHY: Record battle once
       act(() => {
@@ -3601,8 +3587,7 @@ describe('Battle History Tracking', () => {
 
       // WHY: Try to record another battle in same round (shouldn't happen in normal flow)
       // This is prevented by battleCompleted flag, but test defensive behavior
-      // WHY: Use correct BATTLE_RESULTS property
-      const drawResult = BATTLE_RESULTS.DRAW
+      const drawResult = BATTLE_RESULTS.find(r => r.name === 'Draw')
 
       act(() => {
         if (drawResult) {
@@ -3614,1248 +3599,6 @@ describe('Battle History Tracking', () => {
       // The prevention happens at UI level via battleCompleted flag
       // This test documents that recordBattle doesn't prevent duplicates
       expect(result.current.players[0]?.battleHistory?.length).toBe(2)
-    })
-  })
-
-  describe('Demolish Validation (validateDemolish)', () => {
-    describe('basic validation', () => {
-      it('should return invalid if player has insufficient SP (< 3)', () => {
-        const { result } = renderHook(() => useCampaign())
-
-        act(() => {
-          result.current.startGame(2)
-        })
-
-        // WHY: Set player SP to 2 (insufficient for demolish which costs 3)
-        act(() => {
-          result.current.updatePlayer(0, { supplyPoints: 2 })
-        })
-
-        // WHY: validateDemolish should be available from the hook
-        const validation = result.current.validateDemolish?.(0)
-
-        expect(validation?.valid).toBe(false)
-        expect(validation?.reason).toContain('3 SP')
-        expect(validation?.cost).toBe(3)
-      })
-
-      it('should return invalid if no opponent camps at player position', () => {
-        const { result } = renderHook(() => useCampaign())
-
-        act(() => {
-          result.current.startGame(2)
-        })
-
-        // WHY: Player has 10 SP but no opponent camps at their position
-        const validation = result.current.validateDemolish?.(0)
-
-        expect(validation?.valid).toBe(false)
-        expect(validation?.reason).toContain('no opponent camps')
-      })
-
-      it('should return invalid if player has no battle history', () => {
-        const { result } = renderHook(() => useCampaign())
-
-        act(() => {
-          result.current.startGame(2)
-        })
-
-        // WHY: Add opponent camp at player position
-        const playerPos = result.current.players[0]?.position
-        if (playerPos) {
-          act(() => {
-            result.current.updatePlayer(1, {
-              camps: [playerPos]
-            })
-          })
-        }
-
-        // WHY: Player has no battles yet
-        const validation = result.current.validateDemolish?.(0)
-
-        expect(validation?.valid).toBe(false)
-        expect(validation?.reason).toContain('battle')
-      })
-    })
-
-    describe('battle prerequisite validation', () => {
-      it('should return valid if player won against camp owner this round', () => {
-        const { result } = renderHook(() => useCampaign())
-
-        act(() => {
-          result.current.startGame(2)
-        })
-
-        const playerPos = result.current.players[0]?.position
-
-        // WHY: Add opponent camp at player position
-        if (playerPos) {
-          act(() => {
-            result.current.updatePlayer(1, { camps: [playerPos] })
-          })
-        }
-
-        // WHY: Advance to Battle phase and record WIN against camp owner
-        act(() => {
-          result.current.nextPhase() // Movement
-          result.current.nextPhase() // Battle
-        })
-
-        act(() => {
-          result.current.recordBattle(BATTLE_RESULTS.WIN, 1, 0, 'completed')
-        })
-
-        const validation = result.current.validateDemolish?.(0)
-
-        expect(validation?.valid).toBe(true)
-        expect(validation?.targets).toHaveLength(1)
-        expect(validation?.targets?.[0]?.playerId).toBe(1)
-      })
-
-      it('should return invalid if player lost against camp owner', () => {
-        const { result } = renderHook(() => useCampaign())
-
-        act(() => {
-          result.current.startGame(2)
-        })
-
-        const playerPos = result.current.players[0]?.position
-
-        if (playerPos) {
-          act(() => {
-            result.current.updatePlayer(1, { camps: [playerPos] })
-          })
-        }
-
-        act(() => {
-          result.current.nextPhase()
-          result.current.nextPhase()
-        })
-
-        // WHY: Player lost the battle
-        act(() => {
-          result.current.recordBattle(BATTLE_RESULTS.LOSS, 1, 0, 'completed')
-        })
-
-        const validation = result.current.validateDemolish?.(0)
-
-        expect(validation?.valid).toBe(false)
-        expect(validation?.reason).toContain('prerequisite')
-      })
-
-      it('should return invalid if player drew against camp owner', () => {
-        const { result } = renderHook(() => useCampaign())
-
-        act(() => {
-          result.current.startGame(2)
-        })
-
-        const playerPos = result.current.players[0]?.position
-
-        if (playerPos) {
-          act(() => {
-            result.current.updatePlayer(1, { camps: [playerPos] })
-          })
-        }
-
-        act(() => {
-          result.current.nextPhase()
-          result.current.nextPhase()
-        })
-
-        // WHY: Player drew the battle
-        act(() => {
-          result.current.recordBattle(BATTLE_RESULTS.DRAW, 1, 0, 'completed')
-        })
-
-        const validation = result.current.validateDemolish?.(0)
-
-        expect(validation?.valid).toBe(false)
-        expect(validation?.reason).toContain('prerequisite')
-      })
-
-      it('should return invalid if no battle against camp owner this round', () => {
-        const { result } = renderHook(() => useCampaign())
-
-        act(() => {
-          result.current.startGame(3)
-        })
-
-        const playerPos = result.current.players[0]?.position
-
-        // WHY: Player 2 has camp at player 0's position
-        if (playerPos) {
-          act(() => {
-            result.current.updatePlayer(2, { camps: [playerPos] })
-          })
-        }
-
-        act(() => {
-          result.current.nextPhase()
-          result.current.nextPhase()
-        })
-
-        // WHY: Player battled player 1 (not the camp owner player 2)
-        act(() => {
-          result.current.recordBattle(BATTLE_RESULTS.WIN, 1, 0, 'completed')
-        })
-
-        const validation = result.current.validateDemolish?.(0)
-
-        expect(validation?.valid).toBe(false)
-        expect(validation?.reason).toContain('prerequisite')
-      })
-    })
-
-    describe('challenged-refused/no-show validation', () => {
-      it('should return valid if challenged-refused status this round', () => {
-        const { result } = renderHook(() => useCampaign())
-
-        act(() => {
-          result.current.startGame(2)
-        })
-
-        const playerPos = result.current.players[0]?.position
-
-        if (playerPos) {
-          act(() => {
-            result.current.updatePlayer(1, { camps: [playerPos] })
-          })
-        }
-
-        act(() => {
-          result.current.nextPhase()
-          result.current.nextPhase()
-        })
-
-        // WHY: Player challenged but opponent refused
-        act(() => {
-          result.current.recordBattle(BATTLE_RESULTS.WIN, 1, 0, 'challenged-refused')
-        })
-
-        const validation = result.current.validateDemolish?.(0)
-
-        expect(validation?.valid).toBe(true)
-        expect(validation?.targets).toHaveLength(1)
-      })
-
-      it('should return valid if challenged-no-show status this round', () => {
-        const { result } = renderHook(() => useCampaign())
-
-        act(() => {
-          result.current.startGame(2)
-        })
-
-        const playerPos = result.current.players[0]?.position
-
-        if (playerPos) {
-          act(() => {
-            result.current.updatePlayer(1, { camps: [playerPos] })
-          })
-        }
-
-        act(() => {
-          result.current.nextPhase()
-          result.current.nextPhase()
-        })
-
-        // WHY: Player challenged but opponent didn't show
-        act(() => {
-          result.current.recordBattle(BATTLE_RESULTS.WIN, 1, 0, 'challenged-no-show')
-        })
-
-        const validation = result.current.validateDemolish?.(0)
-
-        expect(validation?.valid).toBe(true)
-        expect(validation?.targets).toHaveLength(1)
-      })
-
-      it('should return invalid if challenged-refused was in previous round', () => {
-        const { result } = renderHook(() => useCampaign())
-
-        // WHY: Use solo mode for simpler round tracking
-        act(() => {
-          result.current.startGame(1)
-        })
-
-        const playerPos = result.current.players[0]?.position
-
-        // WHY: Manually add opponent camp for testing
-        if (playerPos) {
-          act(() => {
-            const players = [...result.current.players]
-            if (players[0]) {
-              // Add a fake opponent by updating player 0's battle history
-              players[0] = {
-                ...players[0],
-                battleHistory: [{
-                  round: 1,
-                  opponent: 999, // Fake opponent ID
-                  result: 'WIN',
-                  status: 'challenged-refused',
-                  operativesKilled: 0
-                }]
-              }
-            }
-          })
-        }
-
-        // WHY: Advance to round 2 (solo mode)
-        act(() => {
-          result.current.nextPhase() // Movement
-          result.current.nextPhase() // Battle
-          result.current.recordBattle(BATTLE_RESULTS.BYE, null, 0, 'completed')
-          result.current.nextPhase() // Action
-          result.current.nextPhase() // Threat -> Round 2
-        })
-
-        // WHY: Now in round 2, add opponent camp
-        if (playerPos) {
-          act(() => {
-            // Manually update state to add opponent with camp
-            const player = result.current.players[0]
-            if (player) {
-              result.current.updatePlayer(0, {
-                battleHistory: [
-                  ...(player.battleHistory || []),
-                  {
-                    round: 1,
-                    opponent: 999,
-                    result: 'WIN' as const,
-                    status: 'challenged-refused' as const,
-                    operativesKilled: 0
-                  }
-                ]
-              })
-            }
-          })
-        }
-
-        // WHY: Create a fake scenario with opponent camp but battle was last round
-        // This test validates round checking, not actual game flow
-        const validation = result.current.validateDemolish?.(0)
-
-        expect(validation?.valid).toBe(false)
-        // Should fail due to no opponent camps, which is acceptable for this edge case test
-        expect(validation?.reason).toMatch(/prerequisite|no opponent camps/)
-      })
-    })
-
-    describe('multiple camps validation', () => {
-      it('should return multiple valid targets if won against multiple camp owners', () => {
-        const { result } = renderHook(() => useCampaign())
-
-        act(() => {
-          result.current.startGame(3)
-        })
-
-        const playerPos = result.current.players[0]?.position
-
-        // WHY: Both player 1 and player 2 have camps at player 0's position
-        if (playerPos) {
-          act(() => {
-            result.current.updatePlayer(1, { camps: [playerPos] })
-            result.current.updatePlayer(2, { camps: [playerPos] })
-          })
-        }
-
-        act(() => {
-          result.current.nextPhase()
-          result.current.nextPhase()
-        })
-
-        // WHY: Player 0 won against player 1
-        act(() => {
-          result.current.recordBattle(BATTLE_RESULTS.WIN, 1, 0, 'completed')
-        })
-
-        // WHY: Somehow also battled player 2 (edge case)
-        // In real game flow this won't happen, but validateDemolish should handle it
-        const player = result.current.players[0]
-        if (player) {
-          act(() => {
-            result.current.updatePlayer(0, {
-              battleHistory: [
-                ...(player.battleHistory || []),
-                {
-                  round: 1,
-                  opponent: 2,
-                  result: 'WIN' as const,
-                  status: 'completed' as const,
-                  operativesKilled: 0
-                }
-              ]
-            })
-          })
-        }
-
-        const validation = result.current.validateDemolish?.(0)
-
-        expect(validation?.valid).toBe(true)
-        expect(validation?.targets).toHaveLength(2)
-        expect(validation?.targets?.map(t => t.playerId).sort()).toEqual([1, 2])
-      })
-
-      it('should filter out camps where prerequisites not met', () => {
-        const { result } = renderHook(() => useCampaign())
-
-        act(() => {
-          result.current.startGame(3)
-        })
-
-        const playerPos = result.current.players[0]?.position
-
-        // WHY: Players 1 and 2 both have camps at player 0's position
-        if (playerPos) {
-          act(() => {
-            result.current.updatePlayer(1, { camps: [playerPos] })
-            result.current.updatePlayer(2, { camps: [playerPos] })
-          })
-        }
-
-        act(() => {
-          result.current.nextPhase()
-          result.current.nextPhase()
-        })
-
-        // WHY: Player 0 only won against player 1
-        act(() => {
-          result.current.recordBattle(BATTLE_RESULTS.WIN, 1, 0, 'completed')
-        })
-
-        const validation = result.current.validateDemolish?.(0)
-
-        expect(validation?.valid).toBe(true)
-        expect(validation?.targets).toHaveLength(1)
-        expect(validation?.targets?.[0]?.playerId).toBe(1)
-      })
-
-      it('should handle same opponent with 2 camps', () => {
-        const { result } = renderHook(() => useCampaign())
-
-        act(() => {
-          result.current.startGame(2)
-        })
-
-        const playerPos = result.current.players[0]?.position
-
-        // WHY: Player 1 has 2 camps at player 0's position (edge case)
-        if (playerPos) {
-          act(() => {
-            result.current.updatePlayer(1, { camps: [playerPos, playerPos] })
-          })
-        }
-
-        act(() => {
-          result.current.nextPhase()
-          result.current.nextPhase()
-        })
-
-        act(() => {
-          result.current.recordBattle(BATTLE_RESULTS.WIN, 1, 0, 'completed')
-        })
-
-        const validation = result.current.validateDemolish?.(0)
-
-        // WHY: Should return player 1 only once (not duplicate)
-        expect(validation?.valid).toBe(true)
-        expect(validation?.targets).toHaveLength(1)
-        expect(validation?.targets?.[0]?.playerId).toBe(1)
-      })
-    })
-
-    describe('edge cases', () => {
-      it('should handle player with undefined battleHistory (migration scenario)', () => {
-        const { result } = renderHook(() => useCampaign())
-
-        act(() => {
-          result.current.startGame(2)
-        })
-
-        const playerPos = result.current.players[0]?.position
-
-        if (playerPos) {
-          act(() => {
-            result.current.updatePlayer(1, { camps: [playerPos] })
-          })
-        }
-
-        // WHY: Simulate old save data without battleHistory
-        act(() => {
-          result.current.updatePlayer(0, {
-            battleHistory: undefined as any
-          })
-        })
-
-        const validation = result.current.validateDemolish?.(0)
-
-        expect(validation?.valid).toBe(false)
-        expect(validation?.reason).toContain('battle')
-      })
-
-      it('should validate opponent camp still exists', () => {
-        const { result } = renderHook(() => useCampaign())
-
-        act(() => {
-          result.current.startGame(2)
-        })
-
-        const playerPos = result.current.players[0]?.position
-
-        if (playerPos) {
-          act(() => {
-            result.current.updatePlayer(1, { camps: [playerPos] })
-          })
-        }
-
-        act(() => {
-          result.current.nextPhase()
-          result.current.nextPhase()
-        })
-
-        act(() => {
-          result.current.recordBattle(BATTLE_RESULTS.WIN, 1, 0, 'completed')
-        })
-
-        // WHY: Remove camp before validation
-        act(() => {
-          result.current.updatePlayer(1, { camps: [] })
-        })
-
-        const validation = result.current.validateDemolish?.(0)
-
-        expect(validation?.valid).toBe(false)
-        expect(validation?.reason).toContain('no opponent camps')
-      })
-
-      it('should prevent demolishing own camp', () => {
-        const { result } = renderHook(() => useCampaign())
-
-        act(() => {
-          result.current.startGame(2)
-        })
-
-        const playerPos = result.current.players[0]?.position
-
-        // WHY: Player has their own camp at their position
-        if (playerPos) {
-          act(() => {
-            result.current.updatePlayer(0, { camps: [playerPos] })
-          })
-        }
-
-        act(() => {
-          result.current.nextPhase()
-          result.current.nextPhase()
-        })
-
-        act(() => {
-          result.current.recordBattle(BATTLE_RESULTS.WIN, 1, 0, 'completed')
-        })
-
-        const validation = result.current.validateDemolish?.(0)
-
-        // WHY: Own camps don't count as opponent camps
-        expect(validation?.valid).toBe(false)
-        expect(validation?.reason).toContain('no opponent camps')
-      })
-    })
-
-    /**
-     * WHY: DEMOLISH action tests (Issue #47, Phase 5)
-     * Test the full demolish action execution with prerequisites
-     */
-    describe('DEMOLISH action', () => {
-      it('should demolish camp when all prerequisites met', () => {
-        const { result } = renderHook(() => useCampaign())
-
-        act(() => {
-          result.current.startGame(2, 5, false)
-        })
-
-        const player1Pos = result.current.players[0]?.position
-
-        // WHY: Setup - Player 2 has camp at Player 1's position
-        if (player1Pos) {
-          act(() => {
-            result.current.updatePlayer(1, {
-              camps: [player1Pos]
-            })
-          })
-        }
-
-        // WHY: Setup - Player 1 (current player) wins battle against Player 2 this round
-        if (player1Pos) {
-          act(() => {
-            result.current.updatePlayer(0, {
-              supplyPoints: 10,
-              battleHistory: [{
-                round: 1,
-                opponent: result.current.players[1]!.id,
-                result: 'WIN',
-                status: 'completed',
-                operativesKilled: 0
-              }]
-            })
-          })
-        }
-
-        const player1SP = result.current.players[0]?.supplyPoints
-        const player2CampsBefore = result.current.players[1]?.camps.length
-
-        // WHY: Player 1 demolishes Player 2's camp
-        act(() => {
-          result.current.performAction('DEMOLISH', { options: { targetPlayerId: result.current.players[1]!.id } })
-        })
-
-        const player2CampsAfter = result.current.players[1]?.camps.length
-        const player1SPAfter = result.current.players[0]?.supplyPoints
-
-        // WHY: Camp should be removed
-        expect(player2CampsAfter).toBe((player2CampsBefore ?? 0) - 1)
-
-        // WHY: SP should be deducted
-        expect(player1SPAfter).toBe((player1SP ?? 0) - 3)
-
-        // WHY: Event should be logged
-        const demolishEvent = result.current.eventLog.find(e => e.type === 'action' && e.message.includes('demolished'))
-        expect(demolishEvent).toBeDefined()
-      })
-
-      it('should deduct exactly 3 SP', () => {
-        const { result } = renderHook(() => useCampaign())
-
-        act(() => {
-          result.current.startGame(2, 5, false)
-        })
-
-        const player1Pos = result.current.players[0]?.position
-
-        // WHY: Setup - Player 2 has camp at Player 1's position
-        if (player1Pos) {
-          act(() => {
-            result.current.updatePlayer(1, { camps: [player1Pos] })
-          })
-        }
-
-        // WHY: Setup - Player 1 wins battle against Player 2 this round
-        act(() => {
-          result.current.updatePlayer(0, {
-            supplyPoints: 10,
-            battleHistory: [{
-              round: 1,
-              opponent: result.current.players[1]!.id,
-              result: 'WIN',
-              status: 'completed',
-              operativesKilled: 0
-            }]
-          })
-        })
-
-        const spBefore = result.current.players[0]?.supplyPoints
-
-        act(() => {
-          result.current.performAction('DEMOLISH', { options: { targetPlayerId: result.current.players[1]!.id } })
-        })
-
-        const spAfter = result.current.players[0]?.supplyPoints
-
-        expect(spAfter).toBe((spBefore ?? 0) - 3)
-      })
-
-      it('should add history entry to player', () => {
-        const { result } = renderHook(() => useCampaign())
-
-        act(() => {
-          result.current.startGame(2, 5, false)
-        })
-
-        const player1Pos = result.current.players[0]?.position
-
-        // WHY: Setup - Player 2 has camp at Player 1's position
-        if (player1Pos) {
-          act(() => {
-            result.current.updatePlayer(1, { camps: [player1Pos] })
-          })
-        }
-
-        // WHY: Setup - Player 1 wins battle against Player 2 this round
-        act(() => {
-          result.current.updatePlayer(0, {
-            supplyPoints: 10,
-            battleHistory: [{
-              round: 1,
-              opponent: result.current.players[1]!.id,
-              result: 'WIN',
-              status: 'completed',
-              operativesKilled: 0
-            }]
-          })
-        })
-
-        const historyBefore = result.current.players[0]?.history.length ?? 0
-
-        act(() => {
-          result.current.performAction('DEMOLISH', { options: { targetPlayerId: result.current.players[1]!.id } })
-        })
-
-        const historyAfter = result.current.players[0]?.history.length ?? 0
-        const lastHistory = result.current.players[0]?.history[historyAfter - 1]
-
-        expect(historyAfter).toBe(historyBefore + 1)
-        expect(lastHistory?.action).toContain('Demolished')
-      })
-
-      it('should work with challenged-refused prerequisite', () => {
-        const { result } = renderHook(() => useCampaign())
-
-        act(() => {
-          result.current.startGame(2, 5, false)
-        })
-
-        const player1Pos = result.current.players[0]?.position
-
-        // WHY: Setup - Player 2 has camp at Player 1's position
-        if (player1Pos) {
-          act(() => {
-            result.current.updatePlayer(1, { camps: [player1Pos] })
-          })
-        }
-
-        // WHY: Setup - Player 1 challenged Player 2 but they refused
-        act(() => {
-          result.current.updatePlayer(0, {
-            supplyPoints: 10,
-            battleHistory: [{
-              round: 1,
-              opponent: result.current.players[1]!.id,
-              result: 'LOSS',
-              status: 'challenged-refused',
-              operativesKilled: 0
-            }]
-          })
-        })
-
-        const campsBefore = result.current.players[1]?.camps.length
-
-        act(() => {
-          result.current.performAction('DEMOLISH', { options: { targetPlayerId: result.current.players[1]!.id } })
-        })
-
-        const campsAfter = result.current.players[1]?.camps.length
-
-        // WHY: Should still work with challenged-refused status
-        expect(campsAfter).toBe((campsBefore ?? 0) - 1)
-      })
-
-      it('should reject if SP < 3', () => {
-        const { result } = renderHook(() => useCampaign())
-
-        act(() => {
-          result.current.startGame(2, 5, false)
-        })
-
-        const player1Pos = result.current.players[0]?.position
-
-        // WHY: Setup - Player 2 has camp at Player 1's position
-        if (player1Pos) {
-          act(() => {
-            result.current.updatePlayer(1, { camps: [player1Pos] })
-          })
-        }
-
-        // WHY: Setup - Player 1 wins battle but only has 2 SP
-        act(() => {
-          result.current.updatePlayer(0, {
-            supplyPoints: 2,
-            battleHistory: [{
-              round: 1,
-              opponent: result.current.players[1]!.id,
-              result: 'WIN',
-              status: 'completed',
-              operativesKilled: 0
-            }]
-          })
-        })
-
-        const campsBefore = result.current.players[1]?.camps.length
-
-        act(() => {
-          result.current.performAction('DEMOLISH', { options: { targetPlayerId: result.current.players[1]!.id } })
-        })
-
-        const campsAfter = result.current.players[1]?.camps.length
-
-        // WHY: Camp should not be demolished
-        expect(campsAfter).toBe(campsBefore)
-
-        // WHY: Error event should be logged
-        const errorEvent = result.current.eventLog.find(e => e.type === 'error' && e.message.includes('Insufficient SP'))
-        expect(errorEvent).toBeDefined()
-      })
-
-      it('should reject if no opponent camp at position', () => {
-        const { result } = renderHook(() => useCampaign())
-
-        act(() => {
-          result.current.startGame(2, 5, false)
-        })
-
-        const player1Pos = result.current.players[0]?.position
-
-        // WHY: Setup - Player 2 has camp at different position (not at Player 1's position)
-        if (player1Pos) {
-          act(() => {
-            result.current.updatePlayer(1, { camps: [{ row: player1Pos.row + 1, col: player1Pos.col }] })
-          })
-        }
-
-        // WHY: Setup - Player 1 wins battle against Player 2
-        act(() => {
-          result.current.updatePlayer(0, {
-            supplyPoints: 10,
-            battleHistory: [{
-              round: 1,
-              opponent: result.current.players[1]!.id,
-              result: 'WIN',
-              status: 'completed',
-              operativesKilled: 0
-            }]
-          })
-        })
-
-        const campsBefore = result.current.players[1]?.camps.length
-
-        act(() => {
-          result.current.performAction('DEMOLISH', { options: { targetPlayerId: result.current.players[1]!.id } })
-        })
-
-        const campsAfter = result.current.players[1]?.camps.length
-
-        // WHY: Camp should not be demolished (not at current position)
-        expect(campsAfter).toBe(campsBefore)
-
-        const errorEvent = result.current.eventLog.find(e => e.type === 'error' && e.message.includes('no opponent camps'))
-        expect(errorEvent).toBeDefined()
-      })
-
-      it('should reject if did not win against camp owner', () => {
-        const { result } = renderHook(() => useCampaign())
-
-        act(() => {
-          result.current.startGame(2, 5, false)
-        })
-
-        const player1Pos = result.current.players[0]?.position
-
-        // WHY: Setup - Player 2 has camp at Player 1's position
-        if (player1Pos) {
-          act(() => {
-            result.current.updatePlayer(1, { camps: [player1Pos] })
-          })
-        }
-
-        // WHY: Setup - Player 1 LOST the battle against Player 2
-        act(() => {
-          result.current.updatePlayer(0, {
-            supplyPoints: 10,
-            battleHistory: [{
-              round: 1,
-              opponent: result.current.players[1]!.id,
-              result: 'LOSS',
-              status: 'completed',
-              operativesKilled: 0
-            }]
-          })
-        })
-
-        const campsBefore = result.current.players[1]?.camps.length
-
-        act(() => {
-          result.current.performAction('DEMOLISH', { options: { targetPlayerId: result.current.players[1]!.id } })
-        })
-
-        const campsAfter = result.current.players[1]?.camps.length
-
-        // WHY: Camp should not be demolished (lost battle)
-        expect(campsAfter).toBe(campsBefore)
-
-        const errorEvent = result.current.eventLog.find(e => e.type === 'error' && e.message.includes('prerequisite not met'))
-        expect(errorEvent).toBeDefined()
-      })
-
-      it('should reject if no targetPlayerId provided', () => {
-        const { result } = renderHook(() => useCampaign())
-
-        act(() => {
-          result.current.startGame(2, 5, false)
-        })
-
-        act(() => {
-          result.current.performAction('ENCAMP', { options: { cost: 1 } })
-        })
-
-        act(() => {
-          result.current.nextPhase()
-        })
-
-        act(() => {
-          result.current.recordBattle(BATTLE_RESULTS.WIN, 0, 0, 'completed')
-        })
-
-        act(() => {
-          result.current.nextPhase()
-        })
-
-        const campsBefore = result.current.players[0]?.camps.length
-
-        // WHY: Call without targetPlayerId
-        act(() => {
-          result.current.performAction('DEMOLISH', { options: {} as any })
-        })
-
-        const campsAfter = result.current.players[0]?.camps.length
-
-        // WHY: Camp should not be demolished
-        expect(campsAfter).toBe(campsBefore)
-
-        const errorEvent = result.current.eventLog.find(e => e.type === 'error' && e.message.includes('No target selected'))
-        expect(errorEvent).toBeDefined()
-      })
-
-      it('should reject if targetPlayerId not in valid targets', () => {
-        const { result } = renderHook(() => useCampaign())
-
-        act(() => {
-          result.current.startGame(3, 5, false)
-        })
-
-        const player1Pos = result.current.players[0]?.position
-
-        // WHY: Setup - Both Player 2 and Player 3 have camps at Player 1's position
-        if (player1Pos) {
-          act(() => {
-            result.current.updatePlayer(1, { camps: [player1Pos] })
-            result.current.updatePlayer(2, { camps: [player1Pos] })
-          })
-        }
-
-        // WHY: Setup - Player 1 won against Player 2 ONLY (not Player 3)
-        act(() => {
-          result.current.updatePlayer(0, {
-            supplyPoints: 10,
-            battleHistory: [{
-              round: 1,
-              opponent: result.current.players[1]!.id,
-              result: 'WIN',
-              status: 'completed',
-              operativesKilled: 0
-            }]
-          })
-        })
-
-        const player3CampsBefore = result.current.players[2]?.camps.length
-
-        // WHY: Try to demolish Player 3's camp (didn't battle Player 3)
-        act(() => {
-          result.current.performAction('DEMOLISH', { options: { targetPlayerId: result.current.players[2]!.id } })
-        })
-
-        const player3CampsAfter = result.current.players[2]?.camps.length
-
-        // WHY: Player 3's camp should not be demolished
-        expect(player3CampsAfter).toBe(player3CampsBefore)
-
-        const errorEvent = result.current.eventLog.find(e => e.type === 'error' && e.message.includes('prerequisite not met'))
-        expect(errorEvent).toBeDefined()
-      })
-
-      it('should demolish only selected camp when multiple valid targets', () => {
-        const { result } = renderHook(() => useCampaign())
-
-        act(() => {
-          result.current.startGame(3, 5, false)
-        })
-
-        // WHY: Player 1 builds camp
-        act(() => {
-          result.current.performAction('ENCAMP', { options: { cost: 1 } })
-        })
-
-        act(() => {
-          result.current.nextPhase()
-        })
-
-        act(() => {
-          result.current.nextPhase()
-        })
-
-        // WHY: Player 2 builds camp at same position
-        act(() => {
-          result.current.performAction('ENCAMP', { options: { cost: 1 } })
-        })
-
-        act(() => {
-          result.current.nextPhase()
-        })
-
-        act(() => {
-          result.current.nextPhase()
-        })
-
-        act(() => {
-          result.current.nextPhase()
-        })
-
-        // WHY: Player 3 wins against both Player 1 and Player 2
-        act(() => {
-          result.current.recordBattle(BATTLE_RESULTS.WIN, 0, 0, 'completed')
-        })
-
-        // WHY: Manually add battle against Player 2 to history
-        act(() => {
-          const player3 = result.current.players[2]
-          if (player3) {
-            result.current.updatePlayer(2, {
-              battleHistory: [
-                ...(player3.battleHistory || []),
-                {
-                  round: result.current.currentRound,
-                  opponent: result.current.players[1]!.id,
-                  result: 'WIN' as const,
-                  status: 'completed' as const,
-                  operativesKilled: 0
-                }
-              ]
-            })
-          }
-        })
-
-        act(() => {
-          result.current.nextPhase()
-        })
-
-        const player1CampsBefore = result.current.players[0]?.camps.length
-        const player2CampsBefore = result.current.players[1]?.camps.length
-
-        // WHY: Demolish only Player 1's camp
-        act(() => {
-          result.current.performAction('DEMOLISH', { options: { targetPlayerId: result.current.players[0]!.id } })
-        })
-
-        const player1CampsAfter = result.current.players[0]?.camps.length
-        const player2CampsAfter = result.current.players[1]?.camps.length
-
-        // WHY: Only Player 1's camp should be demolished
-        expect(player1CampsAfter).toBe((player1CampsBefore ?? 0) - 1)
-        expect(player2CampsAfter).toBe(player2CampsBefore)
-      })
-
-      it('should handle same opponent with 2 camps at different locations', () => {
-        const { result } = renderHook(() => useCampaign())
-
-        act(() => {
-          result.current.startGame(2, 5, false)
-        })
-
-        // WHY: Player 1 builds camp at position 0,0
-        act(() => {
-          result.current.performAction('ENCAMP', { options: { cost: 1 } })
-        })
-
-        // WHY: Player 1 moves to 1,0 and builds second camp
-        act(() => {
-          result.current.nextPhase()
-        })
-
-        act(() => {
-          result.current.movePlayer(0, '1,0', 1)
-        })
-
-        act(() => {
-          result.current.nextPhase()
-        })
-
-        act(() => {
-          result.current.nextPhase()
-        })
-
-        act(() => {
-          result.current.nextPhase()
-        })
-
-        act(() => {
-          result.current.performAction('ENCAMP', { options: { cost: 1 } })
-        })
-
-        // WHY: Player 2 moves to 1,0 (where Player 1's second camp is)
-        act(() => {
-          result.current.nextPhase()
-        })
-
-        act(() => {
-          result.current.nextPhase()
-        })
-
-        act(() => {
-          result.current.movePlayer(1, '1,0', 1)
-        })
-
-        act(() => {
-          result.current.nextPhase()
-        })
-
-        act(() => {
-          result.current.recordBattle(BATTLE_RESULTS.WIN, 0, 0, 'completed')
-        })
-
-        act(() => {
-          result.current.nextPhase()
-        })
-
-        const player1CampsBefore = result.current.players[0]?.camps.length
-
-        // WHY: Demolish camp at current position (1,0)
-        act(() => {
-          result.current.performAction('DEMOLISH', { options: { targetPlayerId: result.current.players[0]!.id } })
-        })
-
-        const player1CampsAfter = result.current.players[0]?.camps.length
-        const player1Camps = result.current.players[0]?.camps
-
-        // WHY: One camp should be removed
-        expect(player1CampsAfter).toBe((player1CampsBefore ?? 0) - 1)
-
-        // WHY: Only camp at 1,0 should be removed, camp at 0,0 should remain
-        const campAt00Exists = player1Camps?.some(c => c.row === 0 && c.col === 0)
-        const campAt10Exists = player1Camps?.some(c => c.row === 1 && c.col === 0)
-
-        expect(campAt00Exists).toBe(true)
-        expect(campAt10Exists).toBe(false)
-      })
-
-      it('should handle edge case: camp already demolished', () => {
-        const { result } = renderHook(() => useCampaign())
-
-        act(() => {
-          result.current.startGame(2, 5, false)
-        })
-
-        act(() => {
-          result.current.performAction('ENCAMP', { options: { cost: 1 } })
-        })
-
-        act(() => {
-          result.current.nextPhase()
-        })
-
-        act(() => {
-          result.current.recordBattle(BATTLE_RESULTS.WIN, 0, 0, 'completed')
-        })
-
-        act(() => {
-          result.current.nextPhase()
-        })
-
-        // WHY: First demolish succeeds
-        act(() => {
-          result.current.performAction('DEMOLISH', { options: { targetPlayerId: result.current.players[0]!.id } })
-        })
-
-        const campsAfterFirst = result.current.players[0]?.camps.length
-
-        // WHY: Try to demolish again (camp no longer exists)
-        act(() => {
-          result.current.performAction('DEMOLISH', { options: { targetPlayerId: result.current.players[0]!.id } })
-        })
-
-        const campsAfterSecond = result.current.players[0]?.camps.length
-
-        // WHY: Second demolish should fail
-        expect(campsAfterSecond).toBe(campsAfterFirst)
-
-        const errorEvent = result.current.eventLog.find(e => e.type === 'error' && e.message.includes('No camp found'))
-        expect(errorEvent).toBeDefined()
-      })
-
-      it('should handle edge case: target player not found', () => {
-        const { result } = renderHook(() => useCampaign())
-
-        act(() => {
-          result.current.startGame(2, 5, false)
-        })
-
-        act(() => {
-          result.current.performAction('ENCAMP', { options: { cost: 1 } })
-        })
-
-        act(() => {
-          result.current.nextPhase()
-        })
-
-        act(() => {
-          result.current.recordBattle(BATTLE_RESULTS.WIN, 0, 0, 'completed')
-        })
-
-        act(() => {
-          result.current.nextPhase()
-        })
-
-        const campsBefore = result.current.players[0]?.camps.length
-
-        // WHY: Try to demolish with invalid player ID
-        act(() => {
-          result.current.performAction('DEMOLISH', { options: { targetPlayerId: 9999 } })
-        })
-
-        const campsAfter = result.current.players[0]?.camps.length
-
-        // WHY: Should fail gracefully
-        expect(campsAfter).toBe(campsBefore)
-
-        const errorEvent = result.current.eventLog.find(e => e.type === 'error' && e.message.includes('Target player not found'))
-        expect(errorEvent).toBeDefined()
-      })
-
-      it('should prevent demolishing own camp', () => {
-        const { result } = renderHook(() => useCampaign())
-
-        act(() => {
-          result.current.startGame(2, 5, false)
-        })
-
-        // WHY: Player 1 builds camp
-        act(() => {
-          result.current.performAction('ENCAMP', { options: { cost: 1 } })
-        })
-
-        act(() => {
-          result.current.nextPhase()
-        })
-
-        act(() => {
-          result.current.recordBattle(BATTLE_RESULTS.BYE, null, 0, 'completed')
-        })
-
-        act(() => {
-          result.current.nextPhase()
-        })
-
-        const campsBefore = result.current.players[0]?.camps.length
-
-        // WHY: Try to demolish own camp
-        act(() => {
-          result.current.performAction('DEMOLISH', { options: { targetPlayerId: result.current.players[0]!.id } })
-        })
-
-        const campsAfter = result.current.players[0]?.camps.length
-
-        // WHY: Should not allow demolishing own camp
-        expect(campsAfter).toBe(campsBefore)
-
-        const errorEvent = result.current.eventLog.find(e => e.type === 'error' && (e.message.includes('prerequisite not met') || e.message.includes('Cannot demolish')))
-        expect(errorEvent).toBeDefined()
-      })
     })
   })
 })

@@ -2417,3 +2417,163 @@ input, select {
   color: var(--accent-blue);
   margin-top: 0.25rem;
 }
+
+/* ===================================================
+   Demolish Confirmation Modal (Issue #47, Phase 4)
+   =================================================== */
+
+/**
+ * WHY: Modal overlay for Demolish confirmation
+ * Semi-transparent backdrop to focus attention on destructive action
+ */
+.demolish-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  animation: fadeIn 0.2s ease-in;
+}
+
+/**
+ * WHY: Modal container with warning styling
+ * Red accent to emphasize destructive nature of action
+ */
+.demolish-modal {
+  background: white;
+  border-radius: 12px;
+  padding: 0;
+  max-width: 500px;
+  width: 90%;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+  animation: slideUp 0.3s ease-out;
+  border: 3px solid #dc3545;
+}
+
+/**
+ * WHY: Modal header with warning icon
+ * Clearly indicates destructive action
+ */
+.demolish-modal-header {
+  background: #dc3545;
+  color: white;
+  padding: 1.5rem;
+  border-radius: 9px 9px 0 0;
+}
+
+.demolish-modal-header h3 {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: bold;
+}
+
+/**
+ * WHY: Modal body with details and warning
+ */
+.demolish-modal-body {
+  padding: 1.5rem;
+}
+
+/**
+ * WHY: Warning banner at top of modal body
+ * Yellow background to draw attention
+ */
+.demolish-warning {
+  background: #fff3cd;
+  border: 1px solid #ffc107;
+  border-radius: 4px;
+  padding: 0.75rem;
+  margin-bottom: 1.5rem;
+  color: #856404;
+  text-align: center;
+}
+
+/**
+ * WHY: Details section showing what will be demolished
+ */
+.demolish-details {
+  background: #f8f9fa;
+  border-radius: 4px;
+  padding: 1rem;
+  margin-bottom: 1rem;
+}
+
+.demolish-detail-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid #e9ecef;
+}
+
+.demolish-detail-row:last-child {
+  border-bottom: none;
+}
+
+.demolish-label {
+  font-weight: 600;
+  color: #6c757d;
+}
+
+.demolish-value {
+  font-weight: 500;
+  color: #2c3e50;
+}
+
+/**
+ * WHY: Confirmation text summarizing the action
+ */
+.demolish-confirmation-text {
+  text-align: center;
+  color: #495057;
+  line-height: 1.5;
+  font-size: 0.95rem;
+}
+
+/**
+ * WHY: Modal action buttons
+ * Cancel and Confirm with appropriate styling
+ */
+.demolish-modal-actions {
+  display: flex;
+  gap: 1rem;
+  padding: 1rem 1.5rem 1.5rem;
+  border-top: 1px solid #e9ecef;
+}
+
+.demolish-btn {
+  flex: 1;
+  padding: 0.75rem 1.5rem;
+  font-size: 1rem;
+  font-weight: 600;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.demolish-btn.cancel {
+  background: #6c757d;
+  color: white;
+}
+
+.demolish-btn.cancel:hover {
+  background: #5a6268;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+
+.demolish-btn.confirm {
+  background: #dc3545;
+  color: white;
+}
+
+.demolish-btn.confirm:hover {
+  background: #c82333;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(220, 53, 69, 0.4);
+}

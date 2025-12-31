@@ -1,11 +1,12 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import type { Player, Hex, SearchRule, HexPosition } from '@/types/campaign'
 import { PHASES, BATTLE_RESULTS, BattleResultInfo, SURFACE_LOCATIONS, TOMB_LOCATIONS, SURFACE_CONDITIONS, TOMB_CONDITIONS } from '@/lib/data/campaignData'
 import { hexDistance, hexId, isPlayerInBlockedHex } from '@/lib/utils/hexUtils'
 import ScoutConfirmDialog from './ScoutConfirmDialog'
 import CampSelectionModal from './CampSelectionModal'
+import DemolishConfirmationModal from './DemolishConfirmationModal'
 
 interface PhaseTrackerProps {
   currentPhase: string
@@ -23,8 +24,14 @@ interface PhaseTrackerProps {
   onNextPhase: () => void
   onMove: (playerIndex: number, targetHex: string, cost: number) => void
   onAction: (action: string, params?: any) => void
-  onBattle: (result: BattleResultInfo, opponentIndex: number | null, operativesKilled: number) => void
+  onBattle: (result: BattleResultInfo, opponentIndex: number | null, operativesKilled: number, challengeStatus?: 'completed' | 'challenged-refused' | 'challenged-no-show') => void
   calculateEncampCost: (playerIndex: number) => number
+  validateDemolish: (playerIndex: number) => {
+    valid: boolean
+    reason?: string
+    targets?: Array<{ playerId: number; playerName: string }>
+    cost: number
+  }
 }
 
 interface MovementOption {
@@ -152,7 +159,8 @@ export default function PhaseTracker({
   onMove,
   onAction,
   onBattle,
-  calculateEncampCost
+  calculateEncampCost,
+  validateDemolish
 }: PhaseTrackerProps) {
   const [moveTarget, setMoveTarget] = useState<Hex | null>(null)
   const [scoutTarget, setScoutTarget] = useState<Hex | null>(null)
@@ -161,6 +169,10 @@ export default function PhaseTracker({
   const [pendingEncampCost, setPendingEncampCost] = useState<number>(0)
   const [battleResult, setBattleResult] = useState<string>('WIN')
   const [operativesKilled, setOperativesKilled] = useState(0)
+  const [selectedOpponent, setSelectedOpponent] = useState<number | null>(null)
+  const [challengedRefused, setChallengedRefused] = useState(false)
+  const [showDemolishModal, setShowDemolishModal] = useState(false)
+  const [demolishTarget, setDemolishTarget] = useState<{playerId: number, playerName: string} | null>(null)
 
   if (!currentPlayer) return null
 
@@ -266,8 +278,17 @@ export default function PhaseTracker({
   const handleBattle = () => {
     const result = BATTLE_RESULTS[battleResult]
     if (result) {
-      onBattle(result, null, operativesKilled)
+      // WHY: Determine challenge status based on checkbox
+      const challengeStatus = challengedRefused
+        ? 'challenged-refused'
+        : 'completed'
+
+      onBattle(result, selectedOpponent, operativesKilled, challengeStatus as any)
+
+      // WHY: Reset form after recording
       setOperativesKilled(0)
+      setSelectedOpponent(null)
+      setChallengedRefused(false)
     }
   }
 
@@ -279,6 +300,13 @@ export default function PhaseTracker({
     p.id !== currentPlayer.id &&
     p.camps.some(c => c.row === currentPlayer.position.row && c.col === currentPlayer.position.col)
   )
+
+  // WHY: Calculate demolish validation (Issue #47, Phase 4)
+  const demolishValidation = useMemo(() => {
+    const playerIndex = players.findIndex(p => p.id === currentPlayer.id)
+    if (playerIndex === -1) return { valid: false, reason: 'Player not found', cost: 3 }
+    return validateDemolish(playerIndex)
+  }, [players, currentPlayer.id, validateDemolish])
 
   // Check if player is in blocked hex
   const inBlockedHex = isPlayerInBlockedHex(currentPlayer.position, currentHex)
@@ -438,7 +466,14 @@ export default function PhaseTracker({
                 <label>Battle Result:</label>
                 <select
                   value={battleResult}
-                  onChange={(e) => setBattleResult(e.target.value)}
+                  onChange={(e) => {
+                    setBattleResult(e.target.value)
+                    // WHY: Reset opponent and challenge when switching to/from BYE
+                    if (e.target.value === 'BYE') {
+                      setSelectedOpponent(null)
+                      setChallengedRefused(false)
+                    }
+                  }}
                 >
                   <option value="WIN">Victory (+1 CP)</option>
                   <option value="DRAW">Draw (+1 SP)</option>
@@ -446,6 +481,43 @@ export default function PhaseTracker({
                   <option value="BYE">Bye - No Opponent (+2 SP)</option>
                 </select>
               </div>
+
+              {/* WHY: Show opponent selection for non-BYE battles */}
+              {battleResult !== 'BYE' && (
+                <div className="form-group">
+                  <label>Opponent: <span style={{ color: '#dc3545' }}>*</span></label>
+                  <select
+                    value={selectedOpponent ?? ''}
+                    onChange={(e) => setSelectedOpponent(e.target.value ? parseInt(e.target.value) : null)}
+                    required
+                  >
+                    <option value="">-- Select Opponent --</option>
+                    {players.map((player, idx) => {
+                      if (player.id === currentPlayer.id) return null
+                      return (
+                        <option key={player.id} value={idx}>
+                          {player.name}
+                        </option>
+                      )
+                    })}
+                  </select>
+                </div>
+              )}
+
+              {/* WHY: Show challenge checkbox when opponent is selected */}
+              {battleResult !== 'BYE' && selectedOpponent !== null && (
+                <div className="form-group">
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={challengedRefused}
+                      onChange={(e) => setChallengedRefused(e.target.checked)}
+                      style={{ marginRight: '0.5rem' }}
+                    />
+                    Game challenged but didn't happen (refused/no-show)
+                  </label>
+                </div>
+              )}
 
               <div className="form-group">
                 <label>Operatives Killed:</label>
@@ -457,9 +529,20 @@ export default function PhaseTracker({
                 />
               </div>
 
-              <button className="action-btn primary" onClick={handleBattle}>
+              <button
+                className="action-btn primary"
+                onClick={handleBattle}
+                disabled={battleResult !== 'BYE' && selectedOpponent === null}
+              >
                 Record Battle
               </button>
+
+              {/* WHY: Show validation message */}
+              {battleResult !== 'BYE' && selectedOpponent === null && (
+                <p style={{ color: '#dc3545', fontSize: '0.9rem', marginTop: '0.5rem' }}>
+                  Please select an opponent to record the battle.
+                </p>
+              )}
             </div>
           </div>
         )}
@@ -618,19 +701,54 @@ export default function PhaseTracker({
                 </button>
               </div>
 
-              {/* Demolish */}
+              {/* Demolish (Issue #47, Phase 4) */}
               <div className="action-item">
                 <h5>Demolish</h5>
                 <p className="action-desc">
-                  Destroy an opponent&apos;s camp.
+                  Destroy an opponent&apos;s camp. (Cost: {demolishValidation.cost} SP)
                 </p>
-                <button
-                  className="action-btn danger"
-                  onClick={() => onAction('DEMOLISH')}
-                  disabled={!hasEnemyCamp}
-                >
-                  Demolish Camp
-                </button>
+
+                {/* WHY: Show prerequisite feedback */}
+                {!demolishValidation.valid && (
+                  <div style={{
+                    background: '#f8d7da',
+                    border: '1px solid #f5c6cb',
+                    borderRadius: '4px',
+                    padding: '0.75rem',
+                    marginBottom: '1rem',
+                    color: '#721c24'
+                  }}>
+                    <strong>✗ Cannot Demolish:</strong> {demolishValidation.reason}
+                  </div>
+                )}
+
+                {demolishValidation.valid && demolishValidation.targets && (
+                  <div style={{
+                    background: '#d4edda',
+                    border: '1px solid #c3e6cb',
+                    borderRadius: '4px',
+                    padding: '0.75rem',
+                    marginBottom: '1rem',
+                    color: '#155724'
+                  }}>
+                    <strong>✓ You can demolish the following camps:</strong>
+                    <div style={{ marginTop: '0.5rem' }}>
+                      {demolishValidation.targets.map((target, idx) => (
+                        <button
+                          key={idx}
+                          className="action-btn danger"
+                          style={{ marginRight: '0.5rem', marginTop: '0.5rem' }}
+                          onClick={() => {
+                            setDemolishTarget(target)
+                            setShowDemolishModal(true)
+                          }}
+                        >
+                          Demolish {target.playerName}&apos;s Camp ({demolishValidation.cost} SP)
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Skip action */}
@@ -696,6 +814,24 @@ export default function PhaseTracker({
           hexes={hexes}
           onSelectCamp={handleCampRemoval}
           onCancel={handleCampSelectionCancel}
+        />
+      )}
+
+      {/* WHY: Demolish confirmation modal (Issue #47, Phase 4) */}
+      {showDemolishModal && demolishTarget && (
+        <DemolishConfirmationModal
+          targetPlayerName={demolishTarget.playerName}
+          campPosition={currentPlayer.position}
+          cost={demolishValidation.cost}
+          onConfirm={() => {
+            onAction('DEMOLISH', { targetPlayerId: demolishTarget.playerId })
+            setShowDemolishModal(false)
+            setDemolishTarget(null)
+          }}
+          onCancel={() => {
+            setShowDemolishModal(false)
+            setDemolishTarget(null)
+          }}
         />
       )}
     </div>

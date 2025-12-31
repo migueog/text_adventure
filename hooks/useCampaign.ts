@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import type { Player, Hex, MapConfig, Event, HexPosition, EncampOptions } from '@/types/campaign'
 import { 
   MAP_CONFIGS, 
@@ -88,13 +88,14 @@ const createPlayer = (id: number, name: string, color: string, startHex: HexPosi
   history: [],
   battleResult: null,
   searchedHexes: [],  // WHY: Track which hexes this player has searched (one-time use)
+  battleHistory: [],  // WHY: Initialize empty battle history for Demolish prerequisites
 })
 
 interface PerformActionParams {
   targetHex?: string
   distance?: number
   cost?: number
-  options?: EncampOptions  // WHY: Encamp action with camp removal support
+  options?: EncampOptions | import('@/types/campaign').DemolishOptions  // WHY: Encamp and Demolish action options
 }
 
 export function useCampaign() {
@@ -131,6 +132,18 @@ export function useCampaign() {
   // WHY: Track action order and index for battle result-based turn ordering
   const [actionOrder, setActionOrder] = useState<number[] | null>(null)
   const [actionIndex, setActionIndex] = useState(0)
+
+  // WHY: Use refs to avoid stale closure issues in callbacks
+  // Refs are updated synchronously in setState callbacks, not via useEffect
+  const currentRoundRef = useRef(currentRound)
+  const currentPhaseRef = useRef(currentPhase)
+  const currentPlayerIndexRef = useRef(currentPlayerIndex)
+  const playersRef = useRef(players)
+
+  // WHY: Keep playersRef in sync (players array changes frequently)
+  useEffect(() => {
+    playersRef.current = players
+  }, [players])
 
   const addEvent = useCallback((message: string, type: Event['type'] = 'system') => {
     const event: Event = {
@@ -808,36 +821,99 @@ export function useCampaign() {
       }
 
       case 'DEMOLISH': {
-        // Find if any other player has a camp at current position
-        const targetPlayer = players.find((p, idx) => 
-          idx !== currentPlayerIndex && 
-          p.camps.some(c => c.row === player.position.row && c.col === player.position.col)
-        )
-
-        if (!targetPlayer) {
-          addEvent(`No enemy camp to demolish here`, 'error')
+        // WHY: Demolish action - destroy opponent's camp (Issue #47, Phase 5)
+        const { options } = params
+        if (!options) {
+          addEvent('No demolish options provided', 'error')
           return
         }
 
+        // WHY: Type-check that options contains targetPlayerId (DemolishOptions)
+        const demolishOptions = options as import('@/types/campaign').DemolishOptions
+        const targetPlayerId = demolishOptions?.targetPlayerId
+
+        // WHY: Require target player ID to be provided
+        if (!targetPlayerId) {
+          addEvent('No target selected for demolish', 'error')
+          return
+        }
+
+        // WHY: Validate prerequisites before allowing demolish
+        const validation = validateDemolish(currentPlayerIndex)
+        if (!validation.valid) {
+          addEvent(`Cannot demolish: ${validation.reason}`, 'error')
+          return
+        }
+
+        // WHY: Verify target is in validated targets list (security check)
+        const validTarget = validation.targets?.find(t => t.playerId === targetPlayerId)
+        if (!validTarget) {
+          addEvent('Cannot demolish: prerequisite not met for this target', 'error')
+          return
+        }
+
+        // WHY: Find target player BEFORE state update
+        const targetIdx = players.findIndex(p => p.id === targetPlayerId)
+        if (targetIdx === -1) {
+          addEvent('Target player not found', 'error')
+          return
+        }
+
+        const target = players[targetIdx]
+        if (!target) {
+          addEvent('Target player not found', 'error')
+          return
+        }
+
+        // WHY: Check if target has camp at current position BEFORE state update
+        const campExists = target.camps.some(c =>
+          c.row === player.position.row && c.col === player.position.col
+        )
+
+        if (!campExists) {
+          addEvent('No camp found at this position', 'error')
+          return
+        }
+
+        // WHY: Execute demolish action (all validation passed)
+        const DEMOLISH_COST = 3
         setPlayers(prev => {
           const updated = [...prev]
-          const targetIdx = updated.findIndex(p => p.id === targetPlayer.id)
-          if (targetIdx === -1) return prev
+          const currentPlayer = updated[currentPlayerIndex]
+          if (!currentPlayer) return prev
 
-          const target = updated[targetIdx]
-          if (!target) return prev
+          const targetPlayer = updated[targetIdx]
+          if (!targetPlayer) return prev
 
+          // WHY: Deduct SP cost
+          const newSP = Math.max(0, Math.min(10, currentPlayer.supplyPoints - DEMOLISH_COST))
+
+          // WHY: Remove camp from target player
           updated[targetIdx] = {
-            ...target,
-            camps: target.camps.filter(c => 
-              !(c.row === player.position.row && c.col === player.position.col)
+            ...targetPlayer,
+            camps: targetPlayer.camps.filter(c =>
+              !(c.row === currentPlayer.position.row && c.col === currentPlayer.position.col)
             )
           }
-          
+
+          // WHY: Update current player SP and history
+          updated[currentPlayerIndex] = {
+            ...currentPlayer,
+            supplyPoints: newSP,
+            history: addHistoryEntry(
+              currentPlayer,
+              currentRound,
+              PHASES[currentPhase] || 'Unknown',
+              -DEMOLISH_COST,
+              0,
+              `Demolished ${target.name}'s camp`
+            )
+          }
+
           return updated
         })
 
-        addEvent(`${player.name} demolished ${targetPlayer.name}'s camp!`, 'action')
+        addEvent(`${player.name} demolished ${validTarget.playerName}'s camp at ${hexId(player.position.row, player.position.col)}!`, 'action')
         break
       }
       
@@ -846,7 +922,12 @@ export function useCampaign() {
     }
   }, [players, hexes, currentPlayerIndex, currentRound, currentPhase, exploreHex, addEvent])
 
-  const recordBattle = useCallback((result: BattleResultInfo, _opponentIndex: number | null = null, operativesKilled = 0) => {
+  const recordBattle = useCallback((
+    result: BattleResultInfo,
+    opponentIndex: number | null = null,
+    operativesKilled = 0,
+    challengeStatus: 'completed' | 'challenged-refused' | 'challenged-no-show' = 'completed'
+  ) => {
     setPlayers(prev => {
       const updated = [...prev]
       const player = updated[currentPlayerIndex]
@@ -862,6 +943,24 @@ export function useCampaign() {
         result.name === 'Draw' ? 'DRAW' :
         result.name === 'Bye (No Opponent)' ? 'BYE' : null
 
+      // WHY: Get opponent player ID (null for BYE or if no opponent provided)
+      const opponentPlayerId = opponentIndex !== null && updated[opponentIndex]
+        ? updated[opponentIndex].id
+        : null
+
+      // WHY: Create battle record for history tracking (Demolish prerequisites)
+      // Use ref to get current round value (avoids stale closure)
+      const battleRecord: import('@/types/campaign').BattleRecord = {
+        round: currentRoundRef.current,
+        opponent: opponentPlayerId,
+        result: battleResult as import('@/types/campaign').BattleResult,
+        status: challengeStatus,
+        operativesKilled
+      }
+
+      // WHY: Initialize battleHistory if undefined (migration from old save data)
+      const existingHistory = player.battleHistory || []
+
       updated[currentPlayerIndex] = {
         ...player,
         supplyPoints: newSP,
@@ -871,7 +970,8 @@ export function useCampaign() {
         gamesLost: result.name === 'Defeat' ? player.gamesLost + 1 : player.gamesLost,
         operativesKilled: player.operativesKilled + operativesKilled,
         battleResult,  // WHY: Store for Action Phase turn ordering
-        history: addHistoryEntry(player, currentRound, PHASES[currentPhase] || 'Unknown', result.spGain, result.cpGain, `Battle result: ${result.name}`)
+        battleHistory: [...existingHistory, battleRecord],  // WHY: Append to battle history
+        history: addHistoryEntry(player, currentRoundRef.current, PHASES[currentPhase] || 'Unknown', result.spGain, result.cpGain, `Battle result: ${result.name}`)
       }
 
       return updated
@@ -911,30 +1011,48 @@ export function useCampaign() {
   }, [players, soloMode, addEvent])
 
   const nextPhase = useCallback(() => {
+    // WHY: Use ref to get current phase (avoids stale closure)
+    const phase = currentPhaseRef.current
+
     // Validate Battle phase completion (phase index 1)
-    if (currentPhase === 1 && !battleCompleted) {
+    if (phase === 1 && !battleCompleted) {
       addEvent('Cannot advance: You must record a battle result first', 'error')
       return
     }
 
-    if (currentPhase < PHASES.length - 1) {
-      setCurrentPhase(prev => prev + 1)
-      addEvent(`Phase changed to ${PHASES[currentPhase + 1] || 'Unknown'}`, 'system')
+    if (phase < PHASES.length - 1) {
+      const newPhase = phase + 1
+      currentPhaseRef.current = newPhase  // WHY: Update ref BEFORE setState
+      setCurrentPhase(newPhase)
+      addEvent(`Phase changed to ${PHASES[newPhase] || 'Unknown'}`, 'system')
     } else {
       // Move to next player or next round
-      if (currentPlayerIndex < players.length - 1) {
-        setCurrentPlayerIndex(prev => prev + 1)
+      // WHY: Use refs to get current values (avoids stale closure)
+      const playerIndex = currentPlayerIndexRef.current
+      const currentPlayers = playersRef.current
+
+      if (playerIndex < currentPlayers.length - 1) {
+        const newIndex = playerIndex + 1
+        currentPlayerIndexRef.current = newIndex  // WHY: Update ref BEFORE setState
+        setCurrentPlayerIndex(newIndex)
+        currentPhaseRef.current = 0  // WHY: Update ref BEFORE setState
         setCurrentPhase(0)
         setBattleCompleted(false) // Reset for next player
-        const nextPlayer = players[currentPlayerIndex + 1]
+        const nextPlayer = currentPlayers[newIndex]
         if (nextPlayer) {
           addEvent(`${nextPlayer.name}'s turn`, 'system')
         }
       } else {
         // End of round - increase threat
         const newThreat = threatLevel + 1
+        const currentRoundValue = currentRoundRef.current
+        const newRound = currentRoundValue + 1
+        currentRoundRef.current = newRound  // WHY: Update ref BEFORE setState
+        currentPhaseRef.current = 0  // WHY: Update ref BEFORE setState
+        currentPlayerIndexRef.current = 0  // WHY: Update ref BEFORE setState
+
         setThreatLevel(newThreat)
-        setCurrentRound(prev => prev + 1)
+        setCurrentRound(newRound)
         setCurrentPlayerIndex(0)
         setCurrentPhase(0)
         setBattleCompleted(false) // Reset for new round
@@ -949,9 +1067,9 @@ export function useCampaign() {
           setGameEnded(true)
           addEvent(`Campaign ended! Final threat level: ${newThreat}`, 'system')
         } else {
-          addEvent(`Round ${currentRound + 1} begins. Threat level: ${newThreat}`, 'system')
+          addEvent(`Round ${currentRoundRef.current} begins. Threat level: ${newThreat}`, 'system')
           // WHY: Log movement order for transparency
-          const orderNames = newOrder.map(i => players[i]?.name || `Player ${i}`).join(' → ')
+          const orderNames = newOrder.map(i => currentPlayers[i]?.name || `Player ${i}`).join(' → ')
           addEvent(`Movement order: ${orderNames}`, 'system')
         }
       }
@@ -1009,6 +1127,92 @@ export function useCampaign() {
     })
   }, [actionOrder])
 
+  /**
+   * Validate if player can perform Demolish action
+   * WHY: Demolish requires winning battle against camp owner this round OR challenged-refused/no-show
+   *
+   * @param playerIndex - Index of player attempting demolish
+   * @returns Validation result with valid targets or error reason
+   */
+  const validateDemolish = useCallback((playerIndex: number): {
+    valid: boolean
+    reason?: string
+    targets?: Array<{ playerId: number; playerName: string }>
+    cost: number
+  } => {
+    const DEMOLISH_COST = 3
+    const player = players[playerIndex]
+
+    if (!player) {
+      return { valid: false, reason: 'Player not found', cost: DEMOLISH_COST }
+    }
+
+    // WHY: Check if player has enough SP
+    if (player.supplyPoints < DEMOLISH_COST) {
+      return { valid: false, reason: 'Insufficient SP (requires 3 SP)', cost: DEMOLISH_COST }
+    }
+
+    // WHY: Find opponent camps at player's current position
+    const playerPos = player.position
+    const opponentCamps: Array<{ playerId: number; playerName: string }> = []
+
+    players.forEach((opponent, idx) => {
+      if (idx === playerIndex) return // Skip self
+
+      opponent.camps.forEach(camp => {
+        if (camp.row === playerPos.row && camp.col === playerPos.col) {
+          // WHY: Avoid duplicates if same opponent has multiple camps at same position
+          if (!opponentCamps.find(c => c.playerId === opponent.id)) {
+            opponentCamps.push({ playerId: opponent.id, playerName: opponent.name })
+          }
+        }
+      })
+    })
+
+    if (opponentCamps.length === 0) {
+      return { valid: false, reason: 'no opponent camps at your position', cost: DEMOLISH_COST }
+    }
+
+    // WHY: Check battle history for prerequisites
+    const battleHistory = player.battleHistory || []
+
+    if (battleHistory.length === 0) {
+      return { valid: false, reason: 'no battle history (must win battle or challenge first)', cost: DEMOLISH_COST }
+    }
+
+    // WHY: Filter camps where prerequisites are met (won this round OR challenged-refused/no-show)
+    const validTargets = opponentCamps.filter(camp => {
+      // WHY: Find battles against this camp owner in current round
+      const battleThisRound = battleHistory.find(battle =>
+        battle.round === currentRound &&
+        battle.opponent === camp.playerId
+      )
+
+      if (!battleThisRound) return false
+
+      // WHY: Accept WIN or challenged-refused/no-show statuses
+      return (
+        battleThisRound.result === 'WIN' ||
+        battleThisRound.status === 'challenged-refused' ||
+        battleThisRound.status === 'challenged-no-show'
+      )
+    })
+
+    if (validTargets.length === 0) {
+      return {
+        valid: false,
+        reason: 'Demolish prerequisite not met (must win battle or challenge against camp owner this round)',
+        cost: DEMOLISH_COST
+      }
+    }
+
+    return {
+      valid: true,
+      targets: validTargets,
+      cost: DEMOLISH_COST
+    }
+  }, [players, currentRound])
+
   return {
     // State
     gameStarted,
@@ -1050,6 +1254,7 @@ export function useCampaign() {
     nextPhase,
     updatePlayer,
     calculateEncampCost,
+    validateDemolish,
     addEvent,
     updatePriorities,
     checkRollOff,

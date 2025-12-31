@@ -54,6 +54,14 @@ export interface EncampOptions {
   campToRemove?: HexPosition  // Optional: camp to remove when at 2-camp limit
 }
 
+/**
+ * WHY: Options for Demolish action (Issue #47, Phase 5)
+ * Requires target player ID to identify which camp owner to demolish
+ */
+export interface DemolishOptions {
+  targetPlayerId: number  // Which player's camp to demolish
+}
+
 export interface Hex {
   id: string
   row: number
@@ -79,6 +87,18 @@ export interface HistoryEntry {
 // WHY: Track current round's battle result for Action Phase turn ordering
 export type BattleResult = 'WIN' | 'DRAW' | 'LOSS' | 'BYE'
 
+/**
+ * WHY: Track battle history for Demolish action prerequisites (Issue #47)
+ * Records complete battle information including opponent, result, and challenge status
+ */
+export interface BattleRecord {
+  round: number
+  opponent: number | null  // WHY: null for BYE, player ID otherwise
+  result: BattleResult
+  status: 'completed' | 'challenged-refused' | 'challenged-no-show'
+  operativesKilled: number
+}
+
 export interface Player {
   id: number
   name: string
@@ -98,6 +118,7 @@ export interface Player {
   priority?: number
   battleResult: BattleResult | null  // WHY: Current round's battle result (null = no battle this round)
   searchedHexes: string[]  // WHY: Track which hexes this player has searched (one-time use)
+  battleHistory: BattleRecord[]  // WHY: Full battle history for Demolish action prerequisites
 }
 
 export interface Event {
