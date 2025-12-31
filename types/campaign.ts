@@ -1,5 +1,8 @@
 // Type definitions for the campaign manager
 
+// WHY: Import extended battle types for enhanced battle history
+import type { ExtendedBattleRecord } from './battle'
+
 // WHY: Define search rule type system for location-based search rewards
 export type SearchRule =
   | { type: 'sp', amount: 'd3' | 'd3+1' | number }
@@ -130,7 +133,7 @@ export interface Player {
   priority?: number
   battleResult: BattleResult | null  // WHY: Current round's battle result (null = no battle this round)
   searchedHexes: string[]  // WHY: Track which hexes this player has searched (one-time use)
-  battleHistory: BattleRecord[]  // WHY: Full battle history for Demolish action prerequisites
+  battleHistory: ExtendedBattleRecord[]  // WHY: Extended battle history with details for Issue #34
 }
 
 // WHY: Track warning level for approaching campaign end (1-2 levels from target)

@@ -2,18 +2,21 @@
 
 import { useState } from 'react'
 import type { Player, Hex } from '@/types/campaign'
+import type { ExtendedBattleRecord } from '@/types/battle'
 import { hexId } from '@/lib/utils/hexUtils'
 import { SURFACE_LOCATIONS, TOMB_LOCATIONS } from '@/lib/data/campaignData'
+import BattleHistory from './BattleHistory'
 
 interface PlayerCardProps {
   player: Player
+  allPlayers: Player[]
   isActive: boolean
   currentPhase: string
   hexes: Record<string, Hex>
   onUpdate: (playerId: number, updates: Partial<Player>) => void
 }
 
-function PlayerCard({ player, isActive, currentPhase, hexes, onUpdate }: PlayerCardProps) {
+function PlayerCard({ player, allPlayers, isActive, currentPhase, hexes, onUpdate }: PlayerCardProps) {
   const [editing, setEditing] = useState(false)
   const [showHistory, setShowHistory] = useState(false)
   const [editName, setEditName] = useState(player.name)
@@ -218,6 +221,14 @@ function PlayerCard({ player, isActive, currentPhase, hexes, onUpdate }: PlayerC
             )}
           </div>
         )}
+
+        {/* WHY: Battle history accordion (Issue #34) */}
+        {player.battleHistory && player.battleHistory.length > 0 && (
+          <BattleHistory
+            history={player.battleHistory as ExtendedBattleRecord[]}
+            players={allPlayers.map(p => ({ id: p.id, name: p.name }))}
+          />
+        )}
       </div>
     </div>
   )
@@ -247,6 +258,7 @@ export default function PlayerPanel({
             key={player.id}
             hexes={hexes}
             player={player}
+            allPlayers={players}
             isActive={player.id === currentPlayerIndex}
             currentPhase={currentPhase}
             onUpdate={onUpdatePlayer}

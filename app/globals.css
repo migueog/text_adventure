@@ -2639,3 +2639,372 @@ input, select {
   transform: translateY(-2px);
   box-shadow: 0 4px 8px rgba(220, 53, 69, 0.4);
 }
+
+/* ============================================
+   BATTLE FORM STYLES (Issue #34)
+   ============================================ */
+
+/**
+ * WHY: Battle form container for recording battle results
+ */
+.battle-form {
+  background: var(--bg-tertiary);
+  border-radius: 8px;
+  padding: 1rem;
+  margin-top: 1rem;
+}
+
+.battle-form .form-group {
+  margin-bottom: 1rem;
+}
+
+.battle-form .form-group label {
+  display: block;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  margin-bottom: 0.3rem;
+}
+
+.battle-form .form-group select,
+.battle-form .form-group input {
+  width: 100%;
+  padding: 0.5rem;
+  background: var(--bg-secondary);
+  border: 1px solid var(--text-muted);
+  border-radius: 4px;
+  color: var(--text-primary);
+  font-size: 0.9rem;
+}
+
+.battle-form .form-group select:focus,
+.battle-form .form-group input:focus {
+  outline: none;
+  border-color: var(--accent-blue);
+}
+
+/**
+ * WHY: Checkbox groups need inline layout
+ */
+.battle-form .checkbox-group label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.battle-form .checkbox-group input[type="checkbox"] {
+  width: auto;
+  cursor: pointer;
+}
+
+/**
+ * WHY: Required field indicator
+ */
+.battle-form .required {
+  color: var(--accent-red);
+}
+
+/**
+ * WHY: Details toggle button for expanded form
+ */
+.battle-form .details-toggle {
+  width: 100%;
+  padding: 0.5rem;
+  background: var(--bg-secondary);
+  border: 1px dashed var(--text-muted);
+  border-radius: 4px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 0.85rem;
+  margin-bottom: 1rem;
+}
+
+.battle-form .details-toggle:hover {
+  background: var(--bg-tertiary);
+  border-color: var(--accent-blue);
+  color: var(--text-primary);
+}
+
+/**
+ * WHY: Detailed mode additional fields
+ */
+.battle-form .battle-details {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 4px;
+  padding: 1rem;
+  margin-bottom: 1rem;
+}
+
+.battle-form .mission-input {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.battle-form .mission-input select {
+  flex: 1;
+}
+
+.battle-form .random-mission-btn {
+  padding: 0.5rem 1rem;
+  background: var(--accent-purple);
+  border: none;
+  border-radius: 4px;
+  color: white;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.battle-form .random-mission-btn:hover {
+  background: #8e44ad;
+}
+
+.battle-form .form-row {
+  display: flex;
+  gap: 1rem;
+}
+
+.battle-form .form-row .form-group {
+  flex: 1;
+}
+
+/**
+ * WHY: Validation message for incomplete form
+ */
+.battle-form .validation-message {
+  color: var(--accent-red);
+  font-size: 0.85rem;
+  margin-top: 0.5rem;
+}
+
+/* ============================================
+   BATTLE HISTORY STYLES (Issue #34)
+   ============================================ */
+
+/**
+ * WHY: Battle history accordion container
+ */
+.battle-history-section {
+  margin-top: 1rem;
+  border-radius: 6px;
+  overflow: hidden;
+  border: 1px solid var(--text-muted);
+}
+
+/**
+ * WHY: Accordion header/toggle button
+ */
+.battle-history-header {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem 1rem;
+  background: var(--bg-tertiary);
+  border: none;
+  color: var(--text-primary);
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.battle-history-header:hover {
+  background: var(--bg-secondary);
+}
+
+.battle-history-header .accordion-icon {
+  color: var(--text-secondary);
+  font-size: 1.1rem;
+}
+
+/**
+ * WHY: Expanded content container
+ */
+.battle-history-content {
+  padding: 1rem;
+  background: var(--bg-secondary);
+}
+
+/**
+ * WHY: Statistics summary display
+ */
+.battle-stats-summary {
+  background: var(--bg-tertiary);
+  border-radius: 4px;
+  padding: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.battle-stats-summary .stat-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.3rem 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.battle-stats-summary .stat-row:last-child {
+  border-bottom: none;
+}
+
+.battle-stats-summary .stat-label {
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+}
+
+.battle-stats-summary .stat-value {
+  color: var(--text-primary);
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+
+/**
+ * WHY: Filter controls for battle list
+ */
+.battle-filters {
+  margin-bottom: 1rem;
+}
+
+.battle-filters label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+}
+
+.battle-filters select {
+  padding: 0.3rem 0.5rem;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--text-muted);
+  border-radius: 4px;
+  color: var(--text-primary);
+  font-size: 0.85rem;
+}
+
+/**
+ * WHY: Battle list with entries
+ */
+.battle-list {
+  list-style: none;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.battle-entry {
+  background: var(--bg-tertiary);
+  border-radius: 4px;
+  padding: 0.75rem;
+  margin-bottom: 0.5rem;
+}
+
+.battle-entry:last-child {
+  margin-bottom: 0;
+}
+
+/**
+ * WHY: Battle entry header with badges
+ */
+.battle-entry .battle-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.5rem;
+}
+
+/**
+ * WHY: Round badge styling
+ */
+.battle-entry .round-badge {
+  background: var(--accent-blue);
+  color: white;
+  padding: 0.15rem 0.4rem;
+  border-radius: 3px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+/**
+ * WHY: Result badges with color-coding
+ */
+.battle-entry .result-badge {
+  padding: 0.15rem 0.5rem;
+  border-radius: 3px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.battle-entry .result-badge.win {
+  background: var(--accent-green);
+  color: white;
+}
+
+.battle-entry .result-badge.loss {
+  background: var(--accent-red);
+  color: white;
+}
+
+.battle-entry .result-badge.draw {
+  background: var(--accent-yellow);
+  color: #333;
+}
+
+.battle-entry .result-badge.bye {
+  background: var(--text-muted);
+  color: white;
+}
+
+/**
+ * WHY: Opponent name styling
+ */
+.battle-entry .opponent-name {
+  color: var(--text-primary);
+  font-size: 0.85rem;
+}
+
+/**
+ * WHY: Reward display
+ */
+.battle-entry .reward {
+  margin-left: auto;
+  color: var(--accent-green);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+/**
+ * WHY: Battle detail rows
+ */
+.battle-entry .battle-detail {
+  display: flex;
+  gap: 0.5rem;
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  margin-bottom: 0.25rem;
+}
+
+.battle-entry .battle-detail .detail-label {
+  color: var(--text-muted);
+}
+
+/**
+ * WHY: Notes styling
+ */
+.battle-entry .battle-notes {
+  margin-top: 0.5rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  font-style: italic;
+}
+
+/**
+ * WHY: Empty state message
+ */
+.battle-history-content .empty-message {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  text-align: center;
+  padding: 1rem;
+}

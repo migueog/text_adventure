@@ -1,7 +1,8 @@
 'use client'
 
 import { useState, useCallback, useEffect, useRef } from 'react'
-import type { Player, Hex, MapConfig, Event, HexPosition, EncampOptions, ThreatWarningLevel } from '@/types/campaign'
+import type { Player, Hex, MapConfig, Event, HexPosition, EncampOptions, ThreatWarningLevel, BattleResult } from '@/types/campaign'
+import type { ExtendedBattleRecord } from '@/types/battle'
 import {
   MAP_CONFIGS,
   SURFACE_LOCATIONS,
@@ -958,56 +959,53 @@ export function useCampaign() {
     }
   }, [players, hexes, currentPlayerIndex, currentRound, currentPhase, exploreHex, addEvent])
 
+  /**
+   * Record battle result with extended details (Issue #34)
+   * WHY: Updated signature accepts full ExtendedBattleRecord minus auto-generated fields
+   */
   const recordBattle = useCallback((
-    result: BattleResultInfo,
-    opponentIndex: number | null = null,
-    operativesKilled = 0,
-    challengeStatus: 'completed' | 'challenged-refused' | 'challenged-no-show' = 'completed'
+    record: Omit<ExtendedBattleRecord, 'round' | 'timestamp'>
   ) => {
     setPlayers(prev => {
       const updated = [...prev]
       const player = updated[currentPlayerIndex]
       if (!player) return prev
 
-      const newSP = clampSP(player.supplyPoints + result.spGain)
-      const newCP = player.campaignPoints + result.cpGain
+      const newSP = clampSP(player.supplyPoints + record.spEarned)
+      const newCP = player.campaignPoints + record.cpEarned
 
-      // WHY: Map result name to BattleResult type for Action Phase turn ordering
-      const battleResult =
-        result.name === 'Victory' ? 'WIN' :
-        result.name === 'Defeat' ? 'LOSS' :
-        result.name === 'Draw' ? 'DRAW' :
-        result.name === 'Bye (No Opponent)' ? 'BYE' : null
-
-      // WHY: Get opponent player ID (null for BYE or if no opponent provided)
-      const opponentPlayerId = opponentIndex !== null && updated[opponentIndex]
-        ? updated[opponentIndex].id
-        : null
-
-      // WHY: Create battle record for history tracking (Demolish prerequisites)
-      // Use ref to get current round value (avoids stale closure)
-      const battleRecord: import('@/types/campaign').BattleRecord = {
+      // WHY: Create complete battle record with auto-generated fields
+      const battleRecord: ExtendedBattleRecord = {
+        ...record,
         round: currentRoundRef.current,
-        opponent: opponentPlayerId,
-        result: battleResult as import('@/types/campaign').BattleResult,
-        status: challengeStatus,
-        operativesKilled
+        timestamp: new Date().toISOString()
       }
 
       // WHY: Initialize battleHistory if undefined (migration from old save data)
       const existingHistory = player.battleHistory || []
+
+      // WHY: Calculate win/loss stats from result
+      const isWin = record.result === 'WIN'
+      const isLoss = record.result === 'LOSS'
 
       updated[currentPlayerIndex] = {
         ...player,
         supplyPoints: newSP,
         campaignPoints: newCP,
         gamesPlayed: player.gamesPlayed + 1,
-        gamesWon: result.name === 'Victory' ? player.gamesWon + 1 : player.gamesWon,
-        gamesLost: result.name === 'Defeat' ? player.gamesLost + 1 : player.gamesLost,
-        operativesKilled: player.operativesKilled + operativesKilled,
-        battleResult,  // WHY: Store for Action Phase turn ordering
-        battleHistory: [...existingHistory, battleRecord],  // WHY: Append to battle history
-        history: addHistoryEntry(player, currentRoundRef.current, PHASES[currentPhase] || 'Unknown', result.spGain, result.cpGain, `Battle result: ${result.name}`)
+        gamesWon: isWin ? player.gamesWon + 1 : player.gamesWon,
+        gamesLost: isLoss ? player.gamesLost + 1 : player.gamesLost,
+        operativesKilled: player.operativesKilled + record.operativesKilled,
+        battleResult: record.result,  // WHY: Store for Action Phase turn ordering
+        battleHistory: [...existingHistory, battleRecord],
+        history: addHistoryEntry(
+          player,
+          currentRoundRef.current,
+          PHASES[currentPhase] || 'Unknown',
+          record.spEarned,
+          record.cpEarned,
+          `Battle result: ${record.result}`
+        )
       }
 
       return updated
@@ -1015,12 +1013,15 @@ export function useCampaign() {
 
     const player = players[currentPlayerIndex]
     if (player) {
-      addEvent(`${player.name}: ${result.name} (+${result.cpGain} CP, +${result.spGain} SP)`, 'battle')
+      addEvent(
+        `${player.name}: ${record.result} (+${record.cpEarned} CP, +${record.spEarned} SP)`,
+        'battle'
+      )
     }
 
     // Mark battle phase as completed
     setBattleCompleted(true)
-  }, [players, currentPlayerIndex, currentRound, currentPhase, addEvent])
+  }, [players, currentPlayerIndex, currentPhase, addEvent])
 
   /**
    * Calculate movement order based on player priority

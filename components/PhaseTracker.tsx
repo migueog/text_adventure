@@ -2,8 +2,10 @@
 
 import { useState, useMemo } from 'react'
 import type { Player, Hex, SearchRule, HexPosition, ThreatWarningLevel } from '@/types/campaign'
-import { PHASES, BATTLE_RESULTS, BattleResultInfo, SURFACE_LOCATIONS, TOMB_LOCATIONS, SURFACE_CONDITIONS, TOMB_CONDITIONS } from '@/lib/data/campaignData'
+import { PHASES, SURFACE_LOCATIONS, TOMB_LOCATIONS, SURFACE_CONDITIONS, TOMB_CONDITIONS } from '@/lib/data/campaignData'
 import { hexDistance, hexId, isPlayerInBlockedHex } from '@/lib/utils/hexUtils'
+import type { ExtendedBattleRecord } from '@/types/battle'
+import BattleForm from './BattleForm'
 import ScoutConfirmDialog from './ScoutConfirmDialog'
 import CampSelectionModal from './CampSelectionModal'
 import DemolishConfirmationModal from './DemolishConfirmationModal'
@@ -25,7 +27,7 @@ interface PhaseTrackerProps {
   onNextPhase: () => void
   onMove: (playerIndex: number, targetHex: string, cost: number) => void
   onAction: (action: string, params?: any) => void
-  onBattle: (result: BattleResultInfo, opponentIndex: number | null, operativesKilled: number, challengeStatus?: 'completed' | 'challenged-refused' | 'challenged-no-show') => void
+  onBattle: (record: Omit<ExtendedBattleRecord, 'round' | 'timestamp'>) => void
   calculateEncampCost: (playerIndex: number) => number
   validateDemolish: (playerIndex: number) => {
     valid: boolean
@@ -169,10 +171,6 @@ export default function PhaseTracker({
   const [showScoutConfirm, setShowScoutConfirm] = useState(false)
   const [showCampSelection, setShowCampSelection] = useState(false)
   const [pendingEncampCost, setPendingEncampCost] = useState<number>(0)
-  const [battleResult, setBattleResult] = useState<string>('WIN')
-  const [operativesKilled, setOperativesKilled] = useState(0)
-  const [selectedOpponent, setSelectedOpponent] = useState<number | null>(null)
-  const [challengedRefused, setChallengedRefused] = useState(false)
   const [showDemolishModal, setShowDemolishModal] = useState(false)
   const [demolishTarget, setDemolishTarget] = useState<{playerId: number, playerName: string} | null>(null)
 
@@ -275,23 +273,6 @@ export default function PhaseTracker({
   const handleCampSelectionCancel = () => {
     setShowCampSelection(false)
     setPendingEncampCost(0)
-  }
-
-  const handleBattle = () => {
-    const result = BATTLE_RESULTS[battleResult]
-    if (result) {
-      // WHY: Determine challenge status based on checkbox
-      const challengeStatus = challengedRefused
-        ? 'challenged-refused'
-        : 'completed'
-
-      onBattle(result, selectedOpponent, operativesKilled, challengeStatus as any)
-
-      // WHY: Reset form after recording
-      setOperativesKilled(0)
-      setSelectedOpponent(null)
-      setChallengedRefused(false)
-    }
   }
 
   const movementOptions = getMovementOptions()
@@ -463,89 +444,13 @@ export default function PhaseTracker({
               </div>
             )}
 
-            <div className="battle-form">
-              <div className="form-group">
-                <label>Battle Result:</label>
-                <select
-                  value={battleResult}
-                  onChange={(e) => {
-                    setBattleResult(e.target.value)
-                    // WHY: Reset opponent and challenge when switching to/from BYE
-                    if (e.target.value === 'BYE') {
-                      setSelectedOpponent(null)
-                      setChallengedRefused(false)
-                    }
-                  }}
-                >
-                  <option value="WIN">Victory (+1 CP)</option>
-                  <option value="DRAW">Draw (+1 SP)</option>
-                  <option value="LOSS">Defeat (+1 SP)</option>
-                  <option value="BYE">Bye - No Opponent (+2 SP)</option>
-                </select>
-              </div>
-
-              {/* WHY: Show opponent selection for non-BYE battles */}
-              {battleResult !== 'BYE' && (
-                <div className="form-group">
-                  <label>Opponent: <span style={{ color: '#dc3545' }}>*</span></label>
-                  <select
-                    value={selectedOpponent ?? ''}
-                    onChange={(e) => setSelectedOpponent(e.target.value ? parseInt(e.target.value) : null)}
-                    required
-                  >
-                    <option value="">-- Select Opponent --</option>
-                    {players.map((player, idx) => {
-                      if (player.id === currentPlayer.id) return null
-                      return (
-                        <option key={player.id} value={idx}>
-                          {player.name}
-                        </option>
-                      )
-                    })}
-                  </select>
-                </div>
-              )}
-
-              {/* WHY: Show challenge checkbox when opponent is selected */}
-              {battleResult !== 'BYE' && selectedOpponent !== null && (
-                <div className="form-group">
-                  <label>
-                    <input
-                      type="checkbox"
-                      checked={challengedRefused}
-                      onChange={(e) => setChallengedRefused(e.target.checked)}
-                      style={{ marginRight: '0.5rem' }}
-                    />
-                    Game challenged but didn't happen (refused/no-show)
-                  </label>
-                </div>
-              )}
-
-              <div className="form-group">
-                <label>Operatives Killed:</label>
-                <input
-                  type="number"
-                  min="0"
-                  value={operativesKilled}
-                  onChange={(e) => setOperativesKilled(parseInt(e.target.value) || 0)}
-                />
-              </div>
-
-              <button
-                className="action-btn primary"
-                onClick={handleBattle}
-                disabled={battleResult !== 'BYE' && selectedOpponent === null}
-              >
-                Record Battle
-              </button>
-
-              {/* WHY: Show validation message */}
-              {battleResult !== 'BYE' && selectedOpponent === null && (
-                <p style={{ color: '#dc3545', fontSize: '0.9rem', marginTop: '0.5rem' }}>
-                  Please select an opponent to record the battle.
-                </p>
-              )}
-            </div>
+            {/* WHY: Use BattleForm component (Issue #34) */}
+            <BattleForm
+              currentPlayerId={currentPlayer.id}
+              players={players.map(p => ({ id: p.id, name: p.name, color: p.color }))}
+              currentRound={currentRound}
+              onRecordBattle={onBattle}
+            />
           </div>
         )}
 
