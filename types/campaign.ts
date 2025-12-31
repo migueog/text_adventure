@@ -55,11 +55,15 @@ export interface EncampOptions {
 }
 
 /**
- * WHY: Options for Demolish action (Issue #47, Phase 5)
- * Requires target player ID to identify which camp owner to demolish
+ * Options for Demolish action (Issue #47)
+ *
+ * WHY: Requires target player ID to identify which camp owner to demolish.
+ * Player must have won battle against target OR challenged-refused/no-show this round.
+ *
+ * @property {number} targetPlayerId - ID of player whose camp to demolish
  */
 export interface DemolishOptions {
-  targetPlayerId: number  // Which player's camp to demolish
+  targetPlayerId: number
 }
 
 export interface Hex {
@@ -88,12 +92,20 @@ export interface HistoryEntry {
 export type BattleResult = 'WIN' | 'DRAW' | 'LOSS' | 'BYE'
 
 /**
- * WHY: Track battle history for Demolish action prerequisites (Issue #47)
- * Records complete battle information including opponent, result, and challenge status
+ * Battle history record for tracking Demolish action prerequisites (Issue #47)
+ *
+ * WHY: Each battle record stores complete information to validate demolish attempts.
+ * Prerequisites: WIN result OR challenged-refused/no-show status in current round.
+ *
+ * @property {number} round - Round number when battle occurred
+ * @property {number | null} opponent - Opponent player ID (null for BYE)
+ * @property {BattleResult} result - Battle outcome (WIN, LOSS, DRAW, BYE)
+ * @property {'completed' | 'challenged-refused' | 'challenged-no-show'} status - Battle status
+ * @property {number} operativesKilled - Number of operatives killed in battle
  */
 export interface BattleRecord {
   round: number
-  opponent: number | null  // WHY: null for BYE, player ID otherwise
+  opponent: number | null
   result: BattleResult
   status: 'completed' | 'challenged-refused' | 'challenged-no-show'
   operativesKilled: number
