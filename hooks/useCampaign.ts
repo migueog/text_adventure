@@ -20,6 +20,9 @@ import { determinePriority, needsRollOff } from '@/lib/utils/priority'
 import { calculateActionPhaseOrder } from '@/lib/utils/actionPhaseUtils'
 import { calculateResupply } from '@/lib/utils/resupply'
 import { resolveSearchRule, canPerformSearch } from '@/lib/utils/search'
+import { determineActiveCondition, getKillzoneRecommendation } from '@/lib/utils/battleCondition'
+import { createMissingPlayerRecords } from '@/lib/utils/battleRewards'
+import type { ActiveBattleCondition, KillzoneRecommendation } from '@/types/battleCondition'
 
 // Constants for SP management
 const SP_MIN = 0
@@ -135,6 +138,10 @@ export function useCampaign() {
   // WHY: Track action order and index for battle result-based turn ordering
   const [actionOrder, setActionOrder] = useState<number[] | null>(null)
   const [actionIndex, setActionIndex] = useState(0)
+
+  // WHY: Track battle condition state for Issue #40
+  const [conditionEnabled, setConditionEnabled] = useState(true)
+  const [selectedOpponentId, setSelectedOpponentId] = useState<number | null>(null)
 
   // WHY: Use refs to avoid stale closure issues in callbacks
   // Refs are updated synchronously in setState callbacks, not via useEffect
@@ -1024,6 +1031,102 @@ export function useCampaign() {
   }, [players, currentPlayerIndex, currentPhase, addEvent])
 
   /**
+   * Record missing player scenario (Issue #41)
+   *
+   * WHY: When an opponent doesn't show up, sporting rules apply:
+   * - Present player gets WIN (+1 CP)
+   * - Absent player gets LOSS (+1 SP)
+   *
+   * @param presentPlayerId - ID of player who showed up
+   * @param absentPlayerId - ID of player who didn't show
+   */
+  const recordMissingPlayer = useCallback((
+    presentPlayerId: number,
+    absentPlayerId: number
+  ) => {
+    const presentPlayer = players.find(p => p.id === presentPlayerId)
+    const absentPlayer = players.find(p => p.id === absentPlayerId)
+
+    if (!presentPlayer || !absentPlayer) {
+      console.error('recordMissingPlayer: Invalid player IDs')
+      return
+    }
+
+    // WHY: Create records for both players
+    const { winRecord, lossRecord } = createMissingPlayerRecords(
+      presentPlayer,
+      absentPlayer,
+      currentRoundRef.current
+    )
+
+    // WHY: Update both players' state with their respective records
+    setPlayers(prev => {
+      const updated = [...prev]
+
+      // Update present player with WIN
+      const presentIdx = updated.findIndex(p => p.id === presentPlayerId)
+      if (presentIdx !== -1) {
+        const present = updated[presentIdx]
+        updated[presentIdx] = {
+          ...present,
+          supplyPoints: present.supplyPoints, // WIN gives CP, not SP
+          campaignPoints: present.campaignPoints + winRecord.cpEarned,
+          gamesPlayed: present.gamesPlayed + 1,
+          gamesWon: present.gamesWon + 1,
+          battleResult: 'WIN',
+          battleHistory: [...(present.battleHistory || []), winRecord],
+          history: addHistoryEntry(
+            present,
+            currentRoundRef.current,
+            PHASES[currentPhase] || 'Battle',
+            winRecord.spEarned,
+            winRecord.cpEarned,
+            `Battle result: WIN (opponent absent)`
+          )
+        }
+      }
+
+      // Update absent player with LOSS
+      const absentIdx = updated.findIndex(p => p.id === absentPlayerId)
+      if (absentIdx !== -1) {
+        const absent = updated[absentIdx]
+        updated[absentIdx] = {
+          ...absent,
+          supplyPoints: clampSP(absent.supplyPoints + lossRecord.spEarned),
+          campaignPoints: absent.campaignPoints, // LOSS gives SP, not CP
+          gamesPlayed: absent.gamesPlayed + 1,
+          gamesLost: absent.gamesLost + 1,
+          battleResult: 'LOSS',
+          battleHistory: [...(absent.battleHistory || []), lossRecord],
+          history: addHistoryEntry(
+            absent,
+            currentRoundRef.current,
+            PHASES[currentPhase] || 'Battle',
+            lossRecord.spEarned,
+            lossRecord.cpEarned,
+            `Battle result: LOSS (absent)`
+          )
+        }
+      }
+
+      return updated
+    })
+
+    // WHY: Log events for both players
+    addEvent(
+      `${presentPlayer.name}: WIN (+1 CP) - ${absentPlayer.name} was absent`,
+      'battle'
+    )
+    addEvent(
+      `${absentPlayer.name}: LOSS (+1 SP) - marked as absent`,
+      'battle'
+    )
+
+    // WHY: Mark battle as completed for present player
+    setBattleCompleted(true)
+  }, [players, currentPhase, addEvent])
+
+  /**
    * Calculate movement order based on player priority
    * WHY: Official rules state players move in priority order (lowest CP → SP)
    * @returns Array of player indices in movement order
@@ -1253,6 +1356,60 @@ export function useCampaign() {
     }
   }, [players, currentRound])
 
+  /**
+   * Get the active battle condition for the current battle (Issue #40)
+   * WHY: Called during Battle Phase to determine which condition applies
+   *
+   * @param opponentId - The selected opponent's player ID (null for BYE/external)
+   * @returns ActiveBattleCondition with condition info and reason, plus killzone recommendation
+   */
+  const getActiveBattleCondition = useCallback((
+    opponentId: number | null
+  ): { condition: ActiveBattleCondition; killzone: KillzoneRecommendation | null } | null => {
+    // Only return condition during Battle Phase
+    if (currentPhase !== 1) return null
+
+    const currentPlayer = players[currentPlayerIndex]
+    if (!currentPlayer) return null
+
+    // If condition rules disabled, return disabled state
+    if (!conditionEnabled) {
+      return {
+        condition: {
+          condition: null,
+          sourceHex: null,
+          reason: 'disabled',
+          conditionProviderPlayerId: null,
+          conditionProviderName: null
+        },
+        killzone: null
+      }
+    }
+
+    // Get opponent player (null for BYE or external)
+    const opponent = opponentId !== null
+      ? players.find(p => p.id === opponentId) ?? null
+      : null
+
+    // Get players with priority for initiative determination
+    const playersWithPriority = determinePriority(players)
+
+    // Determine active condition
+    const activeCondition = determineActiveCondition(
+      currentPlayer,
+      opponent,
+      hexes,
+      playersWithPriority
+    )
+
+    // Get killzone recommendation based on hex type
+    const killzone = activeCondition.sourceHex
+      ? getKillzoneRecommendation(activeCondition.sourceHex.type)
+      : null
+
+    return { condition: activeCondition, killzone }
+  }, [currentPhase, currentPlayerIndex, players, hexes, conditionEnabled])
+
   return {
     // State
     gameStarted,
@@ -1277,12 +1434,16 @@ export function useCampaign() {
     movementIndex,
     actionOrder,
     actionIndex,
+    conditionEnabled,
+    selectedOpponentId,
 
     // Setters
     setPlayerCount,
     setTargetThreatLevel,
     setSelectedHex,
     setThreatLevel,
+    setConditionEnabled,
+    setSelectedOpponentId,
 
     // Actions
     startGame,
@@ -1292,6 +1453,7 @@ export function useCampaign() {
     exploreHex,
     performAction,
     recordBattle,
+    recordMissingPlayer,
     nextPhase,
     updatePlayer,
     calculateEncampCost,
@@ -1303,5 +1465,6 @@ export function useCampaign() {
     clearExplorationResult,
     calculateMovementOrder,
     advanceActionTurn,
+    getActiveBattleCondition,
   }
 }

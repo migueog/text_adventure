@@ -18,12 +18,15 @@ interface BattleFormProps {
   players: Array<{ id: number; name: string; color: string }>
   currentRound: number
   onRecordBattle: (record: Omit<ExtendedBattleRecord, 'round' | 'timestamp'>) => void
+  /** WHY: Callback for Issue #40 - notify parent when opponent changes for condition display */
+  onOpponentSelect?: (opponentId: number | null) => void
 }
 
 export default function BattleForm({
   currentPlayerId,
   players,
-  onRecordBattle
+  onRecordBattle,
+  onOpponentSelect
 }: BattleFormProps) {
   // Basic form state
   const [result, setResult] = useState<BattleResult>('WIN')
@@ -31,6 +34,8 @@ export default function BattleForm({
   const [isExternal, setIsExternal] = useState(false)
   const [operativesKilled, setOperativesKilled] = useState(0)
   const [challengedRefused, setChallengedRefused] = useState(false)
+  // WHY: Issue #41 - Extra game checkbox for helpers who play twice
+  const [isExtraGame, setIsExtraGame] = useState(false)
 
   // Detailed mode state
   const [showDetails, setShowDetails] = useState(false)
@@ -45,22 +50,30 @@ export default function BattleForm({
   const canSubmit = isBye || isExternal || opponentId !== null
   const otherPlayers = players.filter(p => p.id !== currentPlayerId)
 
+  /**
+   * WHY: Wrapper to update opponent and notify parent for condition display (Issue #40)
+   */
+  const handleOpponentChange = useCallback((newOpponentId: number | null) => {
+    setOpponentId(newOpponentId)
+    onOpponentSelect?.(newOpponentId)
+  }, [onOpponentSelect])
+
   const handleResultChange = useCallback((newResult: BattleResult) => {
     setResult(newResult)
     if (newResult === 'BYE') {
-      setOpponentId(null)
+      handleOpponentChange(null)
       setIsExternal(false)
       setChallengedRefused(false)
     }
-  }, [])
+  }, [handleOpponentChange])
 
   const handleExternalToggle = useCallback((checked: boolean) => {
     setIsExternal(checked)
     if (checked) {
-      setOpponentId(null)
+      handleOpponentChange(null)
       setChallengedRefused(false)
     }
-  }, [])
+  }, [handleOpponentChange])
 
   const handleRandomMission = useCallback(() => {
     const randomMission = getRandomMission()
@@ -69,15 +82,16 @@ export default function BattleForm({
 
   const resetForm = useCallback(() => {
     setOperativesKilled(0)
-    setOpponentId(null)
+    handleOpponentChange(null)
     setChallengedRefused(false)
     setIsExternal(false)
+    setIsExtraGame(false)
     setMission('')
     setVpScored('')
     setVpOpponent('')
     setOperativesLost('')
     setNotes('')
-  }, [])
+  }, [handleOpponentChange])
 
   const handleSubmit = useCallback(() => {
     if (!canSubmit) return
@@ -88,14 +102,20 @@ export default function BattleForm({
 
     const status = challengedRefused ? 'challenged-refused' : 'completed'
 
+    // WHY: Issue #41 - Extra game helper gets no rewards
+    const cpEarned = isExtraGame ? 0 : rewards.cpGain
+    const spEarned = isExtraGame ? 0 : rewards.spGain
+
     const record: Omit<ExtendedBattleRecord, 'round' | 'timestamp'> = {
       opponent: opponentId,
       result,
       status,
       operativesKilled,
       isExternalOpponent: isExternal,
-      cpEarned: rewards.cpGain,
-      spEarned: rewards.spGain,
+      cpEarned,
+      spEarned,
+      // WHY: Issue #41 - Track if this was an extra game
+      ...(isExtraGame && { isExtraGame: true }),
       // Optional detailed fields - only include if provided
       ...(mission && { missionType: mission }),
       ...(vpScored !== '' && { vpScored: vpScored as number }),
@@ -108,7 +128,7 @@ export default function BattleForm({
     resetForm()
   }, [
     result, opponentId, isExternal, operativesKilled,
-    challengedRefused, mission, vpScored, vpOpponent,
+    challengedRefused, isExtraGame, mission, vpScored, vpOpponent,
     operativesLost, notes, canSubmit, onRecordBattle, resetForm
   ])
 
@@ -151,7 +171,7 @@ export default function BattleForm({
               <select
                 id="opponent"
                 value={opponentId ?? ''}
-                onChange={(e) => setOpponentId(e.target.value ? parseInt(e.target.value) : null)}
+                onChange={(e) => handleOpponentChange(e.target.value ? parseInt(e.target.value) : null)}
               >
                 <option value="">-- Select Opponent --</option>
                 {otherPlayers.map(player => (
@@ -177,6 +197,20 @@ export default function BattleForm({
             </div>
           )}
         </>
+      )}
+
+      {/* Extra Game Checkbox (Issue #41) - for helpers playing twice */}
+      {!isBye && (
+        <div className="form-group checkbox-group extra-game-checkbox">
+          <label>
+            <input
+              type="checkbox"
+              checked={isExtraGame}
+              onChange={(e) => setIsExtraGame(e.target.checked)}
+            />
+            {' '}This is an extra game (helping odd player - no rewards)
+          </label>
+        </div>
       )}
 
       {/* Operatives Killed */}
@@ -278,11 +312,11 @@ export default function BattleForm({
       {/* Submit Button */}
       <button
         type="button"
-        className="action-btn primary"
+        className={`action-btn primary ${isExtraGame ? 'extra-game' : ''}`}
         onClick={handleSubmit}
         disabled={!canSubmit}
       >
-        Record Battle
+        {isExtraGame ? 'Record Extra Game (No Rewards)' : 'Record Battle'}
       </button>
 
       {/* Validation Message */}

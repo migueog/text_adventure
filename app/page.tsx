@@ -190,6 +190,12 @@ export default function Home() {
             onBattle={campaign.recordBattle}
             calculateEncampCost={campaign.calculateEncampCost}
             validateDemolish={campaign.validateDemolish}
+            conditionEnabled={campaign.conditionEnabled}
+            selectedOpponentId={campaign.selectedOpponentId}
+            onConditionEnabledChange={campaign.setConditionEnabled}
+            onOpponentSelect={campaign.setSelectedOpponentId}
+            getActiveBattleCondition={campaign.getActiveBattleCondition}
+            onRecordMissingPlayer={campaign.recordMissingPlayer}
           />
           <HexDetails
             hex={campaign.selectedHex ? campaign.hexes[campaign.selectedHex] : undefined}

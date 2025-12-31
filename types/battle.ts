@@ -40,6 +40,14 @@ export interface ExtendedBattleRecord extends BattleRecord {
 
   /** WHY: Free-form notes for narrative tracking */
   notes?: string
+
+  // Issue #41: Battle Phase Rewards and Special Cases
+
+  /** WHY: Helper playing extra game for odd player - receives no rewards */
+  isExtraGame?: boolean
+
+  /** WHY: Recorded against missing opponent - auto loss/win scenario */
+  isMissingOpponent?: boolean
 }
 
 /**

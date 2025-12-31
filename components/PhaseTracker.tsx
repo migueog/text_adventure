@@ -5,7 +5,10 @@ import type { Player, Hex, SearchRule, HexPosition, ThreatWarningLevel } from '@
 import { PHASES, SURFACE_LOCATIONS, TOMB_LOCATIONS, SURFACE_CONDITIONS, TOMB_CONDITIONS } from '@/lib/data/campaignData'
 import { hexDistance, hexId, isPlayerInBlockedHex } from '@/lib/utils/hexUtils'
 import type { ExtendedBattleRecord } from '@/types/battle'
+import type { ActiveBattleCondition, KillzoneRecommendation } from '@/types/battleCondition'
 import BattleForm from './BattleForm'
+import BattleConditionDisplay from './BattleConditionDisplay'
+import MissingPlayerModal from './MissingPlayerModal'
 import ScoutConfirmDialog from './ScoutConfirmDialog'
 import CampSelectionModal from './CampSelectionModal'
 import DemolishConfirmationModal from './DemolishConfirmationModal'
@@ -35,6 +38,17 @@ interface PhaseTrackerProps {
     targets?: Array<{ playerId: number; playerName: string }>
     cost: number
   }
+  // WHY: Battle condition props for Issue #40
+  conditionEnabled: boolean
+  selectedOpponentId: number | null
+  onConditionEnabledChange: (enabled: boolean) => void
+  onOpponentSelect: (opponentId: number | null) => void
+  getActiveBattleCondition: (opponentId: number | null) => {
+    condition: ActiveBattleCondition
+    killzone: KillzoneRecommendation | null
+  } | null
+  // WHY: Issue #41 - Missing player handling
+  onRecordMissingPlayer?: (presentPlayerId: number, absentPlayerId: number) => void
 }
 
 interface MovementOption {
@@ -164,9 +178,17 @@ export default function PhaseTracker({
   onAction,
   onBattle,
   calculateEncampCost,
-  validateDemolish
+  validateDemolish,
+  conditionEnabled,
+  selectedOpponentId,
+  onConditionEnabledChange,
+  onOpponentSelect,
+  getActiveBattleCondition,
+  onRecordMissingPlayer
 }: PhaseTrackerProps) {
   const [moveTarget, setMoveTarget] = useState<Hex | null>(null)
+  // WHY: Issue #41 - Missing player modal state
+  const [showMissingPlayerModal, setShowMissingPlayerModal] = useState(false)
   const [scoutTarget, setScoutTarget] = useState<Hex | null>(null)
   const [showScoutConfirm, setShowScoutConfirm] = useState(false)
   const [showCampSelection, setShowCampSelection] = useState(false)
@@ -432,6 +454,20 @@ export default function PhaseTracker({
             <h4>Battle Phase</h4>
             <p>Record the result of your battle this round.</p>
 
+            {/* WHY: Battle Condition Display (Issue #40) */}
+            {(() => {
+              const conditionData = getActiveBattleCondition(selectedOpponentId)
+              return (
+                <BattleConditionDisplay
+                  activeCondition={conditionData?.condition ?? null}
+                  killzoneRecommendation={conditionData?.killzone ?? null}
+                  conditionEnabled={conditionEnabled}
+                  onToggleCondition={onConditionEnabledChange}
+                  round={currentRound}
+                />
+              )
+            })()}
+
             {!battleCompleted && (
               <div style={{ background: '#fff3cd', border: '1px solid #ffc107', padding: '0.5rem', marginBottom: '1rem', borderRadius: '4px', color: '#856404' }}>
                 ⚠️ <strong>Required:</strong> You must record a battle result before advancing to the next phase.
@@ -450,7 +486,37 @@ export default function PhaseTracker({
               players={players.map(p => ({ id: p.id, name: p.name, color: p.color }))}
               currentRound={currentRound}
               onRecordBattle={onBattle}
+              onOpponentSelect={onOpponentSelect}
             />
+
+            {/* WHY: Issue #41 - Missing opponent recording option */}
+            {onRecordMissingPlayer && players.length > 1 && (
+              <div className="missing-opponent-section">
+                <button
+                  type="button"
+                  className="action-btn secondary"
+                  onClick={() => setShowMissingPlayerModal(true)}
+                >
+                  Record Missing Opponent
+                </button>
+              </div>
+            )}
+
+            {/* WHY: Issue #41 - Missing player modal */}
+            {onRecordMissingPlayer && (
+              <MissingPlayerModal
+                isOpen={showMissingPlayerModal}
+                currentPlayer={{ id: currentPlayer.id, name: currentPlayer.name, color: currentPlayer.color }}
+                otherPlayers={players
+                  .filter(p => p.id !== currentPlayer.id)
+                  .map(p => ({ id: p.id, name: p.name, color: p.color }))}
+                onConfirm={(absentPlayerId) => {
+                  onRecordMissingPlayer(currentPlayer.id, absentPlayerId)
+                  setShowMissingPlayerModal(false)
+                }}
+                onCancel={() => setShowMissingPlayerModal(false)}
+              />
+            )}
           </div>
         )}
 
