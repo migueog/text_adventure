@@ -153,6 +153,7 @@ export default function Home() {
             currentThreat={campaign.threatLevel}
             targetThreat={campaign.targetThreatLevel}
             soloMode={campaign.soloMode}
+            warningLevel={campaign.threatWarning}
           />
           <DiceRoller />
         </aside>
@@ -177,6 +178,7 @@ export default function Home() {
             hexes={campaign.hexes}
             threatLevel={campaign.threatLevel}
             targetThreatLevel={campaign.targetThreatLevel}
+            threatWarning={campaign.threatWarning}
             battleCompleted={campaign.battleCompleted}
             movementOrder={campaign.movementOrder}
             movementIndex={campaign.movementIndex}

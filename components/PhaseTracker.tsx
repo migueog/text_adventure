@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useMemo } from 'react'
-import type { Player, Hex, SearchRule, HexPosition } from '@/types/campaign'
+import type { Player, Hex, SearchRule, HexPosition, ThreatWarningLevel } from '@/types/campaign'
 import { PHASES, BATTLE_RESULTS, BattleResultInfo, SURFACE_LOCATIONS, TOMB_LOCATIONS, SURFACE_CONDITIONS, TOMB_CONDITIONS } from '@/lib/data/campaignData'
 import { hexDistance, hexId, isPlayerInBlockedHex } from '@/lib/utils/hexUtils'
 import ScoutConfirmDialog from './ScoutConfirmDialog'
@@ -16,6 +16,7 @@ interface PhaseTrackerProps {
   hexes: Record<string, Hex>
   threatLevel: number
   targetThreatLevel: number
+  threatWarning: ThreatWarningLevel
   battleCompleted: boolean
   movementOrder: number[]
   movementIndex: number
@@ -150,6 +151,7 @@ export default function PhaseTracker({
   hexes,
   threatLevel,
   targetThreatLevel,
+  threatWarning,
   battleCompleted,
   movementOrder,
   movementIndex,
@@ -780,6 +782,14 @@ export default function PhaseTracker({
                 </p>
               )}
             </div>
+
+            {threatWarning !== 'none' && (
+              <div className={`threat-phase-warning ${threatWarning}`}>
+                {threatWarning === 'critical'
+                  ? '⚠️ CRITICAL: Campaign ending next round!'
+                  : '⚠️ WARNING: Approaching campaign end'}
+              </div>
+            )}
 
             <button className="action-btn primary" onClick={onNextPhase}>
               End Turn

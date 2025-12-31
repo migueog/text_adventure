@@ -1603,6 +1603,22 @@ input, select {
   }
 }
 
+/* WHY: Pulse animation when threat increases */
+@keyframes threat-increase-pulse {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow: 0 0 15px rgba(0, 255, 65, 0.5);
+  }
+  50% {
+    transform: scale(1.08);
+    box-shadow: 0 0 30px rgba(0, 255, 65, 0.9);
+  }
+}
+
+.threat-level.increased {
+  animation: threat-increase-pulse 0.5s ease-in-out 3;
+}
+
 .threat-level.target {
   border-color: #ffba08;
 }
@@ -1628,6 +1644,52 @@ input, select {
   font-size: 13px;
   color: #8b95a5;
   font-weight: 600;
+}
+
+/* WHY: Warning badges for approaching campaign end */
+.threat-warning {
+  padding: 0.5rem 0.75rem;
+  border-radius: 4px;
+  font-weight: 600;
+  font-size: 12px;
+  margin-top: 0.75rem;
+  text-align: center;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.threat-warning.moderate {
+  background: rgba(255, 186, 8, 0.15);
+  border: 2px solid #ffba08;
+  color: #ffba08;
+}
+
+.threat-warning.critical {
+  background: rgba(233, 69, 96, 0.2);
+  border: 2px solid #e94560;
+  color: #e94560;
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+/* WHY: Warning display in PhaseTracker threat phase */
+.threat-phase-warning {
+  padding: 0.75rem;
+  margin: 0.75rem 0;
+  border-radius: 4px;
+  font-weight: 600;
+  text-align: center;
+}
+
+.threat-phase-warning.moderate {
+  background: rgba(255, 186, 8, 0.15);
+  border: 2px solid #ffba08;
+  color: #ffba08;
+}
+
+.threat-phase-warning.critical {
+  background: rgba(233, 69, 96, 0.2);
+  border: 2px solid #e94560;
+  color: #e94560;
 }
 
 /* Campaign Setup Validation Styles */

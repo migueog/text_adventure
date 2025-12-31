@@ -51,6 +51,7 @@ describe('PhaseTracker - Battle Phase UI', () => {
     hexes: {},
     threatLevel: 1,
     targetThreatLevel: 5,
+    threatWarning: 'none' as const,
     battleCompleted: false,
     movementOrder: [0, 1, 2],
     movementIndex: 0,

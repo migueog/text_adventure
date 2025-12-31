@@ -133,6 +133,9 @@ export interface Player {
   battleHistory: BattleRecord[]  // WHY: Full battle history for Demolish action prerequisites
 }
 
+// WHY: Track warning level for approaching campaign end (1-2 levels from target)
+export type ThreatWarningLevel = 'none' | 'moderate' | 'critical'
+
 export interface Event {
   type: 'system' | 'movement' | 'exploration' | 'reward' | 'action' | 'battle' | 'warning' | 'error'
   icon: string

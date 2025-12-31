@@ -1,15 +1,16 @@
 'use client'
 
 import { useState, useCallback, useEffect, useRef } from 'react'
-import type { Player, Hex, MapConfig, Event, HexPosition, EncampOptions } from '@/types/campaign'
-import { 
-  MAP_CONFIGS, 
-  SURFACE_LOCATIONS, 
-  TOMB_LOCATIONS, 
-  SURFACE_CONDITIONS, 
-  TOMB_CONDITIONS, 
-  PLAYER_COLORS, 
+import type { Player, Hex, MapConfig, Event, HexPosition, EncampOptions, ThreatWarningLevel } from '@/types/campaign'
+import {
+  MAP_CONFIGS,
+  SURFACE_LOCATIONS,
+  TOMB_LOCATIONS,
+  SURFACE_CONDITIONS,
+  TOMB_CONDITIONS,
+  PLAYER_COLORS,
   PHASES,
+  THREAT_LEVELS,
   BattleResultInfo
 } from '@/lib/data/campaignData'
 import { rollD36, parseValue } from '@/lib/utils/dice'
@@ -108,6 +109,7 @@ export function useCampaign() {
   const [currentPlayerIndex, setCurrentPlayerIndex] = useState(0)
   const [threatLevel, setThreatLevel] = useState(1)
   const [targetThreatLevel, setTargetThreatLevel] = useState(7)
+  const [threatWarning, setThreatWarning] = useState<ThreatWarningLevel>('none')
   const [eventLog, setEventLog] = useState<Event[]>([])
   const [soloMode, setSoloMode] = useState(false)
   const [mapConfig, setMapConfig] = useState<MapConfig | null>(null)
@@ -160,8 +162,42 @@ export function useCampaign() {
   }, [currentRound, currentPhase])
 
   /**
+   * Calculate threat warning level based on distance to target
+   * WHY: Warn players when approaching campaign end
+   */
+  const calculateThreatWarning = useCallback((current: number, target: number): ThreatWarningLevel => {
+    const distance = target - current
+    if (distance <= 1) return 'critical'
+    if (distance === 2) return 'moderate'
+    return 'none'
+  }, [])
+
+  /**
+   * Increase threat level with warning updates and event logging
+   * WHY: Centralize threat logic for consistency and event logging
+   */
+  const increaseThreat = useCallback((amount: number, reason: string): void => {
+    setThreatLevel(prev => {
+      const newThreat = Math.min(prev + amount, 10)
+      const warning = calculateThreatWarning(newThreat, targetThreatLevel)
+
+      setThreatWarning(warning)
+      addEvent(`Threat increased by ${amount}: ${reason}`, 'warning')
+
+      // WHY: Inform players when approaching campaign end
+      if (warning === 'critical') {
+        addEvent(`⚠️ CRITICAL: Only ${targetThreatLevel - newThreat} level(s) from campaign end!`, 'warning')
+      } else if (warning === 'moderate') {
+        addEvent(`⚠️ WARNING: ${targetThreatLevel - newThreat} levels from campaign end`, 'warning')
+      }
+
+      return newThreat
+    })
+  }, [targetThreatLevel, calculateThreatWarning, addEvent])
+
+  /**
    * Enable extended campaign mode
-   * Why: Allows campaign to continue beyond target threat level
+   * WHY: Allows campaign to continue beyond target threat level
    */
   const enableExtendedMode = useCallback(() => {
     setExtendedMode(true)
@@ -359,8 +395,8 @@ export function useCampaign() {
       // Handle threat increase from tomb exploration in solo mode
       if (soloMode && hex.type === 'tomb' && condition && condition.effect === 'threatIncrease') {
         const threatInc = typeof condition.value === 'number' ? condition.value : 1
-        setThreatLevel(prev => Math.min(prev + threatInc, 10))
-        addEvent(`Threat level increased by ${threatInc}!`, 'warning')
+        // WHY: Use centralized threat increase with warning logic
+        increaseThreat(threatInc, condition.name || 'Tomb exploration')
       }
 
       return {
@@ -1044,14 +1080,16 @@ export function useCampaign() {
         }
       } else {
         // End of round - increase threat
-        const newThreat = threatLevel + 1
         const currentRoundValue = currentRoundRef.current
         const newRound = currentRoundValue + 1
         currentRoundRef.current = newRound  // WHY: Update ref BEFORE setState
         currentPhaseRef.current = 0  // WHY: Update ref BEFORE setState
         currentPlayerIndexRef.current = 0  // WHY: Update ref BEFORE setState
 
-        setThreatLevel(newThreat)
+        // WHY: Use centralized threat increase with warning logic
+        increaseThreat(1, 'End of round')
+        const newThreat = threatLevel + 1  // WHY: Local value for campaign end check
+
         setCurrentRound(newRound)
         setCurrentPlayerIndex(0)
         setCurrentPhase(0)
@@ -1065,7 +1103,8 @@ export function useCampaign() {
         // Only end game if NOT in extended mode
         if (newThreat >= targetThreatLevel && !extendedMode) {
           setGameEnded(true)
-          addEvent(`Campaign ended! Final threat level: ${newThreat}`, 'system')
+          addEvent(`🔴 CAMPAIGN ENDED! Target threat level ${targetThreatLevel} reached.`, 'system')
+          addEvent(`The Necrons have fully awakened at threat level ${newThreat}: ${THREAT_LEVELS[newThreat]}`, 'system')
         } else {
           addEvent(`Round ${currentRoundRef.current} begins. Threat level: ${newThreat}`, 'system')
           // WHY: Log movement order for transparency
@@ -1074,7 +1113,7 @@ export function useCampaign() {
         }
       }
     }
-  }, [currentPhase, currentPlayerIndex, players, threatLevel, targetThreatLevel, currentRound, battleCompleted, extendedMode, addEvent, calculateMovementOrder])
+  }, [currentPhase, currentPlayerIndex, players, threatLevel, targetThreatLevel, currentRound, battleCompleted, extendedMode, addEvent, calculateMovementOrder, increaseThreat])
 
   const updatePlayer = useCallback((playerIndex: number, updates: Partial<Player>) => {
     setPlayers(prev => {
@@ -1224,6 +1263,7 @@ export function useCampaign() {
     currentPlayerIndex,
     threatLevel,
     targetThreatLevel,
+    threatWarning,
     eventLog,
     soloMode,
     mapConfig,
