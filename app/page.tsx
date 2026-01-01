@@ -200,6 +200,14 @@ export default function Home() {
             threatRulesResolved={campaign.threatRulesResolved}
             onResolveThreatRules={campaign.resolveThreatPhaseLocationRules}
             checkForThreatRules={campaign.checkForThreatRules}
+            showPortalConfigModal={campaign.showPortalConfigModal}
+            portalHexId={campaign.portalHexId}
+            onPortalConfig={campaign.handlePortalConfig}
+            onCancelPortalConfig={campaign.handleCancelPortalConfig}
+            showHexBlockSelector={campaign.showHexBlockSelector}
+            fulcrumHexId={campaign.fulcrumHexId}
+            onHexBlock={campaign.handleHexBlock}
+            onCancelHexBlock={campaign.handleCancelHexBlock}
           />
           <HexDetails
             hex={campaign.selectedHex ? campaign.hexes[campaign.selectedHex] : undefined}

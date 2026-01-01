@@ -74,8 +74,13 @@ export interface HexState {
   supplyCount?: number          // WHY: Remaining SP for depleting locations (Abandoned Camp, Resource Stockpile)
   intelGained?: boolean         // WHY: Track if intel reward already claimed (Intelligence Cache)
   intelRemaining?: number       // WHY: Remaining intel at Intel Cache (D6 on discovery, depletes on search) (Issue #59)
-  portalDestination?: string    // WHY: Linked hex ID for portal locations
+  portalDestination?: string    // WHY: Linked hex ID for portal locations (legacy, replaced by portalDestinations)
+  portalDestinations?: {        // WHY: Portal network links for Tomb Ruin (TL11) - one tomb, one surface (Issue #59)
+    tomb: string
+    surface: string
+  }
   beastLairActive?: boolean     // WHY: Track if Beast Lair threat is still active
+  blockedByFulcrumId?: string   // WHY: Tracks which Transtechnic Fulcrum (TL25) has blocked this hex (Issue #59)
 }
 
 export interface Location {

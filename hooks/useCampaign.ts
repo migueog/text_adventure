@@ -21,6 +21,7 @@ import { calculateActionPhaseOrder } from '@/lib/utils/actionPhaseUtils'
 import { calculateResupply } from '@/lib/utils/resupply'
 import { resolveSearchRule, canPerformSearch, providesDimensionalKey, canAcquireKey } from '@/lib/utils/search'
 import { initializeIntelHex, gainIntel, canUseIntelScout } from '@/lib/utils/intel'
+import { configurePortalNetwork, canUsePortal, toggleHexBlocking } from '@/lib/utils/hexManipulation'
 import { determineActiveCondition, getKillzoneRecommendation } from '@/lib/utils/battleCondition'
 import { createMissingPlayerRecords } from '@/lib/utils/battleRewards'
 import { detectActiveThreatPhaseRules, sortByPriority, hasActiveRules } from '@/lib/utils/threatPhaseRules'
@@ -165,6 +166,12 @@ export function useCampaign() {
   // WHY: Track Released Prisoner entities for Issue #59
   // Prisoners spawn when camping at Hyperfractal Gaol (TL32), move and attack during Threat Phase
   const [releasedPrisoners, setReleasedPrisoners] = useState<ReleasedPrisonerEntity[]>([])
+
+  // WHY: Portal and Hex Blocking modal state (Issue #59 - Phase 4)
+  const [showPortalConfigModal, setShowPortalConfigModal] = useState(false)
+  const [portalHexId, setPortalHexId] = useState<string | null>(null)
+  const [showHexBlockSelector, setShowHexBlockSelector] = useState(false)
+  const [fulcrumHexId, setFulcrumHexId] = useState<string | null>(null)
 
   // WHY: Use refs to avoid stale closure issues in callbacks
   // Refs are updated synchronously in setState callbacks, not via useEffect
@@ -1057,6 +1064,20 @@ export function useCampaign() {
           }
         }
 
+        // WHY: Check for Portal (TL11 Tomb Ruin) configuration trigger (Issue #59)
+        if (location?.specialRules?.includes('PORTAL')) {
+          setPortalHexId(hexKey)
+          setShowPortalConfigModal(true)
+          addEvent(`${player.name} can now configure the portal network at ${hexKey}`, 'reward')
+        }
+
+        // WHY: Check for Hex Blocking (TL25 Transtechnic Fulcrum) trigger (Issue #59)
+        if (location?.specialRules?.includes('HEX_BLOCK')) {
+          setFulcrumHexId(hexKey)
+          setShowHexBlockSelector(true)
+          addEvent(`${player.name} can now configure hex blocking at ${hexKey}`, 'reward')
+        }
+
         break
       }
 
@@ -1135,20 +1156,10 @@ export function useCampaign() {
       }
 
       case 'DEMOLISH': {
-        // WHY: Demolish action - destroy opponent's camp (Issue #47, Phase 5)
+        // WHY: Demolish action - destroy camps, Beast Lair, or Released Prisoner (Issue #47, #59)
         const { options } = params
         if (!options) {
           addEvent('No demolish options provided', 'error')
-          return
-        }
-
-        // WHY: Type-check that options contains targetPlayerId (DemolishOptions)
-        const demolishOptions = options as import('@/types/campaign').DemolishOptions
-        const targetPlayerId = demolishOptions?.targetPlayerId
-
-        // WHY: Require target player ID to be provided
-        if (!targetPlayerId) {
-          addEvent('No target selected for demolish', 'error')
           return
         }
 
@@ -1159,75 +1170,112 @@ export function useCampaign() {
           return
         }
 
+        // WHY: Extract target type and target player ID (if applicable)
+        const { targetType, targetPlayerId } = options as { targetType?: string; targetPlayerId?: number }
+
+        if (!targetType) {
+          addEvent('No target type selected for demolish', 'error')
+          return
+        }
+
         // WHY: Verify target is in validated targets list (security check)
-        const validTarget = validation.targets?.find(t => t.playerId === targetPlayerId)
-        if (!validTarget) {
-          addEvent('Cannot demolish: prerequisite not met for this target', 'error')
-          return
-        }
-
-        // WHY: Find target player BEFORE state update
-        const targetIdx = players.findIndex(p => p.id === targetPlayerId)
-        if (targetIdx === -1) {
-          addEvent('Target player not found', 'error')
-          return
-        }
-
-        const target = players[targetIdx]
-        if (!target) {
-          addEvent('Target player not found', 'error')
-          return
-        }
-
-        // WHY: Check if target has camp at current position BEFORE state update
-        const campExists = target.camps.some(c =>
-          c.row === player.position.row && c.col === player.position.col
-        )
-
-        if (!campExists) {
-          addEvent('No camp found at this position', 'error')
-          return
-        }
-
-        // WHY: Execute demolish action (all validation passed)
-        const DEMOLISH_COST = 3
-        setPlayers(prev => {
-          const updated = [...prev]
-          const currentPlayer = updated[currentPlayerIndex]
-          if (!currentPlayer) return prev
-
-          const targetPlayer = updated[targetIdx]
-          if (!targetPlayer) return prev
-
-          // WHY: Deduct SP cost
-          const newSP = Math.max(0, Math.min(10, currentPlayer.supplyPoints - DEMOLISH_COST))
-
-          // WHY: Remove camp from target player
-          updated[targetIdx] = {
-            ...targetPlayer,
-            camps: targetPlayer.camps.filter(c =>
-              !(c.row === currentPlayer.position.row && c.col === currentPlayer.position.col)
-            )
+        const validTarget = validation.targets?.find(t => {
+          if (t.type === 'CAMP') {
+            return t.type === targetType && t.playerId === targetPlayerId
           }
-
-          // WHY: Update current player SP and history
-          updated[currentPlayerIndex] = {
-            ...currentPlayer,
-            supplyPoints: newSP,
-            history: addHistoryEntry(
-              currentPlayer,
-              currentRound,
-              PHASES[currentPhase] || 'Unknown',
-              -DEMOLISH_COST,
-              0,
-              `Demolished ${target.name}'s camp`
-            )
-          }
-
-          return updated
+          return t.type === targetType
         })
 
-        addEvent(`${player.name} demolished ${validTarget.playerName}'s camp at ${hexId(player.position.row, player.position.col)}!`, 'action')
+        if (!validTarget) {
+          addEvent('Cannot demolish: target not available or prerequisite not met', 'error')
+          return
+        }
+
+        const DEMOLISH_COST = 3
+        const playerHexId = hexId(player.position.row, player.position.col)
+
+        // WHY: Handle different target types (Issue #59 - Phase 5)
+        if (targetType === 'BEAST_LAIR') {
+          // WHY: Destroy Beast Lair - update hex state
+          setHexes(prev => ({
+            ...prev,
+            [playerHexId]: {
+              ...prev[playerHexId]!,
+              state: { ...prev[playerHexId]!.state, beastLairActive: false }
+            }
+          }))
+
+          setPlayers(prev => {
+            const updated = [...prev]
+            updated[currentPlayerIndex] = {
+              ...updated[currentPlayerIndex]!,
+              supplyPoints: clampSP(player.supplyPoints - DEMOLISH_COST),
+              history: addHistoryEntry(player, currentRound, PHASES[currentPhase] || 'Unknown', -DEMOLISH_COST, 0, 'Demolished Beast Lair')
+            }
+            return updated
+          })
+
+          addEvent(`${player.name} destroyed the Beast Lair at ${playerHexId}!`, 'action')
+        } else if (targetType === 'RELEASED_PRISONER') {
+          // WHY: Destroy Released Prisoner - remove from array
+          setReleasedPrisoners(prev => prev?.filter(p => p.currentHexId !== playerHexId) || [])
+
+          setPlayers(prev => {
+            const updated = [...prev]
+            updated[currentPlayerIndex] = {
+              ...updated[currentPlayerIndex]!,
+              supplyPoints: clampSP(player.supplyPoints - DEMOLISH_COST),
+              history: addHistoryEntry(player, currentRound, PHASES[currentPhase] || 'Unknown', -DEMOLISH_COST, 0, 'Demolished Released Prisoner')
+            }
+            return updated
+          })
+
+          addEvent(`${player.name} destroyed the Released Prisoner at ${playerHexId}!`, 'action')
+        } else if (targetType === 'CAMP') {
+          // WHY: Demolish opponent camp - existing logic
+          if (!targetPlayerId) {
+            addEvent('No target player selected for camp demolish', 'error')
+            return
+          }
+
+          const targetIdx = players.findIndex(p => p.id === targetPlayerId)
+          if (targetIdx === -1) {
+            addEvent('Target player not found', 'error')
+            return
+          }
+
+          const target = players[targetIdx]
+          if (!target) {
+            addEvent('Target player not found', 'error')
+            return
+          }
+
+          setPlayers(prev => {
+            const updated = [...prev]
+            const currentPlayer = updated[currentPlayerIndex]
+            const targetPlayer = updated[targetIdx]
+            if (!currentPlayer || !targetPlayer) return prev
+
+            // WHY: Remove camp from target player
+            updated[targetIdx] = {
+              ...targetPlayer,
+              camps: targetPlayer.camps.filter(c =>
+                !(c.row === currentPlayer.position.row && c.col === currentPlayer.position.col)
+              )
+            }
+
+            // WHY: Update current player SP and history
+            updated[currentPlayerIndex] = {
+              ...currentPlayer,
+              supplyPoints: clampSP(currentPlayer.supplyPoints - DEMOLISH_COST),
+              history: addHistoryEntry(currentPlayer, currentRound, PHASES[currentPhase] || 'Unknown', -DEMOLISH_COST, 0, `Demolished ${target.name}'s camp`)
+            }
+
+            return updated
+          })
+
+          addEvent(`${player.name} demolished ${target.name}'s camp at ${playerHexId}!`, 'action')
+        }
         break
       }
 
@@ -1341,6 +1389,49 @@ export function useCampaign() {
 
         exploreHex(targetHex)
         addEvent(`${player.name} used intel to scout ${targetHex}`, 'action')
+        break
+      }
+
+      case 'PORTAL_TRAVEL': {
+        // WHY: Portal Travel - use configured portal to move to linked hex (Issue #59)
+        const { targetHex } = params
+
+        const validation = canUsePortal(playerHexId, targetHex, hexes)
+        if (!validation.canTravel) {
+          addEvent(`${player.name}: ${validation.reason}`, 'error')
+          break
+        }
+
+        if (player.supplyPoints < 1) {
+          addEvent(`${player.name} needs 1 SP for portal travel`, 'error')
+          break
+        }
+
+        const targetHexObj = hexes[targetHex]
+        if (!targetHexObj) {
+          addEvent('Invalid target hex for portal travel', 'error')
+          break
+        }
+
+        // WHY: Move player to destination, deduct SP
+        setPlayers(prev => {
+          const updated = [...prev]
+          updated[currentPlayerIndex] = {
+            ...updated[currentPlayerIndex]!,
+            position: { row: targetHexObj.row, col: targetHexObj.col },
+            supplyPoints: clampSP(player.supplyPoints - 1),
+            history: addHistoryEntry(
+              player,
+              'Portal Travel',
+              player.supplyPoints,
+              player.supplyPoints - 1,
+              player.campaignPoints,
+              player.campaignPoints
+            )
+          }
+          return updated
+        })
+        addEvent(`${player.name} used portal to travel to ${targetHex}`, 'action')
         break
       }
 
@@ -1665,7 +1756,7 @@ export function useCampaign() {
   const validateDemolish = useCallback((playerIndex: number): {
     valid: boolean
     reason?: string
-    targets?: Array<{ playerId: number; playerName: string }>
+    targets?: Array<{ type: 'CAMP' | 'BEAST_LAIR' | 'RELEASED_PRISONER'; playerId?: number; playerName?: string; name: string }>
     cost: number
   } => {
     const DEMOLISH_COST = 3
@@ -1680,56 +1771,77 @@ export function useCampaign() {
       return { valid: false, reason: 'Insufficient SP (requires 3 SP)', cost: DEMOLISH_COST }
     }
 
-    // WHY: Find opponent camps at player's current position
+    // WHY: Find demolishable targets at player's current position (Issue #59 - Phase 5)
     const playerPos = player.position
-    const opponentCamps: Array<{ playerId: number; playerName: string }> = []
+    const playerHexId = `${playerPos.row},${playerPos.col}`
+    const hex = hexes[playerHexId]
+    const allTargets: Array<{ type: 'CAMP' | 'BEAST_LAIR' | 'RELEASED_PRISONER'; playerId?: number; playerName?: string; name: string }> = []
 
+    // WHY: Check for Beast Lair (TL23) at current position
+    if (hex?.location === 23 && hex.state?.beastLairActive !== false) {
+      allTargets.push({ type: 'BEAST_LAIR', name: 'Beast Lair' })
+    }
+
+    // WHY: Check for Released Prisoner at current position
+    const prisoner = releasedPrisoners?.find(p => p.currentHexId === playerHexId && p.active)
+    if (prisoner) {
+      allTargets.push({ type: 'RELEASED_PRISONER', name: 'Released Prisoner' })
+    }
+
+    // WHY: Find opponent camps at player's current position
     players.forEach((opponent, idx) => {
       if (idx === playerIndex) return // Skip self
 
       opponent.camps.forEach(camp => {
         if (camp.row === playerPos.row && camp.col === playerPos.col) {
           // WHY: Avoid duplicates if same opponent has multiple camps at same position
-          if (!opponentCamps.find(c => c.playerId === opponent.id)) {
-            opponentCamps.push({ playerId: opponent.id, playerName: opponent.name })
+          if (!allTargets.find(t => t.playerId === opponent.id && t.type === 'CAMP')) {
+            allTargets.push({ type: 'CAMP', playerId: opponent.id, playerName: opponent.name, name: `${opponent.name}'s Camp` })
           }
         }
       })
     })
 
-    if (opponentCamps.length === 0) {
-      return { valid: false, reason: 'no opponent camps at your position', cost: DEMOLISH_COST }
+    if (allTargets.length === 0) {
+      return { valid: false, reason: 'No demolishable targets at your position', cost: DEMOLISH_COST }
     }
 
-    // WHY: Check battle history for prerequisites
+    // WHY: Filter targets based on prerequisites (Issue #59 - Phase 5)
+    // Beast Lair and Released Prisoner can be demolished immediately
+    // Opponent camps require battle prerequisites (win or challenge this round)
     const battleHistory = player.battleHistory || []
 
-    if (battleHistory.length === 0) {
-      return { valid: false, reason: 'no battle history (must win battle or challenge first)', cost: DEMOLISH_COST }
-    }
+    const validTargets = allTargets.filter(target => {
+      // WHY: Beast Lair and Released Prisoner don't require battle prerequisites
+      if (target.type === 'BEAST_LAIR' || target.type === 'RELEASED_PRISONER') {
+        return true
+      }
 
-    // WHY: Filter camps where prerequisites are met (won this round OR challenged-refused/no-show)
-    const validTargets = opponentCamps.filter(camp => {
-      // WHY: Find battles against this camp owner in current round
-      const battleThisRound = battleHistory.find(battle =>
-        battle.round === currentRound &&
-        battle.opponent === camp.playerId
-      )
+      // WHY: Camps require battle prerequisites
+      if (target.type === 'CAMP' && target.playerId !== undefined) {
+        // WHY: Find battles against this camp owner in current round
+        const battleThisRound = battleHistory.find(battle =>
+          battle.round === currentRound &&
+          battle.opponent === target.playerId
+        )
 
-      if (!battleThisRound) return false
+        if (!battleThisRound) return false
 
-      // WHY: Accept WIN or challenged-refused/no-show statuses
-      return (
-        battleThisRound.result === 'WIN' ||
-        battleThisRound.status === 'challenged-refused' ||
-        battleThisRound.status === 'challenged-no-show'
-      )
+        // WHY: Accept WIN or challenged-refused/no-show statuses
+        return (
+          battleThisRound.result === 'WIN' ||
+          battleThisRound.status === 'challenged-refused' ||
+          battleThisRound.status === 'challenged-no-show'
+        )
+      }
+
+      return false
     })
 
     if (validTargets.length === 0) {
       return {
         valid: false,
-        reason: 'Demolish prerequisite not met (must win battle or challenge against camp owner this round)',
+        reason: 'Demolish prerequisite not met (camps require battle win or challenge against owner this round)',
         cost: DEMOLISH_COST
       }
     }
@@ -1739,7 +1851,7 @@ export function useCampaign() {
       targets: validTargets,
       cost: DEMOLISH_COST
     }
-  }, [players, currentRound])
+  }, [players, hexes, releasedPrisoners, currentRound])
 
   /**
    * Get the active battle condition for the current battle (Issue #40)
@@ -1794,6 +1906,47 @@ export function useCampaign() {
 
     return { condition: activeCondition, killzone }
   }, [currentPhase, currentPlayerIndex, players, hexes, conditionEnabled])
+
+  /**
+   * Handle portal configuration confirmation (Issue #59 - Phase 4)
+   * WHY: User selects tomb and surface destinations, updates hex state
+   */
+  const handlePortalConfig = useCallback((tombDest: string, surfaceDest: string) => {
+    if (!portalHexId) return
+
+    const updatedHexes = configurePortalNetwork(portalHexId, tombDest, surfaceDest, hexes)
+    setHexes(updatedHexes)
+    setShowPortalConfigModal(false)
+    setPortalHexId(null)
+    addEvent(`Portal network configured at ${portalHexId}: tomb→${tombDest}, surface→${surfaceDest}`, 'action')
+  }, [portalHexId, hexes, addEvent])
+
+  /**
+   * Handle hex blocking confirmation (Issue #59 - Phase 4)
+   * WHY: User selects tomb hex to block, updates hex state
+   */
+  const handleHexBlock = useCallback((targetHexId: string) => {
+    if (!fulcrumHexId) return
+
+    const updatedHexes = toggleHexBlocking(fulcrumHexId, targetHexId, hexes)
+    setHexes(updatedHexes)
+    setShowHexBlockSelector(false)
+    setFulcrumHexId(null)
+    addEvent(`Transtechnic Fulcrum at ${fulcrumHexId} now blocking ${targetHexId}`, 'action')
+  }, [fulcrumHexId, hexes, addEvent])
+
+  /**
+   * Cancel modal handlers (Issue #59 - Phase 4)
+   */
+  const handleCancelPortalConfig = useCallback(() => {
+    setShowPortalConfigModal(false)
+    setPortalHexId(null)
+  }, [])
+
+  const handleCancelHexBlock = useCallback(() => {
+    setShowHexBlockSelector(false)
+    setFulcrumHexId(null)
+  }, [])
 
   return {
     // State
@@ -1856,5 +2009,15 @@ export function useCampaign() {
     detectThreatRules,
     resolveThreatPhaseLocationRules,
     checkForThreatRules,
+
+    // Portal and Hex Blocking modals (Issue #59 - Phase 4)
+    showPortalConfigModal,
+    portalHexId,
+    handlePortalConfig,
+    handleCancelPortalConfig,
+    showHexBlockSelector,
+    fulcrumHexId,
+    handleHexBlock,
+    handleCancelHexBlock,
   }
 }

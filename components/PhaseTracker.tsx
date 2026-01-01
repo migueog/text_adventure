@@ -12,6 +12,8 @@ import MissingPlayerModal from './MissingPlayerModal'
 import ScoutConfirmDialog from './ScoutConfirmDialog'
 import CampSelectionModal from './CampSelectionModal'
 import DemolishConfirmationModal from './DemolishConfirmationModal'
+import PortalConfigModal from './PortalConfigModal'
+import HexBlockSelector from './HexBlockSelector'
 
 interface PhaseTrackerProps {
   currentPhase: string
@@ -35,7 +37,7 @@ interface PhaseTrackerProps {
   validateDemolish: (playerIndex: number) => {
     valid: boolean
     reason?: string
-    targets?: Array<{ playerId: number; playerName: string }>
+    targets?: Array<{ type: 'CAMP' | 'BEAST_LAIR' | 'RELEASED_PRISONER'; playerId?: number; playerName?: string; name: string }>
     cost: number
   }
   // WHY: Battle condition props for Issue #40
@@ -57,6 +59,15 @@ interface PhaseTrackerProps {
   // WHY: Issue #59 - Threat Phase attacks (Beast Lair, Released Prisoner)
   hasActiveThreatAttacks?: boolean
   onResolveThreatAttacks?: () => void
+  // WHY: Issue #59 - Phase 4 - Portal and Hex Blocking modals
+  showPortalConfigModal?: boolean
+  portalHexId?: string | null
+  onPortalConfig?: (tombDest: string, surfaceDest: string) => void
+  onCancelPortalConfig?: () => void
+  showHexBlockSelector?: boolean
+  fulcrumHexId?: string | null
+  onHexBlock?: (targetHexId: string) => void
+  onCancelHexBlock?: () => void
 }
 
 interface MovementOption {
@@ -198,7 +209,15 @@ export default function PhaseTracker({
   onResolveThreatRules,
   checkForThreatRules,
   hasActiveThreatAttacks,
-  onResolveThreatAttacks
+  onResolveThreatAttacks,
+  showPortalConfigModal,
+  portalHexId,
+  onPortalConfig,
+  onCancelPortalConfig,
+  showHexBlockSelector,
+  fulcrumHexId,
+  onHexBlock,
+  onCancelHexBlock
 }: PhaseTrackerProps) {
   const [moveTarget, setMoveTarget] = useState<Hex | null>(null)
   // WHY: Issue #41 - Missing player modal state
@@ -803,6 +822,35 @@ export default function PhaseTracker({
                     </div>
                   </div>
                 )}
+
+                {/* WHY: Intel Scout action (Issue #59) */}
+                {(currentPlayer.intelCount ?? 0) > 0 && (
+                  <div style={{
+                    background: '#fff3cd',
+                    border: '1px solid #ffc107',
+                    borderRadius: '4px',
+                    padding: '0.75rem',
+                    marginTop: '1rem'
+                  }}>
+                    <strong>📊 Intel Available: {currentPlayer.intelCount}</strong>
+                    <p style={{ margin: '0.5rem 0', fontSize: '0.9em' }}>
+                      Use intel to scout surface hexes for free (no SP cost)
+                    </p>
+                    <button
+                      className="action-btn"
+                      onClick={() => {
+                        // TODO: Show surface hex selector modal
+                        const targetHex = prompt('Enter surface hex ID to scout (e.g., "1,2"):')
+                        if (targetHex) {
+                          onAction('INTEL_SCOUT', { targetHex })
+                        }
+                      }}
+                      title="Scout any surface hex for free using 1 intel"
+                    >
+                      Intel Scout (1 Intel)
+                    </button>
+                  </div>
+                )}
               </div>
 
               {/* Skip action */}
@@ -941,6 +989,27 @@ export default function PhaseTracker({
             setShowDemolishModal(false)
             setDemolishTarget(null)
           }}
+        />
+      )}
+
+      {/* WHY: Portal configuration modal (Issue #59 - Phase 4) */}
+      {showPortalConfigModal && portalHexId && onPortalConfig && onCancelPortalConfig && (
+        <PortalConfigModal
+          portalHexId={portalHexId}
+          hexes={hexes}
+          onConfirm={onPortalConfig}
+          onCancel={onCancelPortalConfig}
+        />
+      )}
+
+      {/* WHY: Hex blocking selector modal (Issue #59 - Phase 4) */}
+      {showHexBlockSelector && fulcrumHexId && onHexBlock && onCancelHexBlock && (
+        <HexBlockSelector
+          fulcrumHexId={fulcrumHexId}
+          hexes={hexes}
+          currentlyBlockedHex={Object.keys(hexes).find(id => hexes[id]?.state?.blockedByFulcrumId === fulcrumHexId)}
+          onBlock={onHexBlock}
+          onCancel={onCancelHexBlock}
         />
       )}
     </div>
