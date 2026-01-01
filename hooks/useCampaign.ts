@@ -19,7 +19,7 @@ import { hexId, hexDistance, canExploreHex, findNearestBaseOrCamp } from '@/lib/
 import { determinePriority, needsRollOff } from '@/lib/utils/priority'
 import { calculateActionPhaseOrder } from '@/lib/utils/actionPhaseUtils'
 import { calculateResupply } from '@/lib/utils/resupply'
-import { resolveSearchRule, canPerformSearch } from '@/lib/utils/search'
+import { resolveSearchRule, canPerformSearch, providesDimensionalKey, canAcquireKey } from '@/lib/utils/search'
 import { determineActiveCondition, getKillzoneRecommendation } from '@/lib/utils/battleCondition'
 import { createMissingPlayerRecords } from '@/lib/utils/battleRewards'
 import { detectActiveThreatPhaseRules, sortByPriority, hasActiveRules } from '@/lib/utils/threatPhaseRules'
@@ -998,6 +998,25 @@ export function useCampaign() {
         })
 
         addEvent(`${player.name} searched ${location.name}: ${result.description}`, 'action')
+
+        // WHY: Check for Dimensional Key acquisition (Issue #59)
+        if (location && providesDimensionalKey(location)) {
+          const keyValidation = canAcquireKey(players, currentPlayerIndex)
+          if (keyValidation.canAcquire) {
+            setPlayers(prev => {
+              const updated = [...prev]
+              updated[currentPlayerIndex] = {
+                ...updated[currentPlayerIndex]!,
+                hasDimensionalKey: true
+              }
+              return updated
+            })
+            addEvent(`${player.name} acquired the Dimensional Key!`, 'reward')
+          } else {
+            addEvent(`${player.name}: ${keyValidation.reason}`, 'warning')
+          }
+        }
+
         break
       }
 
@@ -1171,7 +1190,95 @@ export function useCampaign() {
         addEvent(`${player.name} demolished ${validTarget.playerName}'s camp at ${hexId(player.position.row, player.position.col)}!`, 'action')
         break
       }
-      
+
+      case 'DIMENSIONAL_MANOEUVRE': {
+        // WHY: Dimensional Manoeuvre - teleport to any hex using Dimensional Key (Issue #59)
+        const { targetHex } = params
+
+        if (!player.hasDimensionalKey) {
+          addEvent(`${player.name} does not have the Dimensional Key`, 'error')
+          break
+        }
+
+        if (player.supplyPoints < 1) {
+          addEvent(`${player.name} needs 1 SP for Dimensional Manoeuvre`, 'error')
+          break
+        }
+
+        if (!targetHex || !hexes[targetHex]) {
+          addEvent('Invalid target hex for Dimensional Manoeuvre', 'error')
+          break
+        }
+
+        // WHY: Move player, deduct SP, return key
+        setPlayers(prev => {
+          const updated = [...prev]
+          updated[currentPlayerIndex] = {
+            ...updated[currentPlayerIndex]!,
+            position: hexes[targetHex]!.type === 'surface'
+              ? { row: hexes[targetHex]!.row, col: hexes[targetHex]!.col }
+              : { row: hexes[targetHex]!.row, col: hexes[targetHex]!.col },
+            supplyPoints: clampSP(player.supplyPoints - 1),
+            hasDimensionalKey: false,  // WHY: Key is consumed after use
+            history: addHistoryEntry(
+              player,
+              currentRound,
+              PHASES[currentPhase] || 'Unknown',
+              -1,
+              0,
+              `Dimensional Manoeuvre to ${targetHex}`
+            )
+          }
+          return updated
+        })
+
+        addEvent(`${player.name} used Dimensional Manoeuvre to teleport to ${targetHex}`, 'action')
+        break
+      }
+
+      case 'TRANSFER_KEY': {
+        // WHY: Transfer Dimensional Key to another player in same hex (Issue #59)
+        const { targetPlayerId } = params
+
+        if (!player.hasDimensionalKey) {
+          addEvent(`${player.name} does not have the Dimensional Key`, 'error')
+          break
+        }
+
+        const targetIdx = players.findIndex(p => p.id === targetPlayerId)
+        if (targetIdx === -1) {
+          addEvent('Target player not found', 'error')
+          break
+        }
+
+        const targetPlayer = players[targetIdx]!
+        const playerHexId = hexId(player.position.row, player.position.col)
+        const targetPlayerHexId = hexId(targetPlayer.position.row, targetPlayer.position.col)
+
+        // WHY: Validate both players in same hex
+        if (playerHexId !== targetPlayerHexId) {
+          addEvent(`${targetPlayer.name} is not in the same hex`, 'error')
+          break
+        }
+
+        // WHY: Transfer key between players
+        setPlayers(prev => {
+          const updated = [...prev]
+          updated[currentPlayerIndex] = {
+            ...updated[currentPlayerIndex]!,
+            hasDimensionalKey: false
+          }
+          updated[targetIdx] = {
+            ...updated[targetIdx]!,
+            hasDimensionalKey: true
+          }
+          return updated
+        })
+
+        addEvent(`${player.name} transferred the Dimensional Key to ${targetPlayer.name}`, 'action')
+        break
+      }
+
       default:
         addEvent(`Unknown action: ${action}`, 'error')
     }
