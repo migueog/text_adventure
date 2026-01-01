@@ -22,6 +22,7 @@ import { calculateResupply } from '@/lib/utils/resupply'
 import { resolveSearchRule, canPerformSearch, providesDimensionalKey, canAcquireKey } from '@/lib/utils/search'
 import { initializeIntelHex, gainIntel, canUseIntelScout } from '@/lib/utils/intel'
 import { configurePortalNetwork, canUsePortal, toggleHexBlocking } from '@/lib/utils/hexManipulation'
+import { calculateThreatWarning } from '@/lib/utils/threatWarning'
 import { determineActiveCondition, getKillzoneRecommendation } from '@/lib/utils/battleCondition'
 import { createMissingPlayerRecords } from '@/lib/utils/battleRewards'
 import { detectActiveThreatPhaseRules, sortByPriority, hasActiveRules } from '@/lib/utils/threatPhaseRules'
@@ -200,19 +201,9 @@ export function useCampaign() {
   }, [currentRound, currentPhase])
 
   /**
-   * Calculate threat warning level based on distance to target
-   * WHY: Warn players when approaching campaign end
-   */
-  const calculateThreatWarning = useCallback((current: number, target: number): ThreatWarningLevel => {
-    const distance = target - current
-    if (distance <= 1) return 'critical'
-    if (distance === 2) return 'moderate'
-    return 'none'
-  }, [])
-
-  /**
    * Increase threat level with warning updates and event logging
    * WHY: Centralize threat logic for consistency and event logging
+   * Uses calculateThreatWarning from lib/utils/threatWarning (Issue #29)
    */
   const increaseThreat = useCallback((amount: number, reason: string): void => {
     setThreatLevel(prev => {

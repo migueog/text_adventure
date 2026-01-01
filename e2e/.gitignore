@@ -1,0 +1,14 @@
+# Playwright Test Artifacts (Issue #29)
+# WHY: Don't commit test results, only baseline screenshots
+
+# Test results
+test-results/
+playwright-report/
+playwright/.cache/
+
+# Actual screenshots (compared against baselines)
+*-actual.png
+*-diff.png
+
+# Downloaded files during tests
+downloads/

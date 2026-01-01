@@ -1,0 +1,73 @@
+# Page snapshot
+
+```yaml
+- generic [active] [ref=e1]:
+  - button "Open Next.js Dev Tools" [ref=e7] [cursor=pointer]:
+    - img [ref=e8]
+  - alert [ref=e11]
+  - generic [ref=e12]:
+    - generic [ref=e13]:
+      - heading "Ctesiphus Expedition" [level=1] [ref=e14]
+      - heading "Kill Team Campaign Manager" [level=2] [ref=e15]
+    - generic [ref=e16]:
+      - generic [ref=e17]:
+        - heading "Campaign Settings" [level=3] [ref=e18]
+        - generic [ref=e19]:
+          - generic [ref=e20]: "Campaign Name:"
+          - textbox "Campaign Name:" [ref=e21]:
+            - /placeholder: Enter campaign name (3-100 characters)
+        - generic [ref=e22]:
+          - generic [ref=e23]: "Number of Players:"
+          - generic [ref=e24]:
+            - button "2" [ref=e25] [cursor=pointer]
+            - button "3" [ref=e26] [cursor=pointer]
+            - button "4" [ref=e27] [cursor=pointer]
+            - button "5" [ref=e28] [cursor=pointer]
+            - button "6" [ref=e29] [cursor=pointer]
+        - generic [ref=e30]:
+          - generic [ref=e31]: "Target Threat Level (Campaign Length):"
+          - generic [ref=e32]:
+            - button "5" [ref=e33] [cursor=pointer]
+            - button "6" [ref=e34] [cursor=pointer]
+            - button "7" [ref=e35] [cursor=pointer]
+            - button "8" [ref=e36] [cursor=pointer]
+            - button "9" [ref=e37] [cursor=pointer]
+            - button "10" [ref=e38] [cursor=pointer]
+          - paragraph [ref=e39]: "Standard campaign: 7 rounds. Shorter: 5-6. Longer: 8-10."
+        - generic [ref=e40]:
+          - generic [ref=e41]: "Game Mode:"
+          - generic [ref=e42]:
+            - button "Competitive" [ref=e43] [cursor=pointer]
+            - button "Solo/Co-op" [ref=e44] [cursor=pointer]
+      - generic [ref=e45]:
+        - heading "Player Names" [level=3] [ref=e46]
+        - generic [ref=e47]:
+          - textbox "Player 1" [ref=e50]
+          - textbox "Player 2" [ref=e53]
+          - textbox "Player 3" [ref=e56]
+          - textbox "Player 4" [ref=e59]
+      - generic [ref=e60]:
+        - heading "Map Preview" [level=3] [ref=e61]
+        - generic [ref=e62]:
+          - paragraph [ref=e63]:
+            - strong [ref=e64]: Standard (4 Players)
+          - paragraph [ref=e65]: "Grid Size: 6 x 6 hexes"
+          - paragraph [ref=e66]: "Surface Rows: 3"
+          - paragraph [ref=e67]: "Tomb Rows: 3"
+      - button "Start Campaign" [ref=e68] [cursor=pointer]
+    - generic [ref=e69]:
+      - heading "Quick Reference" [level=4] [ref=e70]
+      - generic [ref=e71]:
+        - generic [ref=e72]:
+          - strong [ref=e73]: "Movement:"
+          - text: 1-3 hexes, costs 1 SP per hex
+        - generic [ref=e74]:
+          - strong [ref=e75]: "Victory:"
+          - text: Battle win = +1 CP, Loss/Draw = +1 SP
+        - generic [ref=e76]:
+          - strong [ref=e77]: "Resupply:"
+          - text: Base = 10 SP, Camp = D3+3, Other = 1
+        - generic [ref=e78]:
+          - strong [ref=e79]: "Encamp:"
+          - text: Cost = distance to nearest base/camp
+```
