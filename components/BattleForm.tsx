@@ -8,10 +8,11 @@
  */
 
 import { useState, useCallback } from 'react'
-import type { ExtendedBattleRecord } from '@/types/battle'
+import type { ExtendedBattleRecord, OperativeKillInput } from '@/types/battle'
 import type { BattleResult } from '@/types/campaign'
 import { BATTLE_RESULTS } from '@/lib/data/campaignData'
 import { KILL_TEAM_MISSIONS, getRandomMission } from '@/lib/data/missions'
+import OperativeKillRecorder from './OperativeKillRecorder'
 
 interface BattleFormProps {
   currentPlayerId: number
@@ -44,6 +45,8 @@ export default function BattleForm({
   const [vpOpponent, setVpOpponent] = useState<number | ''>('')
   const [operativesLost, setOperativesLost] = useState<number | ''>('')
   const [notes, setNotes] = useState('')
+  // WHY: Issue #52 - Detailed operative kill tracking with wound-based scoring
+  const [operativeKills, setOperativeKills] = useState<OperativeKillInput[]>([])
 
   const isBye = result === 'BYE'
   const needsOpponent = !isBye && !isExternal
@@ -91,6 +94,7 @@ export default function BattleForm({
     setVpOpponent('')
     setOperativesLost('')
     setNotes('')
+    setOperativeKills([])  // WHY: Issue #52 - Clear operative kills on reset
   }, [handleOpponentChange])
 
   const handleSubmit = useCallback(() => {
@@ -110,7 +114,8 @@ export default function BattleForm({
       opponent: opponentId,
       result,
       status,
-      operativesKilled,
+      // WHY: Issue #52 - Use kill count from detailed mode if available
+      operativesKilled: showDetails ? operativeKills.length : operativesKilled,
       isExternalOpponent: isExternal,
       cpEarned,
       spEarned,
@@ -121,7 +126,9 @@ export default function BattleForm({
       ...(vpScored !== '' && { vpScored: vpScored as number }),
       ...(vpOpponent !== '' && { vpOpponent: vpOpponent as number }),
       ...(operativesLost !== '' && { operativesLost: operativesLost as number }),
-      ...(notes && { notes })
+      ...(notes && { notes }),
+      // WHY: Issue #52 - Include detailed operative kills when in detailed mode
+      ...(showDetails && operativeKills.length > 0 && { operativeKills })
     }
 
     onRecordBattle(record)
@@ -129,7 +136,8 @@ export default function BattleForm({
   }, [
     result, opponentId, isExternal, operativesKilled,
     challengedRefused, isExtraGame, mission, vpScored, vpOpponent,
-    operativesLost, notes, canSubmit, onRecordBattle, resetForm
+    operativesLost, notes, canSubmit, onRecordBattle, resetForm,
+    showDetails, operativeKills  // WHY: Issue #52 - Add operative kills dependencies
   ])
 
   return (
@@ -213,17 +221,22 @@ export default function BattleForm({
         </div>
       )}
 
-      {/* Operatives Killed */}
-      <div className="form-group">
-        <label htmlFor="operatives-killed">Operatives Killed:</label>
-        <input
-          id="operatives-killed"
-          type="number"
-          min="0"
-          value={operativesKilled}
-          onChange={(e) => setOperativesKilled(parseInt(e.target.value) || 0)}
-        />
-      </div>
+      {/* WHY: Issue #52 - Show simple input in basic mode, detailed recorder in detailed mode */}
+      {!showDetails && (
+        <div className="form-group">
+          <label htmlFor="operatives-killed">Operatives Killed:</label>
+          <input
+            id="operatives-killed"
+            type="number"
+            min="0"
+            value={operativesKilled}
+            onChange={(e) => setOperativesKilled(parseInt(e.target.value) || 0)}
+          />
+          <span className="hint-text">
+            (Enable details to record specific operatives with wound values)
+          </span>
+        </div>
+      )}
 
       {/* Details Toggle */}
       <button
@@ -295,6 +308,19 @@ export default function BattleForm({
               onChange={(e) => setOperativesLost(e.target.value ? parseInt(e.target.value) : '')}
             />
           </div>
+
+          {/* WHY: Issue #52 - Detailed operative kill tracking in detailed mode */}
+          <OperativeKillRecorder
+            kills={operativeKills}
+            onChange={setOperativeKills}
+            opponentName={
+              isExternal
+                ? 'External Opponent'
+                : opponentId
+                  ? players.find(p => p.id === opponentId)?.name
+                  : undefined
+            }
+          />
 
           <div className="form-group">
             <label htmlFor="notes">Notes:</label>

@@ -14,6 +14,7 @@ import {
   calculateBattleStatistics,
   filterBattleHistory
 } from '@/lib/utils/battleStats'
+import { calculateOperativeWoundValue } from '@/lib/utils/operativeKills'
 
 interface BattleHistoryProps {
   history: ExtendedBattleRecord[]
@@ -239,6 +240,31 @@ function BattleEntry({ battle, opponentName }: BattleEntryProps) {
           <span>, {battle.operativesLost} lost</span>
         )}
       </div>
+
+      {/* WHY: Issue #52 - Enhanced kill display for wound-based tracking */}
+      {battle.operativeKills && battle.operativeKills.length > 0 && (
+        <div className="operative-kills-detail">
+          <div className="detail-label">Operative Kills:</div>
+          <ul className="operative-kills-list">
+            {battle.operativeKills.map((kill, idx) => {
+              const woundValue = calculateOperativeWoundValue(kill.wounds)
+              return (
+                <li key={idx} className="operative-kill-item">
+                  {kill.operativeName} ({kill.wounds}W)
+                  <span className={`wound-badge value-${woundValue}`}>
+                    {woundValue} pt
+                  </span>
+                </li>
+              )
+            })}
+          </ul>
+          <div className="kill-total">
+            Total Wound Value: {battle.operativeKills.reduce((sum, k) =>
+              sum + calculateOperativeWoundValue(k.wounds), 0
+            )} points
+          </div>
+        </div>
+      )}
 
       {battle.notes && (
         <div className="battle-notes">{battle.notes}</div>

@@ -242,6 +242,21 @@ export interface Player {
 export type ThreatWarningLevel = 'none' | 'moderate' | 'critical'
 
 /**
+ * WHY: Issue #52 - Operative database for quick-select UI in kill recording
+ * Pre-defined Kill Team operatives with wound characteristics for HEADHUNTER tracking
+ */
+export interface Operative {
+  id: string            // Unique identifier (kebab-case, e.g., "fire-warrior")
+  name: string          // Display name (e.g., "Fire Warrior")
+  faction: string       // Faction name (e.g., "T'au Empire")
+  wounds: number        // Wound characteristic (determines woundValue)
+  woundValue: number    // Pre-calculated: 0 (≤5W), 1 (6-10W), 2 (11+W)
+  category?: string     // Optional: "Troops", "Leader", "Elite", etc.
+}
+
+export type OperativeDatabase = Record<string, Operative>
+
+/**
  * WHY: Track Released Prisoner entity state (Issue #59)
  * Released Prisoner is spawned when camping at Hyperfractal Gaol (TL32)
  * Moves and attacks during Threat Phase

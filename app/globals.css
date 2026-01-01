@@ -799,6 +799,260 @@ input, select {
   border-radius: 6px;
 }
 
+/* WHY: Issue #52 - Operative Kill Recorder Styles */
+.operative-kill-recorder {
+  padding: 1rem;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  margin-top: 1rem;
+}
+
+.recorder-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.recorder-header h4 {
+  margin: 0;
+  font-size: 1.1rem;
+  color: var(--text-primary);
+}
+
+.opponent-label {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  font-style: italic;
+}
+
+/* Mode Toggle */
+.mode-toggle {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  padding-bottom: 0.5rem;
+}
+
+.mode-toggle button {
+  padding: 0.4rem 1rem;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.mode-toggle button.active {
+  background: var(--accent-color);
+  border-color: var(--accent-color);
+  color: white;
+}
+
+.mode-toggle button:hover:not(.active) {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+/* Quick Select Panel */
+.quick-select-panel {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.quick-select-panel select {
+  flex: 1;
+  padding: 0.5rem;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+  color: var(--text-primary);
+  font-size: 0.95rem;
+}
+
+.quick-select-panel button {
+  padding: 0.5rem 1.5rem;
+  background: var(--accent-color);
+  border: none;
+  border-radius: 4px;
+  color: white;
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.quick-select-panel button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Custom Entry Panel */
+.custom-entry-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.custom-entry-panel input[type="text"] {
+  padding: 0.5rem;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+  color: var(--text-primary);
+  font-size: 0.95rem;
+}
+
+.wound-input-group {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.wound-input-group label {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+}
+
+.wound-input-group input[type="number"] {
+  width: 80px;
+  padding: 0.5rem;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+  color: var(--text-primary);
+  text-align: center;
+}
+
+.wound-value-badge {
+  display: inline-block;
+  padding: 0.25rem 0.75rem;
+  background: var(--accent-color);
+  border-radius: 12px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: white;
+}
+
+/* Kill List */
+.kill-list {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.kill-list h5 {
+  margin: 0 0 0.75rem 0;
+  font-size: 0.95rem;
+  color: var(--text-secondary);
+}
+
+.kill-list ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.kill-entry {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 4px;
+}
+
+.kill-name {
+  flex: 1;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.kill-wounds {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.kill-value {
+  padding: 0.2rem 0.6rem;
+  border-radius: 8px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  min-width: 40px;
+  text-align: center;
+}
+
+.kill-value.value-0 {
+  background: rgba(128, 128, 128, 0.3);
+  color: #999;
+}
+
+.kill-value.value-1 {
+  background: rgba(76, 175, 80, 0.3);
+  color: #4caf50;
+}
+
+.kill-value.value-2 {
+  background: rgba(255, 152, 0, 0.3);
+  color: #ff9800;
+}
+
+.remove-kill {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  background: rgba(255, 0, 0, 0.2);
+  border: 1px solid rgba(255, 0, 0, 0.3);
+  border-radius: 50%;
+  color: #f44336;
+  cursor: pointer;
+  font-size: 1rem;
+  line-height: 1;
+  transition: all 0.2s;
+}
+
+.remove-kill:hover {
+  background: rgba(255, 0, 0, 0.3);
+  border-color: #f44336;
+}
+
+/* Kill Summary */
+.kill-summary {
+  margin-top: 1rem;
+  padding: 0.75rem;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 4px;
+  text-align: center;
+  font-size: 1rem;
+  color: var(--text-primary);
+}
+
+.kill-summary strong {
+  color: var(--accent-color);
+}
+
+/* Empty State */
+.empty-state {
+  padding: 2rem;
+  text-align: center;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+/* Hint Text */
+.hint-text {
+  margin-left: 0.5rem;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
 .threat-info {
   padding: 1rem;
   background: var(--bg-tertiary);
@@ -3111,6 +3365,68 @@ input, select {
   font-size: 0.85rem;
   text-align: center;
   padding: 1rem;
+}
+
+/**
+ * WHY: Issue #52 - Operative Kill Details Display
+ * Shows wound-based kill breakdown in battle history
+ */
+.operative-kills-detail {
+  margin-top: 0.75rem;
+  padding: 0.75rem;
+  background: rgba(255, 255, 255, 0.03);
+  border-left: 3px solid var(--accent-color);
+  border-radius: 4px;
+}
+
+.operative-kills-list {
+  list-style: none;
+  padding: 0;
+  margin: 0.5rem 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.operative-kill-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.9rem;
+  color: var(--text-primary);
+  padding: 0.25rem 0;
+}
+
+.wound-badge {
+  padding: 0.15rem 0.5rem;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.wound-badge.value-0 {
+  background: rgba(128, 128, 128, 0.2);
+  color: #999;
+}
+
+.wound-badge.value-1 {
+  background: rgba(76, 175, 80, 0.2);
+  color: #4caf50;
+}
+
+.wound-badge.value-2 {
+  background: rgba(255, 152, 0, 0.2);
+  color: #ff9800;
+}
+
+.kill-total {
+  margin-top: 0.5rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  text-align: right;
+  font-weight: 500;
 }
 
 /* ============================================
