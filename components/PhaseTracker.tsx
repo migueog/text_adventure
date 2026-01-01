@@ -736,6 +736,73 @@ export default function PhaseTracker({
                     </div>
                   </div>
                 )}
+
+                {/* WHY: Dimensional Key actions (Issue #59) */}
+                {currentPlayer.hasDimensionalKey && (
+                  <div style={{
+                    background: '#e7f3ff',
+                    border: '1px solid #b3d9ff',
+                    borderRadius: '4px',
+                    padding: '0.75rem',
+                    marginTop: '1rem'
+                  }}>
+                    <strong>🔑 Dimensional Key Available</strong>
+                    <p style={{ margin: '0.5rem 0', fontSize: '0.9em' }}>
+                      You possess the unique Dimensional Key!
+                    </p>
+                    <div>
+                      <button
+                        className="action-btn"
+                        onClick={() => {
+                          // TODO: Show hex selector modal for Dimensional Manoeuvre
+                          const targetHex = prompt('Enter target hex ID (e.g., "1,2"):')
+                          if (targetHex) {
+                            onAction('DIMENSIONAL_MANOEUVRE', { targetHex })
+                          }
+                        }}
+                        disabled={currentPlayer.supplyPoints < 1}
+                        title={currentPlayer.supplyPoints < 1 ? 'Need 1 SP' : 'Teleport to any hex (consumes key)'}
+                        style={{ marginRight: '0.5rem' }}
+                      >
+                        Dimensional Manoeuvre (1 SP)
+                      </button>
+
+                      {/* WHY: Show transfer option if other players in same hex */}
+                      {players.filter(p =>
+                        p.id !== currentPlayer.id &&
+                        p.position.row === currentPlayer.position.row &&
+                        p.position.col === currentPlayer.position.col
+                      ).length > 0 && (
+                        <button
+                          className="action-btn secondary"
+                          onClick={() => {
+                            const playersInHex = players.filter(p =>
+                              p.id !== currentPlayer.id &&
+                              p.position.row === currentPlayer.position.row &&
+                              p.position.col === currentPlayer.position.col
+                            )
+                            if (playersInHex.length === 1) {
+                              onAction('TRANSFER_KEY', { targetPlayerId: playersInHex[0]!.id })
+                            } else {
+                              // TODO: Show player selector modal
+                              const playerNames = playersInHex.map((p, i) => `${i + 1}: ${p.name}`).join('\n')
+                              const selection = prompt(`Choose player:\n${playerNames}\nEnter number:`)
+                              if (selection) {
+                                const idx = parseInt(selection) - 1
+                                if (playersInHex[idx]) {
+                                  onAction('TRANSFER_KEY', { targetPlayerId: playersInHex[idx]!.id })
+                                }
+                              }
+                            }
+                          }}
+                          title="Transfer key to another player in this hex"
+                        >
+                          Transfer Key
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Skip action */}
