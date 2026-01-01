@@ -32,6 +32,30 @@
 - ✅ Next.js dev server runs successfully
 - ✅ TypeScript compilation works
 
+### Issue #58: Complete Exploration Data (D36 System)
+- ✅ Phase 1: Type system foundation (7 Location properties, 5 Condition properties, HexState interface)
+- ✅ Phase 2: Data validation utilities (validateLocationData, validateLocationCoverage, validateConditionCoverage)
+- ✅ Phase 3: Re-roll system for duplicates (getExploredLocationIds, rollWithRerolls, rollConditionWithRerolls)
+- ✅ Phase 4: All 18 surface locations with D36 structure (repeatable 11-16, unique 21-36)
+- ✅ Phase 5: All 18 tomb locations with D36 structure
+- ✅ Phase 6: All 72 conditions (36 surface + 36 tomb) with D36 structure
+- ✅ Phase 7: Hook integration (exploreHex updated with re-roll logic and hex state)
+- ⏭️  Phase 8: UI component updates (deferred - will update when special mechanics implemented)
+- ✅ Phase 9: End-to-end testing (50/50 tests passing for Issue #58)
+- ✅ Phase 10: Documentation complete
+
+**Test Coverage:** 50 tests (all passing)
+- 16 tests: dataValidation.test.ts
+- 16 tests: explorationUtils.test.ts
+- 18 tests: campaignData.test.ts
+
+**Key Accomplishments:**
+- Fixed D36 misunderstanding (18 valid values, not 26)
+- Repeatable locations/conditions (11-16) allow duplicates
+- Unique locations/conditions (21-36) trigger automatic re-rolls
+- Hex state tracking for special mechanics (Abandoned Camp, Intelligence Cache, etc.)
+- Foundation for complex special mechanics (deferred to Issue #40)
+
 ## 🚧 Remaining Work
 
 ### Priority 1: Core Hook Migration
