@@ -753,8 +753,9 @@ export interface VictoryCategory {
 
 export const VICTORY_CATEGORIES: VictoryCategory[] = [
   { id: 'warlord', name: 'Warlord', description: 'Most Campaign Points', stat: 'campaignPoints' },
+  { id: 'pioneer', name: 'Pioneer', description: 'Most Supply Points Spent', stat: 'supplyPointsSpent' },  // WHY: Issue #50 - Track SP spent, not remaining
   { id: 'explorer', name: 'Explorer', description: 'Most Hexes Explored', stat: 'exploredHexes' },
-  { id: 'headhunter', name: 'Headhunter', description: 'Most Operatives Killed', stat: 'operativesKilled' },
-  { id: 'pioneer', name: 'Pioneer', description: 'Most Supply Points Remaining', stat: 'supplyPoints' },
-  { id: 'trooper', name: 'Trooper', description: 'Most Games Played', stat: 'gamesPlayed' }
+  { id: 'trooper', name: 'Trooper', description: 'Most Games Played', stat: 'gamesPlayed' },
+  { id: 'warrior', name: 'Warrior', description: 'Most Games Won', stat: 'gamesWon' },  // WHY: Issue #50 - New category for wins
+  { id: 'headhunter', name: 'Headhunter', description: 'Most Operative Wound Value', stat: 'headhunterScore' }  // WHY: Issue #50 - Wound-based scoring
 ]

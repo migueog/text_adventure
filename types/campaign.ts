@@ -200,6 +200,18 @@ export interface BattleRecord {
   operativesKilled: number
 }
 
+/**
+ * Operative Kill Details for Wound-Based Tracking (Issue #50)
+ * WHY: HEADHUNTER victory category uses wound-based counting (not raw kill count)
+ */
+export interface OperativeKill {
+  round: number                  // WHY: Track which round the kill occurred
+  operativeName: string          // WHY: Track operative type killed
+  wounds: number                 // WHY: Wound characteristic determines point value
+  woundValue: number             // WHY: Calculated value: 0 (≤5W), 1 (6-10W), 2 (11+W)
+  opponentId?: number | null     // WHY: Track opponent (null for external/non-campaign opponents)
+}
+
 export interface Player {
   id: number
   name: string
@@ -222,6 +234,8 @@ export interface Player {
   battleHistory: ExtendedBattleRecord[]  // WHY: Extended battle history with details for Issue #34
   hasDimensionalKey?: boolean  // WHY: Track if player has the unique Dimensional Key (Issue #59)
   intelCount?: number  // WHY: Track intel available for free scouts (Issue #59)
+  supplyPointsSpent?: number  // WHY: Track cumulative SP spent for PIONEER victory category (Issue #50)
+  operativeKillDetails?: OperativeKill[]  // WHY: Track kill details for wound-based HEADHUNTER category (Issue #50)
 }
 
 // WHY: Track warning level for approaching campaign end (1-2 levels from target)

@@ -25,6 +25,7 @@ import { configurePortalNetwork, canUsePortal, toggleHexBlocking } from '@/lib/u
 import { calculateThreatWarning } from '@/lib/utils/threatWarning'
 import { determineActiveCondition, getKillzoneRecommendation } from '@/lib/utils/battleCondition'
 import { createMissingPlayerRecords } from '@/lib/utils/battleRewards'
+import { recordOperativeKill } from '@/lib/utils/operativeKills'  // WHY: Issue #50 - Track detailed operative kills
 import { detectActiveThreatPhaseRules, sortByPriority, hasActiveRules } from '@/lib/utils/threatPhaseRules'
 import {
   findPlayersInBeastRange,
@@ -70,6 +71,25 @@ const addHistoryEntry = (
   return [...(player.history || []), entry]
 }
 
+/**
+ * Helper function to deduct SP and track cumulative spending
+ * WHY: Issue #50 - Track total SP spent for PIONEER victory category
+ *
+ * @param player - Player to deduct SP from
+ * @param amount - Amount of SP to deduct
+ * @returns Updated player with deducted SP and tracked spending
+ */
+const deductSupplyPoints = (player: Player, amount: number): Player => {
+  const newSP = clampSP(player.supplyPoints - amount)
+  const spSpent = (player.supplyPointsSpent || 0) + amount
+
+  return {
+    ...player,
+    supplyPoints: newSP,
+    supplyPointsSpent: spSpent
+  }
+}
+
 const createInitialHexGrid = (config: MapConfig): Record<string, Hex> => {
   const hexes: Record<string, Hex> = {}
   for (let row = 0; row < config.rows; row++) {
@@ -110,6 +130,8 @@ const createPlayer = (id: number, name: string, color: string, startHex: HexPosi
   battleResult: null,
   searchedHexes: [],  // WHY: Track which hexes this player has searched (one-time use)
   battleHistory: [],  // WHY: Initialize empty battle history for Demolish prerequisites
+  supplyPointsSpent: 0,  // WHY: Track cumulative SP spent for PIONEER victory category (Issue #50)
+  operativeKillDetails: [],  // WHY: Track kill details for wound-based HEADHUNTER category (Issue #50)
 })
 
 interface PerformActionParams {
@@ -669,13 +691,13 @@ export function useCampaign() {
         return prev
       }
 
-      const newSP = clampSP(player.supplyPoints - cost)
-      
+      // WHY: Issue #50 - Track SP spent for PIONEER category
+      const updatedPlayer = deductSupplyPoints(player, cost)
+
       const targetPos = targetHex.split(',').map(Number)
       updated[playerIndex] = {
-        ...player,
+        ...updatedPlayer,
         position: { row: targetPos[0] ?? 0, col: targetPos[1] ?? 0 },
-        supplyPoints: newSP,
         history: addHistoryEntry(player, currentRound, PHASES[currentPhase] || 'Unknown', -cost, 0, `Moved to hex ${targetHex}`)
       }
 
@@ -932,11 +954,11 @@ export function useCampaign() {
           const currentPlayer = updated[currentPlayerIndex]
           if (!currentPlayer) return prev
 
-          const newSP = clampSP(currentPlayer.supplyPoints - cost)
+          // WHY: Issue #50 - Track SP spent for PIONEER category
+          const updatedPlayer = deductSupplyPoints(currentPlayer, cost)
 
           updated[currentPlayerIndex] = {
-            ...currentPlayer,
-            supplyPoints: newSP,
+            ...updatedPlayer,
             history: addHistoryEntry(currentPlayer, currentRound, PHASES[currentPhase] || 'Unknown', -cost, 0, `Scouted hex ${targetHex}`)
           }
           return updated
@@ -973,9 +995,10 @@ export function useCampaign() {
           break
         }
 
-        // WHY: Deduct 1 SP cost
+        // WHY: Deduct 1 SP cost (Issue #50 - track SP spent)
         const spCost = 1
-        const finalSP = clampSP(player.supplyPoints - spCost + result.spGained)
+        const updatedPlayer = deductSupplyPoints(player, spCost)
+        const finalSP = clampSP(updatedPlayer.supplyPoints + result.spGained)  // WHY: Add search rewards
         const finalCP = player.campaignPoints + result.cpGained
 
         setPlayers(prev => {
@@ -984,7 +1007,7 @@ export function useCampaign() {
           if (!currentPlayer) return prev
 
           updated[currentPlayerIndex] = {
-            ...currentPlayer,
+            ...updatedPlayer,
             supplyPoints: finalSP,
             campaignPoints: finalCP,
             searchedHexes: [...currentPlayer.searchedHexes, hexKey],  // WHY: Mark hex as searched (one-time use)
@@ -1122,10 +1145,12 @@ export function useCampaign() {
           // WHY: Add new camp at current position
           newCamps.push({ row: player.position.row, col: player.position.col })
 
+          // WHY: Issue #50 - Track SP spent for PIONEER category
+          const updatedPlayer = deductSupplyPoints(currentPlayer, cost)
+
           updated[currentPlayerIndex] = {
-            ...currentPlayer,
+            ...updatedPlayer,
             camps: newCamps,
-            supplyPoints: clampSP(currentPlayer.supplyPoints - cost),
             history: addHistoryEntry(
               currentPlayer,
               currentRound,
@@ -1198,9 +1223,10 @@ export function useCampaign() {
 
           setPlayers(prev => {
             const updated = [...prev]
+            // WHY: Issue #50 - Track SP spent for PIONEER category
+            const updatedPlayer = deductSupplyPoints(player, DEMOLISH_COST)
             updated[currentPlayerIndex] = {
-              ...updated[currentPlayerIndex]!,
-              supplyPoints: clampSP(player.supplyPoints - DEMOLISH_COST),
+              ...updatedPlayer,
               history: addHistoryEntry(player, currentRound, PHASES[currentPhase] || 'Unknown', -DEMOLISH_COST, 0, 'Demolished Beast Lair')
             }
             return updated
@@ -1213,9 +1239,10 @@ export function useCampaign() {
 
           setPlayers(prev => {
             const updated = [...prev]
+            // WHY: Issue #50 - Track SP spent for PIONEER category
+            const updatedPlayer = deductSupplyPoints(player, DEMOLISH_COST)
             updated[currentPlayerIndex] = {
-              ...updated[currentPlayerIndex]!,
-              supplyPoints: clampSP(player.supplyPoints - DEMOLISH_COST),
+              ...updatedPlayer,
               history: addHistoryEntry(player, currentRound, PHASES[currentPhase] || 'Unknown', -DEMOLISH_COST, 0, 'Demolished Released Prisoner')
             }
             return updated
@@ -1255,10 +1282,10 @@ export function useCampaign() {
               )
             }
 
-            // WHY: Update current player SP and history
+            // WHY: Update current player SP and history (Issue #50 - track SP spent)
+            const updatedPlayer = deductSupplyPoints(currentPlayer, DEMOLISH_COST)
             updated[currentPlayerIndex] = {
-              ...currentPlayer,
-              supplyPoints: clampSP(currentPlayer.supplyPoints - DEMOLISH_COST),
+              ...updatedPlayer,
               history: addHistoryEntry(currentPlayer, currentRound, PHASES[currentPhase] || 'Unknown', -DEMOLISH_COST, 0, `Demolished ${target.name}'s camp`)
             }
 
@@ -1289,15 +1316,16 @@ export function useCampaign() {
           break
         }
 
-        // WHY: Move player, deduct SP, return key
+        // WHY: Move player, deduct SP, return key (Issue #50 - track SP spent)
+        const updatedPlayer = deductSupplyPoints(player, 1)
+
         setPlayers(prev => {
           const updated = [...prev]
           updated[currentPlayerIndex] = {
-            ...updated[currentPlayerIndex]!,
+            ...updatedPlayer,
             position: hexes[targetHex]!.type === 'surface'
               ? { row: hexes[targetHex]!.row, col: hexes[targetHex]!.col }
               : { row: hexes[targetHex]!.row, col: hexes[targetHex]!.col },
-            supplyPoints: clampSP(player.supplyPoints - 1),
             hasDimensionalKey: false,  // WHY: Key is consumed after use
             history: addHistoryEntry(
               player,
@@ -1404,13 +1432,14 @@ export function useCampaign() {
           break
         }
 
-        // WHY: Move player to destination, deduct SP
+        // WHY: Move player to destination, deduct SP (Issue #50 - track SP spent)
+        const updatedPlayer = deductSupplyPoints(player, 1)
+
         setPlayers(prev => {
           const updated = [...prev]
           updated[currentPlayerIndex] = {
-            ...updated[currentPlayerIndex]!,
+            ...updatedPlayer,
             position: { row: targetHexObj.row, col: targetHexObj.col },
-            supplyPoints: clampSP(player.supplyPoints - 1),
             history: addHistoryEntry(
               player,
               'Portal Travel',
@@ -1460,6 +1489,18 @@ export function useCampaign() {
       const isWin = record.result === 'WIN'
       const isLoss = record.result === 'LOSS'
 
+      // WHY: Issue #50 - Process operative kill details for wound-based tracking
+      const newKillDetails = (record.operativeKills || []).map(kill =>
+        recordOperativeKill(
+          player,
+          currentRoundRef.current,
+          kill.operativeName,
+          kill.wounds,
+          record.opponent
+        )
+      )
+      const existingKillDetails = player.operativeKillDetails || []
+
       updated[currentPlayerIndex] = {
         ...player,
         supplyPoints: newSP,
@@ -1467,7 +1508,8 @@ export function useCampaign() {
         gamesPlayed: player.gamesPlayed + 1,
         gamesWon: isWin ? player.gamesWon + 1 : player.gamesWon,
         gamesLost: isLoss ? player.gamesLost + 1 : player.gamesLost,
-        operativesKilled: player.operativesKilled + record.operativesKilled,
+        operativesKilled: player.operativesKilled + record.operativesKilled,  // WHY: Legacy count for backward compatibility
+        operativeKillDetails: [...existingKillDetails, ...newKillDetails],  // WHY: Issue #50 - Detailed wound-based tracking
         battleResult: record.result,  // WHY: Store for Action Phase turn ordering
         battleHistory: [...existingHistory, battleRecord],
         history: addHistoryEntry(

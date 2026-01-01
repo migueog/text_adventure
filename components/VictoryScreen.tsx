@@ -3,6 +3,7 @@
 import type { Player, Hex } from '@/types/campaign'
 import { VICTORY_CATEGORIES } from '@/lib/data/campaignData'
 import { calculateTotalHexesExplored, calculateTotalBattles, generateNarrativeSummary } from '@/lib/utils/campaignStatistics'
+import { calculateHeadhunterScore } from '@/lib/utils/operativeKills'  // WHY: Issue #50 - Calculate wound-based score
 
 interface VictoryScreenProps {
   players: Player[]
@@ -40,8 +41,18 @@ export default function VictoryScreen({
   // Calculate winners for each category
   const results: CategoryResult[] = VICTORY_CATEGORIES.map(category => {
     const sorted = [...players].sort((a, b) => {
-      const aStat = (a as any)[category.stat] || 0
-      const bStat = (b as any)[category.stat] || 0
+      // WHY: Issue #50 - Handle calculated stats like headhunterScore
+      let aStat: number
+      let bStat: number
+
+      if (category.stat === 'headhunterScore') {
+        aStat = calculateHeadhunterScore(a)
+        bStat = calculateHeadhunterScore(b)
+      } else {
+        aStat = (a as any)[category.stat] || 0
+        bStat = (b as any)[category.stat] || 0
+      }
+
       return bStat - aStat
     })
     return {
@@ -143,7 +154,10 @@ export default function VictoryScreen({
                   {result.winner.name}
                 </div>
                 <div className="category-value">
-                  {(result.winner as any)[result.stat]}
+                  {/* WHY: Issue #50 - Show calculated score for headhunterScore */}
+                  {result.stat === 'headhunterScore'
+                    ? calculateHeadhunterScore(result.winner)
+                    : (result.winner as any)[result.stat]}
                 </div>
               </div>
             ))}

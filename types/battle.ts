@@ -8,6 +8,15 @@
 import type { BattleResult, BattleRecord } from './campaign'
 
 /**
+ * Input data for recording operative kills with wound details (Issue #50)
+ * WHY: Allow battle recording to include detailed operative kill data
+ */
+export interface OperativeKillInput {
+  operativeName: string  // WHY: Name of killed operative (e.g., "Fire Warrior", "Ork Nob")
+  wounds: number         // WHY: Wound characteristic determines point value for HEADHUNTER
+}
+
+/**
  * Extended battle record with full details for history tracking
  *
  * WHY: Extends base BattleRecord to include mission details, VP scoring,
@@ -40,6 +49,9 @@ export interface ExtendedBattleRecord extends BattleRecord {
 
   /** WHY: Free-form notes for narrative tracking */
   notes?: string
+
+  /** WHY: Optional detailed kill tracking for wound-based HEADHUNTER category (Issue #50) */
+  operativeKills?: OperativeKillInput[]
 
   // Issue #41: Battle Phase Rewards and Special Cases
 
