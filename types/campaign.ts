@@ -56,22 +56,61 @@ export interface SearchResult {
   roll?: number  // WHY: For d3/d3+1 rolls, show the dice result
 }
 
-export interface Location {
-  name: string
-  description: string
-  effect: string
-  value?: number | string
-  modifier?: number
-  searchRule: SearchRule  // WHY: One-time search reward for this location
-  threatPhaseRule?: ThreatPhaseRule | null  // WHY: Optional rule that triggers during Threat Phase
+// WHY: Location type categories for D36 exploration system (Issue #58)
+// REPEATABLE: Can be found multiple times (e.g., SL11-16 "Ruin")
+// UNIQUE: Found only once per campaign (e.g., SL21 "Abandoned Camp")
+// SPECIAL: Unique with complex mechanics (e.g., SL23 "Beast Lair")
+export type LocationType = 'REPEATABLE' | 'UNIQUE' | 'SPECIAL'
+
+// WHY: Camp rule categories for location-specific camping restrictions (Issue #58)
+// ALLOWED: Normal camping permitted
+// DANGEROUS: Camping possible but risky
+// FORBIDDEN: Cannot camp at this location (e.g., Beast Lair)
+export type CampRule = 'FORBIDDEN' | 'DANGEROUS' | 'ALLOWED'
+
+// WHY: Hex-level state for special location mechanics (Issue #58)
+// Tracks dynamic properties like depleting resources, portal links, active threats
+export interface HexState {
+  supplyCount?: number          // WHY: Remaining SP for depleting locations (Abandoned Camp, Resource Stockpile)
+  intelGained?: boolean         // WHY: Track if intel reward already claimed (Intelligence Cache)
+  portalDestination?: string    // WHY: Linked hex ID for portal locations
+  beastLairActive?: boolean     // WHY: Track if Beast Lair threat is still active
 }
 
-export interface Condition {
+export interface Location {
+  id?: string                   // WHY: Unique identifier (e.g., "SL11-16", "SL21") for re-roll duplicate detection (Issue #58)
+  number?: number | string      // WHY: D36 roll number (11-16 range for repeatable, 21 for unique)
+  type?: LocationType           // WHY: Location category for gameplay rules
+  repeatable?: boolean          // WHY: If true, allows duplicate explorations (e.g., Ruin at 11-16)
   name: string
   description: string
   effect: string
   value?: number | string
   modifier?: number
+  searchRule: SearchRule        // WHY: One-time search reward for this location
+  threatPhaseRule?: ThreatPhaseRule | null  // WHY: Optional rule that triggers during Threat Phase
+  initialState?: Record<string, number>     // WHY: Initial values for depleting resources (e.g., { supplyCount: D6 })
+  specialRules?: string[]       // WHY: Tags for complex mechanics (e.g., ["BEAST_LAIR", "PORTAL"])
+  campRule?: CampRule           // WHY: Camping restriction level for this location
+}
+
+// WHY: Condition type categories for D36 exploration system (Issue #58)
+// REPEATABLE: Can occur multiple times (e.g., SC11-16 "Clear")
+// STANDARD: Occurs once per campaign
+export type ConditionType = 'REPEATABLE' | 'STANDARD'
+
+export interface Condition {
+  id?: string                   // WHY: Unique identifier (e.g., "SC11-16", "SC21") for re-roll duplicate detection (Issue #58)
+  number?: number | string      // WHY: D36 roll number (11-16 range for repeatable, 21 for unique)
+  type?: ConditionType          // WHY: Condition category for gameplay rules
+  repeatable?: boolean          // WHY: If true, allows duplicate occurrences (e.g., Clear at 11-16)
+  name: string
+  description: string
+  effect: string
+  value?: number | string
+  modifier?: number
+  battleEffect?: string         // WHY: Structured battle effect description for Kill Team battles
+  specialRules?: string[]       // WHY: Tags for complex condition mechanics
 }
 
 export interface MapConfig {
@@ -116,6 +155,9 @@ export interface Hex {
   condition: number
   explored: boolean
   exploredBy: number[]
+  state?: HexState              // WHY: Optional state for special location mechanics (depleting resources, portals, etc.)
+  exploredLocation?: string     // WHY: Location ID for re-roll tracking (e.g., "SL21", "SL11-16")
+  exploredCondition?: string    // WHY: Condition ID for re-roll tracking (e.g., "SC21", "SC11-16")
 }
 
 export interface HistoryEntry {
