@@ -14,7 +14,7 @@ import {
   THREAT_LEVELS,
   BattleResultInfo
 } from '@/lib/data/campaignData'
-import { rollD36, parseValue } from '@/lib/utils/dice'
+import { rollD36, parseValue, rollD6 } from '@/lib/utils/dice'
 import { hexId, hexDistance, canExploreHex, findNearestBaseOrCamp } from '@/lib/utils/hexUtils'
 import { determinePriority, needsRollOff } from '@/lib/utils/priority'
 import { calculateActionPhaseOrder } from '@/lib/utils/actionPhaseUtils'
@@ -23,6 +23,12 @@ import { resolveSearchRule, canPerformSearch } from '@/lib/utils/search'
 import { determineActiveCondition, getKillzoneRecommendation } from '@/lib/utils/battleCondition'
 import { createMissingPlayerRecords } from '@/lib/utils/battleRewards'
 import { detectActiveThreatPhaseRules, sortByPriority, hasActiveRules } from '@/lib/utils/threatPhaseRules'
+import {
+  getExploredLocationIds,
+  getExploredConditionIds,
+  rollWithRerolls,
+  rollConditionWithRerolls
+} from '@/lib/utils/explorationUtils'
 import type { ActiveBattleCondition, KillzoneRecommendation } from '@/types/battleCondition'
 
 // Constants for SP management
@@ -453,11 +459,25 @@ export function useCampaign() {
       const locations = hex.type === 'surface' ? SURFACE_LOCATIONS : TOMB_LOCATIONS
       const conditions = hex.type === 'surface' ? SURFACE_CONDITIONS : TOMB_CONDITIONS
 
-      const locationRoll = rollD36()
-      const conditionRoll = rollD36()
+      // WHY: Get explored IDs for re-roll duplicate detection (Issue #58)
+      const exploredLocationIds = getExploredLocationIds(prev)
+      const exploredConditionIds = getExploredConditionIds(prev)
+
+      // WHY: Roll with automatic re-rolls for unique locations/conditions (Issue #58)
+      const locationRoll = rollWithRerolls(rollD36, exploredLocationIds, locations)
+      const conditionRoll = rollConditionWithRerolls(rollD36, exploredConditionIds, conditions)
 
       const location = locations[locationRoll] || locations[11]
       const condition = conditions[conditionRoll] || conditions[11]
+
+      // WHY: Initialize hex state for special locations (Issue #58)
+      const initialState: Record<string, number> = {}
+      if (location.initialState?.supplyCount !== undefined) {
+        initialState.supplyCount = rollD6() // Roll D6 for Abandoned Camp supplies
+      }
+      if (location.initialState?.intelGained !== undefined) {
+        initialState.intelGained = 0 // 0 = not claimed, 1 = claimed
+      }
 
       addEvent(`Explored hex ${hexKey}: ${location?.name || 'Unknown'} (${condition?.name || 'Clear'})`, 'exploration')
 
@@ -541,7 +561,12 @@ export function useCampaign() {
           explored: true,
           location: locationRoll,
           condition: conditionRoll,
-          exploredBy: [...hex.exploredBy, currentPlayerIndex]
+          exploredBy: [...hex.exploredBy, currentPlayerIndex],
+          // WHY: Store location/condition IDs for re-roll detection (Issue #58)
+          exploredLocation: location.id,
+          exploredCondition: condition.id,
+          // WHY: Store hex state for special locations (Issue #58)
+          state: Object.keys(initialState).length > 0 ? initialState : undefined
         }
       }
     })
