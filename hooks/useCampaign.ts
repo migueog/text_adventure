@@ -20,6 +20,7 @@ import { determinePriority, needsRollOff } from '@/lib/utils/priority'
 import { calculateActionPhaseOrder } from '@/lib/utils/actionPhaseUtils'
 import { calculateResupply } from '@/lib/utils/resupply'
 import { resolveSearchRule, canPerformSearch, providesDimensionalKey, canAcquireKey } from '@/lib/utils/search'
+import { initializeIntelHex, gainIntel, canUseIntelScout } from '@/lib/utils/intel'
 import { determineActiveCondition, getKillzoneRecommendation } from '@/lib/utils/battleCondition'
 import { createMissingPlayerRecords } from '@/lib/utils/battleRewards'
 import { detectActiveThreatPhaseRules, sortByPriority, hasActiveRules } from '@/lib/utils/threatPhaseRules'
@@ -529,13 +530,17 @@ export function useCampaign() {
       const location = locations[locationRoll] || locations[11]
       const condition = conditions[conditionRoll] || conditions[11]
 
-      // WHY: Initialize hex state for special locations (Issue #58)
-      const initialState: Record<string, number> = {}
+      // WHY: Initialize hex state for special locations (Issue #58, #59)
+      const initialState: Record<string, any> = {}
       if (location.initialState?.supplyCount !== undefined) {
         initialState.supplyCount = rollD6() // Roll D6 for Abandoned Camp supplies
       }
       if (location.initialState?.intelGained !== undefined) {
         initialState.intelGained = 0 // 0 = not claimed, 1 = claimed
+      }
+      // WHY: Initialize Intel Cache with D6 intel (Issue #59)
+      if (location.specialRules?.includes('INTEL_CACHE')) {
+        initialState.intelRemaining = rollD6()
       }
 
       addEvent(`Explored hex ${hexKey}: ${location?.name || 'Unknown'} (${condition?.name || 'Clear'})`, 'exploration')
@@ -1017,6 +1022,41 @@ export function useCampaign() {
           }
         }
 
+        // WHY: Check for Intel Cache and gain intel (Issue #59)
+        if (location?.specialRules?.includes('INTEL_CACHE') && hex) {
+          const intelResult = gainIntel(hex, player)
+
+          if (intelResult.intelGained > 0) {
+            // Update both hex and player state
+            setHexes(prev => ({
+              ...prev,
+              [hexKey]: {
+                ...prev[hexKey]!,
+                state: {
+                  ...prev[hexKey]!.state,
+                  intelRemaining: intelResult.remaining
+                }
+              }
+            }))
+
+            setPlayers(prev => {
+              const updated = [...prev]
+              updated[currentPlayerIndex] = {
+                ...updated[currentPlayerIndex]!,
+                intelCount: intelResult.playerIntelCount
+              }
+              return updated
+            })
+
+            addEvent(
+              `${player.name} gained ${intelResult.intelGained} intel! (${intelResult.remaining} remaining at this location)`,
+              'reward'
+            )
+          } else {
+            addEvent(`${player.name}: Intel Cache depleted`, 'warning')
+          }
+        }
+
         break
       }
 
@@ -1276,6 +1316,31 @@ export function useCampaign() {
         })
 
         addEvent(`${player.name} transferred the Dimensional Key to ${targetPlayer.name}`, 'action')
+        break
+      }
+
+      case 'INTEL_SCOUT': {
+        // WHY: Intel Scout - free scout action using intel (Issue #59)
+        const { targetHex } = params
+
+        const validation = canUseIntelScout(player, targetHex, hexes)
+        if (!validation.canScout) {
+          addEvent(`${player.name} cannot use intel scout: ${validation.reason}`, 'error')
+          break
+        }
+
+        // WHY: Deduct 1 intel, explore hex for free
+        setPlayers(prev => {
+          const updated = [...prev]
+          updated[currentPlayerIndex] = {
+            ...updated[currentPlayerIndex]!,
+            intelCount: (updated[currentPlayerIndex]!.intelCount ?? 0) - 1
+          }
+          return updated
+        })
+
+        exploreHex(targetHex)
+        addEvent(`${player.name} used intel to scout ${targetHex}`, 'action')
         break
       }
 
