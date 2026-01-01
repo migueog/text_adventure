@@ -279,3 +279,19 @@ export interface CampaignState {
 }
 
 export type ActionType = 'scout' | 'resupply' | 'search' | 'encamp' | 'demolish'
+
+// WHY: Issue #51 - Victory tie-breaking system
+// Defines a single tie-breaking criterion with name and getter function
+export interface TieBreakerCriterion {
+  name: string                            // Display name (e.g., "Most Campaign Points")
+  getter: (player: Player) => number      // Function to extract stat value from player
+}
+
+// WHY: Issue #51 - Result of tie-breaking resolution
+// Contains winners, which tie-breaker was used, and eliminated players for UI display
+export interface TieBreakerResult {
+  winners: Player[]                       // One or more winners (multiple if ultimate tie)
+  tieBreaker: string | null               // Name of tie-breaker used (null if no tie or shared)
+  eliminatedPlayers: Player[]             // Players eliminated during resolution
+  tieBreakerValues?: Record<number, number>  // Optional: tie-breaker values for tooltips
+}

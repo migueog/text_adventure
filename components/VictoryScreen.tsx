@@ -4,6 +4,7 @@ import type { Player, Hex } from '@/types/campaign'
 import { VICTORY_CATEGORIES } from '@/lib/data/campaignData'
 import { calculateTotalHexesExplored, calculateTotalBattles, generateNarrativeSummary } from '@/lib/utils/campaignStatistics'
 import { calculateHeadhunterScore } from '@/lib/utils/operativeKills'  // WHY: Issue #50 - Calculate wound-based score
+import { resolveTie, getTiedPlayers } from '@/lib/utils/tieBreaker'  // WHY: Issue #51 - Tie-breaking system
 
 interface VictoryScreenProps {
   players: Player[]
@@ -22,11 +23,22 @@ interface CategoryResult {
   stat: string
   winner: Player
   standings: Player[]
+  tieBreaker?: string | null      // WHY: Issue #51 - Name of tie-breaker used (null if shared)
+  tiedPlayers?: Player[]          // WHY: Issue #51 - Players tied at top for UI display
+  sharedWin?: boolean             // WHY: Issue #51 - True if ultimate tie (shared victory)
 }
 
 interface OverallScore {
   player: Player
   points: number
+}
+
+// WHY: Issue #51 - Helper to get stat value (handles calculated stats like headhunterScore)
+function getStatValue(player: Player, stat: string): number {
+  if (stat === 'headhunterScore') {
+    return calculateHeadhunterScore(player)
+  }
+  return (player as any)[stat] || 0
 }
 
 export default function VictoryScreen({
@@ -38,27 +50,40 @@ export default function VictoryScreen({
   onRestart,
   onExport
 }: VictoryScreenProps) {
-  // Calculate winners for each category
+  // WHY: Issue #51 - Calculate winners for each category with tie-breaking
   const results: CategoryResult[] = VICTORY_CATEGORIES.map(category => {
+    // WHY: Sort players by category stat (descending)
     const sorted = [...players].sort((a, b) => {
-      // WHY: Issue #50 - Handle calculated stats like headhunterScore
-      let aStat: number
-      let bStat: number
-
-      if (category.stat === 'headhunterScore') {
-        aStat = calculateHeadhunterScore(a)
-        bStat = calculateHeadhunterScore(b)
-      } else {
-        aStat = (a as any)[category.stat] || 0
-        bStat = (b as any)[category.stat] || 0
-      }
-
+      const aStat = getStatValue(a, category.stat)
+      const bStat = getStatValue(b, category.stat)
       return bStat - aStat
     })
+
+    // WHY: Issue #51 - Check if top players are tied and apply tie-breaking
+    const topPlayers = getTiedPlayers(sorted, p => getStatValue(p, category.stat))
+
+    let tieBreaker: string | null = null
+    let winner: Player
+    let sharedWin = false
+
+    if (topPlayers.length > 1) {
+      // WHY: Multiple players tied - apply tie-breaking algorithm
+      const result = resolveTie(topPlayers, p => getStatValue(p, category.stat))
+      winner = result.winners[0]
+      tieBreaker = result.tieBreaker
+      sharedWin = result.winners.length > 1
+    } else {
+      // WHY: No tie - single winner
+      winner = sorted[0]
+    }
+
     return {
       ...category,
-      winner: sorted[0] as Player,
-      standings: sorted
+      winner,
+      standings: sorted,
+      tieBreaker,
+      tiedPlayers: topPlayers,
+      sharedWin
     }
   })
 
@@ -151,14 +176,34 @@ export default function VictoryScreen({
                   className="category-winner"
                   style={{ color: result.winner.color }}
                 >
-                  {result.winner.name}
+                  {/* WHY: Issue #51 - Show "(Shared)" prefix for shared victories */}
+                  {result.sharedWin ? '(Shared) ' : ''}{result.winner.name}
                 </div>
                 <div className="category-value">
-                  {/* WHY: Issue #50 - Show calculated score for headhunterScore */}
-                  {result.stat === 'headhunterScore'
-                    ? calculateHeadhunterScore(result.winner)
-                    : (result.winner as any)[result.stat]}
+                  {/* WHY: Issue #50/#51 - Show calculated score for headhunterScore */}
+                  {getStatValue(result.winner, result.stat)}
                 </div>
+
+                {/* WHY: Issue #51 - Display tie-breaker information when tie exists */}
+                {result.tieBreaker && (
+                  <div className="tie-breaker-info">
+                    <div className="tie-breaker-label">Tie-breaker:</div>
+                    <div className="tie-breaker-text">{result.tieBreaker}</div>
+                    <div className="tied-players">
+                      Tied with: {result.tiedPlayers
+                        ?.filter(p => p.id !== result.winner.id)
+                        .map(p => p.name)
+                        .join(', ')}
+                    </div>
+                  </div>
+                )}
+
+                {/* WHY: Issue #51 - Display shared victory notice for ultimate ties */}
+                {result.sharedWin && (
+                  <div className="shared-win-notice">
+                    All tie-breakers equal - shared victory
+                  </div>
+                )}
               </div>
             ))}
           </div>

@@ -1323,6 +1323,44 @@ input, select {
   color: var(--accent-yellow);
 }
 
+/* WHY: Issue #51 - Tie-breaker display styles */
+.tie-breaker-info {
+  margin-top: 0.5rem;
+  padding: 0.5rem;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 4px;
+  font-size: 0.85rem;
+}
+
+.tie-breaker-label {
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: 0.25rem;
+}
+
+.tie-breaker-text {
+  color: var(--accent-color);
+  font-weight: 500;
+}
+
+.tied-players {
+  margin-top: 0.25rem;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.shared-win-notice {
+  margin-top: 0.5rem;
+  padding: 0.5rem;
+  background: rgba(255, 215, 0, 0.1);
+  border: 1px solid rgba(255, 215, 0, 0.3);
+  border-radius: 4px;
+  font-size: 0.85rem;
+  color: gold;
+  text-align: center;
+}
+
 .final-standings {
   margin-bottom: 2rem;
 }
