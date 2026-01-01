@@ -73,6 +73,7 @@ export type CampRule = 'FORBIDDEN' | 'DANGEROUS' | 'ALLOWED'
 export interface HexState {
   supplyCount?: number          // WHY: Remaining SP for depleting locations (Abandoned Camp, Resource Stockpile)
   intelGained?: boolean         // WHY: Track if intel reward already claimed (Intelligence Cache)
+  intelRemaining?: number       // WHY: Remaining intel at Intel Cache (D6 on discovery, depletes on search) (Issue #59)
   portalDestination?: string    // WHY: Linked hex ID for portal locations
   beastLairActive?: boolean     // WHY: Track if Beast Lair threat is still active
 }
@@ -215,6 +216,7 @@ export interface Player {
   searchedHexes: string[]  // WHY: Track which hexes this player has searched (one-time use)
   battleHistory: ExtendedBattleRecord[]  // WHY: Extended battle history with details for Issue #34
   hasDimensionalKey?: boolean  // WHY: Track if player has the unique Dimensional Key (Issue #59)
+  intelCount?: number  // WHY: Track intel available for free scouts (Issue #59)
 }
 
 // WHY: Track warning level for approaching campaign end (1-2 levels from target)
