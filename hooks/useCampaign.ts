@@ -24,6 +24,12 @@ import { determineActiveCondition, getKillzoneRecommendation } from '@/lib/utils
 import { createMissingPlayerRecords } from '@/lib/utils/battleRewards'
 import { detectActiveThreatPhaseRules, sortByPriority, hasActiveRules } from '@/lib/utils/threatPhaseRules'
 import {
+  findPlayersInBeastRange,
+  resolveBeastAttack,
+  getValidPrisonerMoves,
+  resolvePrisonerAttack
+} from '@/lib/utils/threatPhaseAttacks'
+import {
   getExploredLocationIds,
   getExploredConditionIds,
   rollWithRerolls,
@@ -341,6 +347,55 @@ export function useCampaign() {
     setActiveThreatRules([])
     return resolutions
   }, [detectThreatRules, currentRound, increaseThreat, addEvent])
+
+  /**
+   * Resolve Beast Lair and Released Prisoner attacks during Threat Phase
+   * WHY: Threat phase attacks resolve AFTER location rules but BEFORE standard threat increase (Issue #59)
+   */
+  const resolveThreatPhaseAttacks = useCallback((): void => {
+    // Find all active Beast Lairs
+    const beastLairs = Object.values(hexes).filter(hex =>
+      hex.location === 23 && hex.state?.beastLairActive !== false
+    )
+
+    // Resolve each Beast Lair attack
+    for (const beastLair of beastLairs) {
+      const playersInRange = findPlayersInBeastRange(beastLair.id, players, hexes)
+
+      if (playersInRange.length > 0) {
+        const { targetPlayerId, damage, roll } = resolveBeastAttack(playersInRange, beastLair.id, hexes)
+
+        if (targetPlayerId !== -1) {
+          setPlayers(prevPlayers => {
+            const updatedPlayers = [...prevPlayers]
+            const targetIndex = updatedPlayers.findIndex(p => p.id === targetPlayerId)
+
+            if (targetIndex !== -1) {
+              const target = updatedPlayers[targetIndex]!
+              const newSP = clampSP(target.supplyPoints - damage)
+
+              updatedPlayers[targetIndex] = {
+                ...target,
+                supplyPoints: newSP
+              }
+            }
+
+            return updatedPlayers
+          })
+
+          const target = players.find(p => p.id === targetPlayerId)
+          addEvent(`Beast Lair attacks ${target?.name}! (Roll: ${roll}, Damage: ${damage} SP)`, 'warning')
+        }
+      }
+    }
+
+    // TODO: Released Prisoner movement and attacks (requires UI for player movement choice)
+    // For each active prisoner in releasedPrisoners array:
+    // 1. Player chooses movement path (UI modal needed)
+    // 2. Call resolvePrisonerAttack() for target hex
+    // 3. Update player SP, remove camps, potentially remove prisoner
+    // This will be implemented in Phase 1 UI integration step
+  }, [players, hexes, releasedPrisoners, addEvent])
 
   /**
    * Check if there are active threat phase rules to resolve
