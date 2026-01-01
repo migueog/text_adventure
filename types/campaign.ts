@@ -219,6 +219,18 @@ export interface Player {
 // WHY: Track warning level for approaching campaign end (1-2 levels from target)
 export type ThreatWarningLevel = 'none' | 'moderate' | 'critical'
 
+/**
+ * WHY: Track Released Prisoner entity state (Issue #59)
+ * Released Prisoner is spawned when camping at Hyperfractal Gaol (TL32)
+ * Moves and attacks during Threat Phase
+ */
+export interface ReleasedPrisonerEntity {
+  active: boolean                 // WHY: Is prisoner currently on the map?
+  currentHexId: string           // WHY: Which hex is prisoner currently in?
+  controllingPlayerId: number    // WHY: Which player controls prisoner movement?
+  movedThisRound: boolean        // WHY: Track if prisoner moved this round
+}
+
 export interface Event {
   type: 'system' | 'movement' | 'exploration' | 'reward' | 'action' | 'battle' | 'warning' | 'error'
   icon: string

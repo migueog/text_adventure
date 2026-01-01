@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useCallback, useEffect, useRef } from 'react'
-import type { Player, Hex, MapConfig, Event, HexPosition, EncampOptions, ThreatWarningLevel, BattleResult, ActiveThreatPhaseRule, ThreatPhaseRuleResolution } from '@/types/campaign'
+import type { Player, Hex, MapConfig, Event, HexPosition, EncampOptions, ThreatWarningLevel, BattleResult, ActiveThreatPhaseRule, ThreatPhaseRuleResolution, ReleasedPrisonerEntity } from '@/types/campaign'
 import type { ExtendedBattleRecord } from '@/types/battle'
 import {
   MAP_CONFIGS,
@@ -154,6 +154,10 @@ export function useCampaign() {
   // Rules must resolve before standard +1 threat increase
   const [activeThreatRules, setActiveThreatRules] = useState<ActiveThreatPhaseRule[]>([])
   const [threatRulesResolved, setThreatRulesResolved] = useState(false)
+
+  // WHY: Track Released Prisoner entities for Issue #59
+  // Prisoners spawn when camping at Hyperfractal Gaol (TL32), move and attack during Threat Phase
+  const [releasedPrisoners, setReleasedPrisoners] = useState<ReleasedPrisonerEntity[]>([])
 
   // WHY: Use refs to avoid stale closure issues in callbacks
   // Refs are updated synchronously in setState callbacks, not via useEffect
