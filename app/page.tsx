@@ -196,6 +196,10 @@ export default function Home() {
             onOpponentSelect={campaign.setSelectedOpponentId}
             getActiveBattleCondition={campaign.getActiveBattleCondition}
             onRecordMissingPlayer={campaign.recordMissingPlayer}
+            activeThreatRules={campaign.detectThreatRules()}
+            threatRulesResolved={campaign.threatRulesResolved}
+            onResolveThreatRules={campaign.resolveThreatPhaseLocationRules}
+            checkForThreatRules={campaign.checkForThreatRules}
           />
           <HexDetails
             hex={campaign.selectedHex ? campaign.hexes[campaign.selectedHex] : undefined}

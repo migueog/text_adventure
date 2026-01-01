@@ -10,6 +10,43 @@ export type SearchRule =
   | { type: 'both', sp: 'd3' | 'd3+1' | number, cp: number }
   | null  // WHY: null means no search available at this location
 
+// WHY: Define threat phase rule types for location-based effects during Threat Phase
+// These effects resolve BEFORE the standard +1 threat increase each round
+export type ThreatPhaseRuleType = 'sp_gain' | 'sp_penalty' | 'cp_gain' | 'threat_increase'
+
+// WHY: Some effects target only the player in the hex, others affect all players in that hex
+export type ThreatPhaseRuleTarget = 'player_in_hex' | 'all_in_hex'
+
+// WHY: Structured rule definition for location-based Threat Phase effects
+export interface ThreatPhaseRule {
+  type: ThreatPhaseRuleType
+  amount: number
+  target: ThreatPhaseRuleTarget
+  description: string  // Human-readable effect for UI display
+}
+
+// WHY: Track active rules with player/hex context for sequential resolution
+// Used during Threat Phase to show and resolve location rules in priority order
+export interface ActiveThreatPhaseRule {
+  player: Player
+  hexId: string
+  location: Location
+  rule: ThreatPhaseRule
+  priority: number
+}
+
+// WHY: Result of resolving a threat phase rule for event logging and UI feedback
+export interface ThreatPhaseRuleResolution {
+  playerId: number
+  playerName: string
+  locationName: string
+  hexId: string
+  effect: string
+  spChange?: number
+  cpChange?: number
+  threatChange?: number
+}
+
 // WHY: Rich result object for UI display and logging
 export interface SearchResult {
   success: boolean
@@ -26,6 +63,7 @@ export interface Location {
   value?: number | string
   modifier?: number
   searchRule: SearchRule  // WHY: One-time search reward for this location
+  threatPhaseRule?: ThreatPhaseRule | null  // WHY: Optional rule that triggers during Threat Phase
 }
 
 export interface Condition {

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useMemo } from 'react'
-import type { Player, Hex, SearchRule, HexPosition, ThreatWarningLevel } from '@/types/campaign'
+import type { Player, Hex, SearchRule, HexPosition, ThreatWarningLevel, ActiveThreatPhaseRule } from '@/types/campaign'
 import { PHASES, SURFACE_LOCATIONS, TOMB_LOCATIONS, SURFACE_CONDITIONS, TOMB_CONDITIONS } from '@/lib/data/campaignData'
 import { hexDistance, hexId, isPlayerInBlockedHex } from '@/lib/utils/hexUtils'
 import type { ExtendedBattleRecord } from '@/types/battle'
@@ -49,6 +49,11 @@ interface PhaseTrackerProps {
   } | null
   // WHY: Issue #41 - Missing player handling
   onRecordMissingPlayer?: (presentPlayerId: number, absentPlayerId: number) => void
+  // WHY: Issue #48 - Threat Phase location rules
+  activeThreatRules?: ActiveThreatPhaseRule[]
+  threatRulesResolved?: boolean
+  onResolveThreatRules?: () => void
+  checkForThreatRules?: () => boolean
 }
 
 interface MovementOption {
@@ -184,7 +189,11 @@ export default function PhaseTracker({
   onConditionEnabledChange,
   onOpponentSelect,
   getActiveBattleCondition,
-  onRecordMissingPlayer
+  onRecordMissingPlayer,
+  activeThreatRules,
+  threatRulesResolved,
+  onResolveThreatRules,
+  checkForThreatRules
 }: PhaseTrackerProps) {
   const [moveTarget, setMoveTarget] = useState<Hex | null>(null)
   // WHY: Issue #41 - Missing player modal state
@@ -737,34 +746,67 @@ export default function PhaseTracker({
         {currentPhaseIndex === 3 && (
           <div className="threat-phase">
             <h4>Threat Phase</h4>
-            <p>The tomb stirs...</p>
 
-            <div className="threat-info">
-              <p>
-                Current Threat Level: <strong>{threatLevel}</strong>
-              </p>
-              <p>
-                At the end of this phase, threat will increase and the next
-                player&apos;s turn will begin.
-              </p>
-              {currentPlayer.id === players.length - 1 && (
-                <p className="warning">
-                  This is the last player - threat will increase after this turn!
-                </p>
-              )}
-            </div>
-
-            {threatWarning !== 'none' && (
-              <div className={`threat-phase-warning ${threatWarning}`}>
-                {threatWarning === 'critical'
-                  ? '⚠️ CRITICAL: Campaign ending next round!'
-                  : '⚠️ WARNING: Approaching campaign end'}
+            {/* Location Rules Section - shows when rules exist and not yet resolved */}
+            {activeThreatRules && activeThreatRules.length > 0 && !threatRulesResolved && (
+              <div className="threat-location-rules">
+                <h5>Location Rules Resolving</h5>
+                <p>The following location effects trigger in priority order:</p>
+                <ol className="location-rule-list">
+                  {activeThreatRules.map((rule, index) => (
+                    <li key={`${rule.player.id}-${rule.hexId}`} className="location-rule-item">
+                      <span
+                        className="player-indicator"
+                        style={{ backgroundColor: rule.player.color }}
+                      />
+                      <span className="player-name">{rule.player.name}</span>
+                      <span className="location-name">({rule.location.name})</span>
+                      <span className="rule-effect">{rule.rule.description}</span>
+                    </li>
+                  ))}
+                </ol>
+                <button
+                  className="action-btn primary"
+                  onClick={onResolveThreatRules}
+                >
+                  Resolve Location Rules
+                </button>
               </div>
             )}
 
-            <button className="action-btn primary" onClick={onNextPhase}>
-              End Turn
-            </button>
+            {/* Standard threat phase content - shows after rules resolved or no rules */}
+            {(!activeThreatRules || activeThreatRules.length === 0 || threatRulesResolved) && (
+              <>
+                <p>The tomb stirs...</p>
+
+                <div className="threat-info">
+                  <p>
+                    Current Threat Level: <strong>{threatLevel}</strong>
+                  </p>
+                  <p>
+                    At the end of this phase, threat will increase and the next
+                    player&apos;s turn will begin.
+                  </p>
+                  {currentPlayer.id === players.length - 1 && (
+                    <p className="warning">
+                      This is the last player - threat will increase after this turn!
+                    </p>
+                  )}
+                </div>
+
+                {threatWarning !== 'none' && (
+                  <div className={`threat-phase-warning ${threatWarning}`}>
+                    {threatWarning === 'critical'
+                      ? '⚠️ CRITICAL: Campaign ending next round!'
+                      : '⚠️ WARNING: Approaching campaign end'}
+                  </div>
+                )}
+
+                <button className="action-btn primary" onClick={onNextPhase}>
+                  End Turn
+                </button>
+              </>
+            )}
           </div>
         )}
       </div>

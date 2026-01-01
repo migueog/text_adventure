@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useCallback, useEffect, useRef } from 'react'
-import type { Player, Hex, MapConfig, Event, HexPosition, EncampOptions, ThreatWarningLevel, BattleResult } from '@/types/campaign'
+import type { Player, Hex, MapConfig, Event, HexPosition, EncampOptions, ThreatWarningLevel, BattleResult, ActiveThreatPhaseRule, ThreatPhaseRuleResolution } from '@/types/campaign'
 import type { ExtendedBattleRecord } from '@/types/battle'
 import {
   MAP_CONFIGS,
@@ -22,6 +22,7 @@ import { calculateResupply } from '@/lib/utils/resupply'
 import { resolveSearchRule, canPerformSearch } from '@/lib/utils/search'
 import { determineActiveCondition, getKillzoneRecommendation } from '@/lib/utils/battleCondition'
 import { createMissingPlayerRecords } from '@/lib/utils/battleRewards'
+import { detectActiveThreatPhaseRules, sortByPriority, hasActiveRules } from '@/lib/utils/threatPhaseRules'
 import type { ActiveBattleCondition, KillzoneRecommendation } from '@/types/battleCondition'
 
 // Constants for SP management
@@ -143,6 +144,11 @@ export function useCampaign() {
   const [conditionEnabled, setConditionEnabled] = useState(true)
   const [selectedOpponentId, setSelectedOpponentId] = useState<number | null>(null)
 
+  // WHY: Track threat phase location rules for Issue #48
+  // Rules must resolve before standard +1 threat increase
+  const [activeThreatRules, setActiveThreatRules] = useState<ActiveThreatPhaseRule[]>([])
+  const [threatRulesResolved, setThreatRulesResolved] = useState(false)
+
   // WHY: Use refs to avoid stale closure issues in callbacks
   // Refs are updated synchronously in setState callbacks, not via useEffect
   const currentRoundRef = useRef(currentRound)
@@ -212,6 +218,127 @@ export function useCampaign() {
     setGameEnded(false) // Re-open the game
     addEvent('Campaign extended beyond target threat level', 'system')
   }, [addEvent])
+
+  /**
+   * Detect active threat phase location rules for current game state
+   * WHY: Identifies which players have location rules that trigger this Threat Phase
+   */
+  const detectThreatRules = useCallback((): ActiveThreatPhaseRule[] => {
+    const rules = detectActiveThreatPhaseRules(players, hexes)
+    return sortByPriority(rules, players)
+  }, [players, hexes])
+
+  /**
+   * Resolve all threat phase location rules in priority order
+   * WHY: Location rules resolve BEFORE standard threat increase per game rules
+   * Returns array of resolutions for UI display/logging
+   */
+  const resolveThreatPhaseLocationRules = useCallback((): ThreatPhaseRuleResolution[] => {
+    const sortedRules = detectThreatRules()
+
+    if (sortedRules.length === 0) {
+      setThreatRulesResolved(true)
+      return []
+    }
+
+    const resolutions: ThreatPhaseRuleResolution[] = []
+
+    setPlayers(prevPlayers => {
+      const updatedPlayers = [...prevPlayers]
+
+      for (const activeRule of sortedRules) {
+        const { player, location, rule, hexId: ruleHexId } = activeRule
+        const playerIndex = updatedPlayers.findIndex(p => p.id === player.id)
+        if (playerIndex === -1) continue
+
+        const currentPlayer = updatedPlayers[playerIndex]!
+        let spChange = 0
+        let cpChange = 0
+        let threatChange = 0
+
+        // Calculate effect based on rule type
+        switch (rule.type) {
+          case 'sp_gain':
+            spChange = rule.amount
+            break
+          case 'sp_penalty':
+            spChange = -rule.amount
+            break
+          case 'cp_gain':
+            cpChange = rule.amount
+            break
+          case 'threat_increase':
+            threatChange = rule.amount
+            break
+        }
+
+        // Apply SP/CP changes to player
+        if (spChange !== 0 || cpChange !== 0) {
+          const newSP = clampSP(currentPlayer.supplyPoints + spChange)
+          const newCP = currentPlayer.campaignPoints + cpChange
+
+          // Update history
+          const newHistory = addHistoryEntry(
+            currentPlayer,
+            currentRound,
+            'Threat',
+            spChange,
+            cpChange,
+            `${location.name}: ${rule.description}`
+          )
+
+          updatedPlayers[playerIndex] = {
+            ...currentPlayer,
+            supplyPoints: newSP,
+            campaignPoints: newCP,
+            history: newHistory
+          }
+        }
+
+        // Apply threat change (via centralized function outside the setter)
+        if (threatChange > 0) {
+          // Defer threat increase to after players update
+          setTimeout(() => {
+            increaseThreat(threatChange, location.name)
+          }, 0)
+        }
+
+        // Build resolution for logging
+        const resolution: ThreatPhaseRuleResolution = {
+          playerId: player.id,
+          playerName: player.name,
+          locationName: location.name,
+          hexId: ruleHexId,
+          effect: rule.description,
+          spChange: spChange !== 0 ? spChange : undefined,
+          cpChange: cpChange !== 0 ? cpChange : undefined,
+          threatChange: threatChange !== 0 ? threatChange : undefined
+        }
+        resolutions.push(resolution)
+
+        // Log the resolution
+        const changeText = spChange > 0 ? `gained ${spChange} SP` :
+          spChange < 0 ? `lost ${Math.abs(spChange)} SP` :
+          cpChange > 0 ? `gained ${cpChange} CP` :
+          threatChange > 0 ? `increased threat by ${threatChange}` : rule.description
+        addEvent(`${player.name} at ${location.name}: ${changeText}`, 'action')
+      }
+
+      return updatedPlayers
+    })
+
+    setThreatRulesResolved(true)
+    setActiveThreatRules([])
+    return resolutions
+  }, [detectThreatRules, currentRound, increaseThreat, addEvent])
+
+  /**
+   * Check if there are active threat phase rules to resolve
+   * WHY: Allows UI to conditionally show location rules section
+   */
+  const checkForThreatRules = useCallback((): boolean => {
+    return hasActiveRules(players, hexes)
+  }, [players, hexes])
 
   const startGame = useCallback((numPlayers: number, isSolo = false) => {
     const config = MAP_CONFIGS[numPlayers] || MAP_CONFIGS[4]
@@ -1178,6 +1305,7 @@ export function useCampaign() {
         currentPhaseRef.current = 0  // WHY: Update ref BEFORE setState
         setCurrentPhase(0)
         setBattleCompleted(false) // Reset for next player
+        setThreatRulesResolved(false) // WHY: Reset for next player's threat phase
         const nextPlayer = currentPlayers[newIndex]
         if (nextPlayer) {
           addEvent(`${nextPlayer.name}'s turn`, 'system')
@@ -1198,6 +1326,7 @@ export function useCampaign() {
         setCurrentPlayerIndex(0)
         setCurrentPhase(0)
         setBattleCompleted(false) // Reset for new round
+        setThreatRulesResolved(false) // WHY: Reset for next round's threat phase rules
 
         // WHY: Recalculate priority for new round (CP/SP may have changed)
         const newOrder = calculateMovementOrder()
@@ -1436,6 +1565,8 @@ export function useCampaign() {
     actionIndex,
     conditionEnabled,
     selectedOpponentId,
+    activeThreatRules,
+    threatRulesResolved,
 
     // Setters
     setPlayerCount,
@@ -1466,5 +1597,8 @@ export function useCampaign() {
     calculateMovementOrder,
     advanceActionTurn,
     getActiveBattleCondition,
+    detectThreatRules,
+    resolveThreatPhaseLocationRules,
+    checkForThreatRules,
   }
 }

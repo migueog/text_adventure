@@ -1,5 +1,42 @@
 // D36 = D3 for tens digit + D6 for units digit (11-36)
-import { Location, Condition, MapConfig } from '@/types/campaign'
+import { Location, Condition, MapConfig, ThreatPhaseRule } from '@/types/campaign'
+
+// WHY: Pre-defined threat phase rules for locations that have effects during Threat Phase
+// Most locations have no threat phase rule - only dangerous or beneficial locations do
+const THREAT_PHASE_RULES: Record<string, ThreatPhaseRule> = {
+  // Tomb locations - dangerous, often increase threat
+  stasisChamber: {
+    type: 'threat_increase',
+    amount: 1,
+    target: 'player_in_hex',
+    description: 'Necrons stir - threat increases by 1'
+  },
+  canoptekNest: {
+    type: 'sp_penalty',
+    amount: 1,
+    target: 'all_in_hex',
+    description: 'Scarabs drain resources - all players in hex lose 1 SP'
+  },
+  scarabSwarm: {
+    type: 'sp_penalty',
+    amount: 1,
+    target: 'player_in_hex',
+    description: 'Constant scarab damage - lose 1 SP'
+  },
+  // Surface locations - some provide shelter
+  abandonedCamp: {
+    type: 'sp_gain',
+    amount: 1,
+    target: 'player_in_hex',
+    description: 'Shelter provides rest - gain 1 SP'
+  },
+  tombEntrance: {
+    type: 'threat_increase',
+    amount: 1,
+    target: 'player_in_hex',
+    description: 'Gateway stirs the tomb - threat increases by 1'
+  }
+}
 
 export const SURFACE_LOCATIONS: Record<number, Location> = {
   11: { name: 'Landing Site', description: 'A suitable area for establishing a forward base. Encamping here costs 0 SP.', effect: 'freeEncamp', searchRule: null },
@@ -12,29 +49,29 @@ export const SURFACE_LOCATIONS: Record<number, Location> = {
   22: { name: 'Ice Cavern', description: 'A natural cave system. Provides shelter but nothing else.', effect: 'none', searchRule: null },
   23: { name: 'Thermal Vent', description: 'Geothermal activity warms this area. Resupply gains +1 SP here.', effect: 'bonusResupply', searchRule: null },
   24: { name: 'Relay Station', description: 'Communications equipment. Gain 1 CP when explored.', effect: 'gainCP', value: 1, searchRule: { type: 'cp', amount: 1 } },
-  25: { name: 'Abandoned Camp', description: 'Previous explorers left in a hurry. Gain 2 SP when first explored.', effect: 'gainSP', value: 2, searchRule: { type: 'sp', amount: 2 } },
+  25: { name: 'Abandoned Camp', description: 'Previous explorers left in a hurry. Gain 2 SP when first explored.', effect: 'gainSP', value: 2, searchRule: { type: 'sp', amount: 2 }, threatPhaseRule: THREAT_PHASE_RULES.abandonedCamp },
   26: { name: 'Xenos Remains', description: 'Ancient alien corpses frozen in ice. Gain 1 CP for the discovery.', effect: 'gainCP', value: 1, searchRule: { type: 'cp', amount: 2 } },
   31: { name: 'Empty Plains', description: 'Featureless terrain stretching to the horizon.', effect: 'none', searchRule: null },
   32: { name: 'Burial Mound', description: 'Strange markings hint at what lies beneath. Search to gain 1 CP.', effect: 'searchCP', searchRule: { type: 'cp', amount: 1 } },
   33: { name: 'Frozen Lake', description: 'Thick ice covers unknown depths.', effect: 'none', searchRule: null },
   34: { name: 'Ruined Structure', description: 'Ancient architecture barely visible. Gain 1 CP when explored.', effect: 'gainCP', value: 1, searchRule: { type: 'cp', amount: 1 } },
   35: { name: 'Equipment Depot', description: 'Military supplies left behind. Gain D3+1 SP when first explored.', effect: 'gainSP', value: 'D3+1', searchRule: { type: 'sp', amount: 'd3' } },
-  36: { name: 'Tomb Entrance', description: 'A passage leading down into darkness. This hex connects to the tomb.', effect: 'tombEntrance', searchRule: null }
+  36: { name: 'Tomb Entrance', description: 'A passage leading down into darkness. This hex connects to the tomb.', effect: 'tombEntrance', searchRule: null, threatPhaseRule: THREAT_PHASE_RULES.tombEntrance }
 }
 
 export const TOMB_LOCATIONS: Record<number, Location> = {
-  11: { name: 'Stasis Chamber', description: 'Rows of dormant Necrons. Disturbing them would be unwise. Nothing of value.', effect: 'none', searchRule: null },
+  11: { name: 'Stasis Chamber', description: 'Rows of dormant Necrons. Disturbing them would be unwise. Nothing of value.', effect: 'none', searchRule: null, threatPhaseRule: THREAT_PHASE_RULES.stasisChamber },
   12: { name: 'Power Conduit', description: 'Glowing energy flows through crystalline tubes. Gain 1 CP when explored.', effect: 'gainCP', value: 1, searchRule: { type: 'cp', amount: 1 } },
   13: { name: 'Astral Augury', description: 'Strange devices project star maps. Gain 2 CP when explored.', effect: 'gainCP', value: 2, searchRule: { type: 'cp', amount: 2 } },
-  14: { name: 'Canoptek Nest', description: 'Repair scarabs swarm here. Dangerous but nothing to salvage.', effect: 'none', searchRule: null },
+  14: { name: 'Canoptek Nest', description: 'Repair scarabs swarm here. Dangerous but nothing to salvage.', effect: 'none', searchRule: null, threatPhaseRule: THREAT_PHASE_RULES.canoptekNest },
   15: { name: 'Transtechnic Fulcrum', description: 'Reality bends around this device. Gain D3 CP when explored.', effect: 'gainCP', value: 'D3', searchRule: { type: 'cp', amount: 2 } },
   16: { name: 'Resurrection Orb', description: 'A glowing sphere of immense power. Gain 3 CP when explored.', effect: 'gainCP', value: 3, searchRule: { type: 'both', sp: 2, cp: 3 } },
   21: { name: 'Empty Corridor', description: 'Featureless metal walls stretch endlessly.', effect: 'none', searchRule: null },
   22: { name: 'Data Repository', description: 'Banks of alien technology store unknown information. Gain 1 CP when explored.', effect: 'gainCP', value: 1, searchRule: { type: 'cp', amount: 2 } },
-  23: { name: 'Scarab Swarm', description: 'Tiny constructs cover every surface. Search at your peril.', effect: 'none', searchRule: null },
+  23: { name: 'Scarab Swarm', description: 'Tiny constructs cover every surface. Search at your peril.', effect: 'none', searchRule: null, threatPhaseRule: THREAT_PHASE_RULES.scarabSwarm },
   24: { name: 'Trophy Hall', description: 'Displays of conquered species. Disturbing but informative. Gain 1 CP.', effect: 'gainCP', value: 1, searchRule: { type: 'cp', amount: 2 } },
   25: { name: 'Energy Cache', description: 'Stored power cells. Gain D3 SP when first explored.', effect: 'gainSP', value: 'D3', searchRule: { type: 'sp', amount: 'd3' } },
-  26: { name: 'Null Field', description: 'Technology fails here. No special effects apply in this hex.', effect: 'nullField', searchRule: null },
+  26: { name: 'Null Field', description: 'Technology fails here. No special effects apply in this hex.', effect: 'nullField', searchRule: null, threatPhaseRule: null },
   31: { name: 'Silent Hall', description: 'The darkness seems to absorb all sound.', effect: 'none', searchRule: null },
   32: { name: 'Cryptek Workshop', description: 'Tools of impossible science. Gain 2 CP when explored.', effect: 'gainCP', value: 2, searchRule: { type: 'both', sp: 'd3', cp: 2 } },
   33: { name: 'Dimensional Rift', description: 'Space folds strangely here. Movement from this hex costs 0 SP.', effect: 'freeMovement', searchRule: null },
