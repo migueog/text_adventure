@@ -54,6 +54,9 @@ interface PhaseTrackerProps {
   threatRulesResolved?: boolean
   onResolveThreatRules?: () => void
   checkForThreatRules?: () => boolean
+  // WHY: Issue #59 - Threat Phase attacks (Beast Lair, Released Prisoner)
+  hasActiveThreatAttacks?: boolean
+  onResolveThreatAttacks?: () => void
 }
 
 interface MovementOption {
@@ -193,7 +196,9 @@ export default function PhaseTracker({
   activeThreatRules,
   threatRulesResolved,
   onResolveThreatRules,
-  checkForThreatRules
+  checkForThreatRules,
+  hasActiveThreatAttacks,
+  onResolveThreatAttacks
 }: PhaseTrackerProps) {
   const [moveTarget, setMoveTarget] = useState<Hex | null>(null)
   // WHY: Issue #41 - Missing player modal state
@@ -774,8 +779,22 @@ export default function PhaseTracker({
               </div>
             )}
 
+            {/* Threat Attacks Section - shows after location rules resolved (Issue #59) */}
+            {hasActiveThreatAttacks && onResolveThreatAttacks && (
+              <div className="threat-attacks-section">
+                <h5>Threat Phase Attacks</h5>
+                <p>Beast Lairs and Released Prisoners may attack during Threat Phase.</p>
+                <button
+                  className="action-btn primary"
+                  onClick={onResolveThreatAttacks}
+                >
+                  Resolve Threat Attacks
+                </button>
+              </div>
+            )}
+
             {/* Standard threat phase content - shows after rules resolved or no rules */}
-            {(!activeThreatRules || activeThreatRules.length === 0 || threatRulesResolved) && (
+            {(!activeThreatRules || activeThreatRules.length === 0 || threatRulesResolved) && !hasActiveThreatAttacks && (
               <>
                 <p>The tomb stirs...</p>
 
