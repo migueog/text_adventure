@@ -214,6 +214,7 @@ export interface Player {
   battleResult: BattleResult | null  // WHY: Current round's battle result (null = no battle this round)
   searchedHexes: string[]  // WHY: Track which hexes this player has searched (one-time use)
   battleHistory: ExtendedBattleRecord[]  // WHY: Extended battle history with details for Issue #34
+  hasDimensionalKey?: boolean  // WHY: Track if player has the unique Dimensional Key (Issue #59)
 }
 
 // WHY: Track warning level for approaching campaign end (1-2 levels from target)

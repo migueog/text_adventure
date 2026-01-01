@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { resolveSearchRule, canPerformSearch } from './search'
-import type { Player, Hex, SearchRule } from '@/types/campaign'
+import { resolveSearchRule, canPerformSearch, providesDimensionalKey, canAcquireKey } from './search'
+import type { Player, Hex, SearchRule, Location } from '@/types/campaign'
 import { SURFACE_LOCATIONS, TOMB_LOCATIONS } from '@/lib/data/campaignData'
 
 // Helper to create test player
@@ -207,5 +207,119 @@ describe('canPerformSearch', () => {
 
     expect(result.canSearch).toBe(false)
     expect(result.reason).toBe('Nothing to search here')
+  })
+})
+
+describe('Dimensional Key acquisition (Issue #59)', () => {
+  describe('providesDimensionalKey', () => {
+    it('should return true for location with DIMENSIONAL_KEY special rule', () => {
+      const location: Location = {
+        name: 'Dimension Matrix',
+        description: 'test',
+        effect: 'test',
+        searchRule: null,
+        specialRules: ['DIMENSIONAL_KEY']
+      }
+
+      expect(providesDimensionalKey(location)).toBe(true)
+    })
+
+    it('should return false for location without DIMENSIONAL_KEY special rule', () => {
+      const location: Location = {
+        name: 'Regular Location',
+        description: 'test',
+        effect: 'test',
+        searchRule: null
+      }
+
+      expect(providesDimensionalKey(location)).toBe(false)
+    })
+
+    it('should return false for location with other special rules', () => {
+      const location: Location = {
+        name: 'Beast Lair',
+        description: 'test',
+        effect: 'test',
+        searchRule: null,
+        specialRules: ['BEAST_LAIR']
+      }
+
+      expect(providesDimensionalKey(location)).toBe(false)
+    })
+
+    it('should return false for location with empty special rules', () => {
+      const location: Location = {
+        name: 'Empty Location',
+        description: 'test',
+        effect: 'test',
+        searchRule: null,
+        specialRules: []
+      }
+
+      expect(providesDimensionalKey(location)).toBe(false)
+    })
+  })
+
+  describe('canAcquireKey', () => {
+    it('should allow first player to acquire key when no one has it', () => {
+      const players: Player[] = [
+        createTestPlayer(0, 5),
+        createTestPlayer(1, 5),
+        createTestPlayer(2, 5)
+      ]
+
+      const result = canAcquireKey(players, 0)
+
+      expect(result.canAcquire).toBe(true)
+      expect(result.reason).toBeUndefined()
+    })
+
+    it('should prevent acquisition if another player already has the key', () => {
+      const player1 = createTestPlayer(0, 5)
+      const player2 = createTestPlayer(1, 5)
+      const player3 = createTestPlayer(2, 5)
+
+      // Player 2 has the key
+      player2.hasDimensionalKey = true
+
+      const players: Player[] = [player1, player2, player3]
+
+      const result = canAcquireKey(players, 0)
+
+      expect(result.canAcquire).toBe(false)
+      expect(result.reason).toBe('Another player already has the Dimensional Key')
+      expect(result.currentHolder).toBe('Player 2')
+    })
+
+    it('should prevent acquisition if searching player already has the key', () => {
+      const player1 = createTestPlayer(0, 5)
+      const player2 = createTestPlayer(1, 5)
+
+      // Player 1 has the key
+      player1.hasDimensionalKey = true
+
+      const players: Player[] = [player1, player2]
+
+      const result = canAcquireKey(players, 0)
+
+      expect(result.canAcquire).toBe(false)
+      expect(result.reason).toBe('You already have the Dimensional Key')
+    })
+
+    it('should allow acquisition after key has been used and returned', () => {
+      const players: Player[] = [
+        createTestPlayer(0, 5),
+        createTestPlayer(1, 5)
+      ]
+
+      // All players have false or undefined for hasDimensionalKey
+      players[0]!.hasDimensionalKey = false
+      players[1]!.hasDimensionalKey = false
+
+      const result = canAcquireKey(players, 1)
+
+      expect(result.canAcquire).toBe(true)
+      expect(result.reason).toBeUndefined()
+    })
   })
 })

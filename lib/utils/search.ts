@@ -1,5 +1,5 @@
 import { rollD3 } from './dice'
-import type { Player, Hex, SearchRule, SearchResult } from '@/types/campaign'
+import type { Player, Hex, SearchRule, SearchResult, Location } from '@/types/campaign'
 import { SURFACE_LOCATIONS, TOMB_LOCATIONS } from '@/lib/data/campaignData'
 
 /**
@@ -116,4 +116,48 @@ export function canPerformSearch(
   }
 
   return { canSearch: true }
+}
+
+/**
+ * Check if location provides Dimensional Key on search (Issue #59)
+ * WHY: Only locations with DIMENSIONAL_KEY special rule provide the key
+ */
+export function providesDimensionalKey(location: Location): boolean {
+  return location.specialRules?.includes('DIMENSIONAL_KEY') ?? false
+}
+
+/**
+ * Validate player can acquire Dimensional Key (Issue #59)
+ * WHY: Only one key exists in the campaign - check no one else has it
+ */
+export function canAcquireKey(
+  players: Player[],
+  searchingPlayerId: number
+): {
+  canAcquire: boolean
+  reason?: string
+  currentHolder?: string
+} {
+  const searchingPlayer = players[searchingPlayerId]
+
+  // WHY: Check if searching player already has it
+  if (searchingPlayer?.hasDimensionalKey === true) {
+    return {
+      canAcquire: false,
+      reason: 'You already have the Dimensional Key'
+    }
+  }
+
+  // WHY: Check if any other player has the key
+  const holder = players.find(p => p.hasDimensionalKey === true)
+
+  if (holder) {
+    return {
+      canAcquire: false,
+      reason: 'Another player already has the Dimensional Key',
+      currentHolder: holder.name
+    }
+  }
+
+  return { canAcquire: true }
 }
