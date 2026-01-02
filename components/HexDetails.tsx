@@ -1,15 +1,16 @@
 'use client'
 
-import type { Hex, Player } from '@/types/campaign'
+import type { Hex, Player, AuditEntry } from '@/types/campaign'
 import { SURFACE_LOCATIONS, TOMB_LOCATIONS, SURFACE_CONDITIONS, TOMB_CONDITIONS } from '@/lib/data/campaignData'
 import { hexId } from '@/lib/utils/hexUtils'
 
 interface HexDetailsProps {
   hex?: Hex
   players: Player[]
+  getHexHistory?: (hexId: string) => AuditEntry[]  // WHY: Optional for backward compatibility (Issue #23 - Phase 3)
 }
 
-export default function HexDetails({ hex, players }: HexDetailsProps) {
+export default function HexDetails({ hex, players, getHexHistory }: HexDetailsProps) {
   if (!hex) {
     return (
       <div className="hex-details">
@@ -24,6 +25,9 @@ export default function HexDetails({ hex, players }: HexDetailsProps) {
     const pIdStr = hexId(p.position.row, p.position.col)
     return pIdStr === hexIdStr
   })
+
+  // WHY: Get audit history for this hex (Issue #23 - Phase 3)
+  const history = getHexHistory ? getHexHistory(hexIdStr) : []
 
   const location = hex.location ? (hex.type === 'surface' ? SURFACE_LOCATIONS[hex.location] : TOMB_LOCATIONS[hex.location]) : null
   const condition = hex.condition ? (hex.type === 'surface' ? SURFACE_CONDITIONS[hex.condition] : TOMB_CONDITIONS[hex.condition]) : null
@@ -115,6 +119,31 @@ export default function HexDetails({ hex, players }: HexDetailsProps) {
                   style={{ backgroundColor: player.color }}
                 >
                   {player.name}
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+
+        {/* WHY: Display hex modification history (Issue #23 - Phase 3) */}
+        {hex.explored && history.length > 0 && (
+          <>
+            <div className="section-divider" />
+            <h4>History</h4>
+            <div className="hex-history">
+              {history.map(entry => (
+                <div key={entry.id} className="history-entry">
+                  <div className="history-header">
+                    <span className="history-round">R{entry.round}</span>
+                    <span className="history-phase">{entry.phase}</span>
+                  </div>
+                  <div className="history-action">
+                    <strong>{entry.playerName}:</strong> {entry.action}
+                  </div>
+                  <div className="history-reason">{entry.reason}</div>
+                  <div className="history-timestamp">
+                    {new Date(entry.timestamp).toLocaleString()}
+                  </div>
                 </div>
               ))}
             </div>

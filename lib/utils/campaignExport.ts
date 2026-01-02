@@ -1,4 +1,4 @@
-import type { Player, Event, Hex } from '@/types/campaign'
+import type { Player, Event, Hex, CampaignAuditLog } from '@/types/campaign'
 
 export interface CampaignExport {
   version: string
@@ -16,6 +16,29 @@ export interface CampaignExport {
     categories: Record<string, string>
     champion: string
   }
+  auditLog?: CampaignAuditLog  // WHY: Optional for backward compatibility (Issue #23 - Phase 3)
+}
+
+/**
+ * WHY: Import validation result with detailed error reporting (Issue #23 - Phase 2)
+ */
+export interface ImportValidationResult {
+  valid: boolean
+  errors: string[]
+  warnings: string[]
+  versionMismatch: boolean
+  currentVersion: string
+  importVersion: string
+}
+
+/**
+ * WHY: Migration result for backward compatibility (Issue #23 - Phase 2)
+ */
+export interface MigrationResult {
+  migrated: boolean
+  fromVersion: string
+  toVersion: string
+  changes: string[]
 }
 
 /**
@@ -31,7 +54,8 @@ export function generateExportData(
   players: Player[],
   events: Event[],
   victoryCategories: Record<string, string>,
-  champion: string
+  champion: string,
+  auditLog?: CampaignAuditLog  // WHY: Optional for backward compatibility (Issue #23 - Phase 3)
 ): CampaignExport {
   return {
     version: '1.0.0',
@@ -48,7 +72,8 @@ export function generateExportData(
     victoryData: {
       categories: victoryCategories,
       champion
-    }
+    },
+    auditLog  // WHY: Include audit trail in export (Issue #23 - Phase 3)
   }
 }
 

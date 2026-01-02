@@ -27,6 +27,18 @@ import { determineActiveCondition, getKillzoneRecommendation } from '@/lib/utils
 import { createMissingPlayerRecords } from '@/lib/utils/battleRewards'
 import { recordOperativeKill } from '@/lib/utils/operativeKills'  // WHY: Issue #50 - Track detailed operative kills
 import { detectActiveThreatPhaseRules, sortByPriority, hasActiveRules } from '@/lib/utils/threatPhaseRules'
+import { validateMapState as validateMapStateUtil } from '@/lib/utils/mapValidation'  // WHY: Issue #23 - Phase 1
+import { importCampaignData, validateImportData } from '@/lib/utils/campaignImport'  // WHY: Issue #23 - Phase 2
+import { migrateCampaignData } from '@/lib/utils/campaignMigrations'  // WHY: Issue #23 - Phase 2
+import type { CampaignExport } from '@/lib/utils/campaignExport'  // WHY: Issue #23 - Phase 2
+import {
+  createHexSnapshot,
+  recordAudit,
+  getHexHistory,
+  getPlayerActions,
+  exportAuditLog
+} from '@/lib/utils/auditTrail'  // WHY: Issue #23 - Phase 3
+import type { CampaignAuditLog, HexSnapshot, AuditActionType } from '@/types/campaign'  // WHY: Issue #23 - Phase 3
 import {
   findPlayersInBeastRange,
   resolveBeastAttack,
@@ -196,6 +208,15 @@ export function useCampaign() {
   const [showHexBlockSelector, setShowHexBlockSelector] = useState(false)
   const [fulcrumHexId, setFulcrumHexId] = useState<string | null>(null)
 
+  // WHY: Campaign import modal state (Issue #23 - Phase 2)
+  const [importModalOpen, setImportModalOpen] = useState(false)
+
+  // WHY: Audit log for tracking hex modifications (Issue #23 - Phase 3)
+  const [auditLog, setAuditLog] = useState<CampaignAuditLog>({
+    entries: [],
+    version: '1.0.0'
+  })
+
   // WHY: Use refs to avoid stale closure issues in callbacks
   // Refs are updated synchronously in setState callbacks, not via useEffect
   const currentRoundRef = useRef(currentRound)
@@ -221,6 +242,38 @@ export function useCampaign() {
     }
     setEventLog(prev => [event, ...prev])
   }, [currentRound, currentPhase])
+
+  /**
+   * Record audit entry for hex modification (Issue #23 - Phase 3)
+   * WHY: Track before/after snapshots for all hex-modifying actions
+   */
+  const addAudit = useCallback((
+    hexId: string,
+    action: AuditActionType,
+    before: HexSnapshot,
+    after: HexSnapshot,
+    reason: string
+  ) => {
+    const player = players[currentPlayerIndex]
+    if (!player) return
+
+    const entry = recordAudit(
+      hexId,
+      action,
+      before,
+      after,
+      player.id,
+      player.name,
+      currentRound,
+      PHASES[currentPhase] || 'Unknown',
+      reason
+    )
+
+    setAuditLog(prev => ({
+      ...prev,
+      entries: [...prev.entries, entry]
+    }))
+  }, [players, currentPlayerIndex, currentRound, currentPhase])
 
   /**
    * Increase threat level with warning updates and event logging
@@ -526,6 +579,9 @@ export function useCampaign() {
       const hex = prev[hexKey]
       if (!hex) return prev
 
+      // WHY: Capture before snapshot for audit trail (Issue #23 - Phase 3)
+      const beforeSnapshot = createHexSnapshot(hex)
+
       // Validate hex can be explored (not blocked, not already explored)
       if (!canExploreHex(hex)) {
         if (hex.type === 'blocked') {
@@ -638,23 +694,28 @@ export function useCampaign() {
         increaseThreat(threatInc, condition.name || 'Tomb exploration')
       }
 
+      // WHY: Create updated hex for after snapshot (Issue #23 - Phase 3)
+      const updatedHex = {
+        ...hex,
+        explored: true,
+        location: locationRoll,
+        condition: conditionRoll,
+        exploredBy: [...hex.exploredBy, currentPlayerIndex],
+        exploredLocation: location.id,
+        exploredCondition: condition.id,
+        state: Object.keys(initialState).length > 0 ? initialState : undefined
+      }
+
+      // WHY: Record audit entry for exploration (Issue #23 - Phase 3)
+      const afterSnapshot = createHexSnapshot(updatedHex)
+      addAudit(hexKey, 'EXPLORE', beforeSnapshot, afterSnapshot, `Explored ${location?.name || 'Unknown'}`)
+
       return {
         ...prev,
-        [hexKey]: {
-          ...hex,
-          explored: true,
-          location: locationRoll,
-          condition: conditionRoll,
-          exploredBy: [...hex.exploredBy, currentPlayerIndex],
-          // WHY: Store location/condition IDs for re-roll detection (Issue #58)
-          exploredLocation: location.id,
-          exploredCondition: condition.id,
-          // WHY: Store hex state for special locations (Issue #58)
-          state: Object.keys(initialState).length > 0 ? initialState : undefined
-        }
+        [hexKey]: updatedHex
       }
     })
-  }, [currentPlayerIndex, currentRound, currentPhase, soloMode, addEvent, players, mapConfig])
+  }, [currentPlayerIndex, currentRound, currentPhase, soloMode, addEvent, addAudit, players, mapConfig])
 
   const movePlayer = useCallback((playerIndex: number, targetHex: string, cost: number) => {
     setPlayers(prev => {
@@ -1947,12 +2008,20 @@ export function useCampaign() {
   const handlePortalConfig = useCallback((tombDest: string, surfaceDest: string) => {
     if (!portalHexId) return
 
+    // WHY: Capture before snapshot for audit trail (Issue #23 - Phase 3)
+    const beforeSnapshot = createHexSnapshot(hexes[portalHexId])
+
     const updatedHexes = configurePortalNetwork(portalHexId, tombDest, surfaceDest, hexes)
     setHexes(updatedHexes)
+
+    // WHY: Record audit entry for portal configuration (Issue #23 - Phase 3)
+    const afterSnapshot = createHexSnapshot(updatedHexes[portalHexId])
+    addAudit(portalHexId, 'PORTAL_CONFIG', beforeSnapshot, afterSnapshot, `Portal network configured: tomb→${tombDest}, surface→${surfaceDest}`)
+
     setShowPortalConfigModal(false)
     setPortalHexId(null)
     addEvent(`Portal network configured at ${portalHexId}: tomb→${tombDest}, surface→${surfaceDest}`, 'action')
-  }, [portalHexId, hexes, addEvent])
+  }, [portalHexId, hexes, addEvent, addAudit])
 
   /**
    * Handle hex blocking confirmation (Issue #59 - Phase 4)
@@ -1961,12 +2030,20 @@ export function useCampaign() {
   const handleHexBlock = useCallback((targetHexId: string) => {
     if (!fulcrumHexId) return
 
+    // WHY: Capture before snapshot for audit trail (Issue #23 - Phase 3)
+    const beforeSnapshot = createHexSnapshot(hexes[fulcrumHexId])
+
     const updatedHexes = toggleHexBlocking(fulcrumHexId, targetHexId, hexes)
     setHexes(updatedHexes)
+
+    // WHY: Record audit entry for hex blocking (Issue #23 - Phase 3)
+    const afterSnapshot = createHexSnapshot(updatedHexes[fulcrumHexId])
+    addAudit(fulcrumHexId, 'HEX_BLOCK', beforeSnapshot, afterSnapshot, `Transtechnic Fulcrum now blocking ${targetHexId}`)
+
     setShowHexBlockSelector(false)
     setFulcrumHexId(null)
     addEvent(`Transtechnic Fulcrum at ${fulcrumHexId} now blocking ${targetHexId}`, 'action')
-  }, [fulcrumHexId, hexes, addEvent])
+  }, [fulcrumHexId, hexes, addEvent, addAudit])
 
   /**
    * Cancel modal handlers (Issue #59 - Phase 4)
@@ -1980,6 +2057,36 @@ export function useCampaign() {
     setShowHexBlockSelector(false)
     setFulcrumHexId(null)
   }, [])
+
+  /**
+   * Load campaign from imported data (Issue #23 - Phase 2)
+   * WHY: Apply validated and migrated campaign export to current state
+   * Component handles file reading, validation, and migration
+   */
+  const loadCampaign = useCallback((data: CampaignExport) => {
+    try {
+      // WHY: Apply all state from imported campaign
+      setPlayers(data.players)
+      setHexes(data.campaign.hexMap)
+      setThreatLevel(data.campaign.threatLevel)
+      setTargetThreatLevel(data.campaign.targetThreatLevel)
+      setCurrentRound(data.campaign.currentRound)
+      setCurrentPhase(PHASES.indexOf(data.campaign.currentPhase))
+      setEventLog(data.events)
+
+      // WHY: Apply victory data if present
+      if (data.victoryData) {
+        // Victory categories and champion are managed elsewhere
+        // This data will be available when needed
+      }
+
+      addEvent('Campaign loaded successfully', 'system')
+      setImportModalOpen(false)
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : 'Unknown error'
+      addEvent(`Failed to load campaign: ${errorMsg}`, 'error')
+    }
+  }, [addEvent])
 
   return {
     // State
@@ -2052,5 +2159,19 @@ export function useCampaign() {
     fulcrumHexId,
     handleHexBlock,
     handleCancelHexBlock,
+
+    // Map state validation (Issue #23 - Phase 1)
+    validateMapState: () => validateMapStateUtil(hexes, players),
+
+    // Campaign import (Issue #23 - Phase 2)
+    loadCampaign,
+    importModalOpen,
+    setImportModalOpen,
+
+    // Audit trail (Issue #23 - Phase 3)
+    auditLog,
+    getHexHistory: (hexId: string) => getHexHistory(auditLog, hexId),
+    getPlayerActions: (playerId: number) => getPlayerActions(auditLog, playerId),
+    exportAuditLog: (campaignName: string) => exportAuditLog(auditLog, campaignName),
   }
 }

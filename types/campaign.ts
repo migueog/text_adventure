@@ -277,6 +277,73 @@ export interface Event {
   timestamp: string
 }
 
+/**
+ * WHY: Audit trail types for tracking hex modification history (Issue #23 - Phase 3)
+ * Provides before/after snapshots and queryable audit log
+ */
+
+/**
+ * WHY: Snapshot of hex state at a point in time
+ * Used for before/after comparisons in audit entries
+ */
+export interface HexSnapshot {
+  explored: boolean
+  location: number
+  condition: number
+  exploredBy: number[]
+  state?: {
+    intelRemaining?: number
+    portalDestination?: string
+    blockedHex?: string
+    beastLairActive?: boolean
+    prisoners?: number
+  }
+  exploredLocation?: string
+  exploredCondition?: string
+}
+
+/**
+ * WHY: Types of actions that modify hex state
+ * Used to categorize audit entries
+ */
+export type AuditActionType =
+  | 'EXPLORE'           // Player explores hex
+  | 'MOVE'              // Player moves to hex
+  | 'SCOUT'             // Player scouts hex
+  | 'SEARCH'            // Player searches hex (Intel Cache)
+  | 'ENCAMP'            // Player builds camp
+  | 'DEMOLISH'          // Player demolishes structure
+  | 'PORTAL_CONFIG'     // Portal network configured
+  | 'HEX_BLOCK'         // Hex blocking configured
+  | 'STATE_CHANGE'      // Generic hex state change
+
+/**
+ * WHY: Single audit log entry with before/after snapshots
+ * Immutable record of a hex modification
+ */
+export interface AuditEntry {
+  id: string                    // Unique identifier
+  timestamp: string             // ISO timestamp
+  round: number                 // Campaign round when action occurred
+  phase: string                 // Phase when action occurred
+  playerId: number              // Player who performed action
+  playerName: string            // Player name (for display)
+  action: AuditActionType       // Type of action
+  hexId: string                 // Hex that was modified
+  before: HexSnapshot           // Hex state before modification
+  after: HexSnapshot            // Hex state after modification
+  reason: string                // Human-readable description
+}
+
+/**
+ * WHY: Complete audit log with version for migration support
+ * Contains all audit entries for a campaign
+ */
+export interface CampaignAuditLog {
+  entries: AuditEntry[]
+  version: string
+}
+
 export interface CampaignState {
   gameStarted: boolean
   gameEnded: boolean
@@ -309,4 +376,39 @@ export interface TieBreakerResult {
   tieBreaker: string | null               // Name of tie-breaker used (null if no tie or shared)
   eliminatedPlayers: Player[]             // Players eliminated during resolution
   tieBreakerValues?: Record<number, number>  // Optional: tie-breaker values for tooltips
+}
+
+/**
+ * WHY: Map state validation types (Issue #23 - Phase 1)
+ * Categorizes different types of map state integrity violations
+ */
+export type MapValidationErrorType =
+  | 'OVERLAPPING_BASE'      // Multiple bases at same hex
+  | 'OVERLAPPING_CAMP'      // Multiple camps at same hex
+  | 'INVALID_PLAYER_ID'     // exploredBy contains non-existent player
+  | 'BROKEN_PORTAL'         // Portal destination doesn't exist
+  | 'BEAST_LAIR_VIOLATION'  // Beast Lair at wrong location (not TL23)
+  | 'INTEL_OVERFLOW'        // Intel Cache count > D6 (6)
+  | 'INVALID_HEX_STATE'     // Hex state inconsistency
+
+/**
+ * WHY: Individual map validation error with context and suggested fix
+ */
+export interface MapValidationError {
+  type: MapValidationErrorType
+  hexId: string
+  severity: 'error' | 'warning'
+  message: string
+  affectedPlayerIds?: number[]
+  suggestedFix?: string
+}
+
+/**
+ * WHY: Complete validation result with timestamp for audit trail
+ */
+export interface MapValidationResult {
+  valid: boolean
+  errors: MapValidationError[]
+  warnings: MapValidationError[]
+  timestamp: string
 }
