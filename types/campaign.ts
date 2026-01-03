@@ -249,6 +249,8 @@ export interface Player {
   intelCount?: number  // WHY: Track intel available for free scouts (Issue #59)
   supplyPointsSpent?: number  // WHY: Track cumulative SP spent for PIONEER victory category (Issue #50)
   operativeKillDetails?: OperativeKill[]  // WHY: Track kill details for wound-based HEADHUNTER category (Issue #50)
+  backstory?: string  // WHY: Kill team narrative/backstory for campaign storytelling (Issue #22)
+  faction?: string    // WHY: Optional faction name for narrative flavor (Issue #22)
 }
 
 // WHY: Track warning level for approaching campaign end (1-2 levels from target)
@@ -288,6 +290,14 @@ export interface Event {
   round: number
   phase: string
   timestamp: string
+  // WHY: Add narrative enrichment for campaign storytelling (Issue #22)
+  narrative?: {
+    flavor: string           // Auto-generated narrative text
+    category: 'combat' | 'exploration' | 'movement' | 'custom' | 'milestone'
+    isCustom: boolean        // true = player-written, false = auto-generated
+    locationName?: string    // Context for exploration events
+    playerNames?: string[]   // Players involved in event
+  }
 }
 
 /**

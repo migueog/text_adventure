@@ -215,6 +215,61 @@ input, select {
   border-radius: 6px;
 }
 
+/* WHY: Player setup with narrative fields (Issue #22) */
+.player-setup-group {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 1rem;
+  margin-bottom: 1rem;
+}
+
+.player-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.player-header h4 {
+  margin: 0;
+  font-size: 1rem;
+  color: var(--text-primary);
+}
+
+.player-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.player-fields input,
+.player-fields textarea {
+  padding: 0.5rem;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  border-radius: 6px;
+  font-family: inherit;
+}
+
+.player-fields textarea {
+  resize: vertical;
+  min-height: 60px;
+}
+
+.char-count {
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  text-align: right;
+}
+
+.section-hint {
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+  margin: 0.5rem 0 1rem;
+}
+
 .map-preview-info {
   background: var(--bg-tertiary);
   padding: 1rem;
@@ -1553,6 +1608,82 @@ input, select {
 
 .event-item.error .event-icon {
   color: var(--accent-red);
+}
+
+/* WHY: Narrative mode styles (Issue #22 - Phase 5) */
+.narrative-event {
+  transition: all 0.2s ease;
+}
+
+.narrative-event:hover {
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.category-badge {
+  user-select: none;
+}
+
+.narrative-flavor {
+  line-height: 1.6;
+  color: var(--text-primary);
+}
+
+.narrative-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+/* WHY: View mode toggle buttons (Issue #22 - Phase 5) */
+.view-mode-toggle button {
+  transition: all 0.2s ease;
+}
+
+.view-mode-toggle button:hover {
+  opacity: 0.9;
+}
+
+.view-mode-toggle button.active {
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
+}
+
+/* WHY: Narrative modal overlay (Issue #22 - Phase 5) */
+.narrative-modal-overlay {
+  animation: fadeIn 0.2s ease-in-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.narrative-modal {
+  animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateY(-20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.narrative-modal textarea {
+  transition: border-color 0.2s ease;
+}
+
+.narrative-modal textarea:focus {
+  outline: none;
+  border-color: #9C27B0;
+  box-shadow: 0 0 0 2px rgba(156, 39, 176, 0.2);
 }
 
 /* Victory Screen */

@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import type { Event } from '@/types/campaign'
+import { useCampaignStore } from '@/store/campaign'
 
 interface EventLogProps {
   events: Event[]
@@ -19,6 +20,16 @@ export default function EventLog({
 
   // WHY: Round filter state (Issue #31 - Phase 5)
   const [selectedRound, setSelectedRound] = useState<number | 'all'>('all')
+
+  // WHY: View mode toggle for narrative system (Issue #22 - Phase 5)
+  const [viewMode, setViewMode] = useState<'mechanical' | 'narrative'>('mechanical')
+
+  // WHY: Custom narrative entry modal state (Issue #22 - Phase 5)
+  const [showNarrativeModal, setShowNarrativeModal] = useState(false)
+  const [narrativeText, setNarrativeText] = useState('')
+
+  // WHY: Access addCustomNarrative from campaign store (Issue #22 - Phase 5)
+  const addCustomNarrative = useCampaignStore((state) => state.addCustomNarrative)
 
   // WHY: Get unique rounds for initialization (Issue #31 - Phase 5)
   const allRounds = Array.from(new Set(events.map(e => e.round)))
@@ -60,6 +71,15 @@ export default function EventLog({
     }
   }
 
+  // WHY: Handle custom narrative submission (Issue #22 - Phase 5)
+  const handleAddNarrative = () => {
+    if (narrativeText.trim()) {
+      addCustomNarrative(narrativeText)
+      setNarrativeText('')
+      setShowNarrativeModal(false)
+    }
+  }
+
   return (
     <div className="event-log">
       <div style={{
@@ -69,7 +89,59 @@ export default function EventLog({
         marginBottom: '1rem'
       }}>
         <h3>Event Log</h3>
-        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+          {/* WHY: View mode toggle (Issue #22 - Phase 5) */}
+          <div className="view-mode-toggle" style={{ display: 'flex', gap: '0.25rem', border: '1px solid #ccc', borderRadius: '4px', overflow: 'hidden' }}>
+            <button
+              onClick={() => setViewMode('mechanical')}
+              className={viewMode === 'mechanical' ? 'active' : ''}
+              style={{
+                padding: '0.25rem 0.5rem',
+                border: 'none',
+                background: viewMode === 'mechanical' ? '#4CAF50' : '#f0f0f0',
+                color: viewMode === 'mechanical' ? 'white' : '#333',
+                cursor: 'pointer',
+                fontSize: '0.75rem',
+                fontWeight: viewMode === 'mechanical' ? 'bold' : 'normal'
+              }}
+            >
+              Mechanical
+            </button>
+            <button
+              onClick={() => setViewMode('narrative')}
+              className={viewMode === 'narrative' ? 'active' : ''}
+              style={{
+                padding: '0.25rem 0.5rem',
+                border: 'none',
+                background: viewMode === 'narrative' ? '#4CAF50' : '#f0f0f0',
+                color: viewMode === 'narrative' ? 'white' : '#333',
+                cursor: 'pointer',
+                fontSize: '0.75rem',
+                fontWeight: viewMode === 'narrative' ? 'bold' : 'normal'
+              }}
+            >
+              Narrative
+            </button>
+          </div>
+
+          {/* WHY: Add custom narrative button (Issue #22 - Phase 5) */}
+          <button
+            onClick={() => setShowNarrativeModal(true)}
+            title="Add custom narrative entry"
+            style={{
+              padding: '0.25rem 0.5rem',
+              borderRadius: '4px',
+              border: '1px solid #9C27B0',
+              background: '#9C27B0',
+              color: 'white',
+              cursor: 'pointer',
+              fontSize: '0.75rem',
+              fontWeight: 'bold'
+            }}
+          >
+            + Narrative
+          </button>
+
           <label htmlFor="event-filter" style={{ fontSize: '0.875rem' }}>
             Type:
           </label>
@@ -139,20 +211,113 @@ export default function EventLog({
         {filteredEvents.length === 0 ? (
           <div className="no-events">No events yet. Start the campaign!</div>
         ) : groupedEvents ? (
-          renderGroupedEvents(groupedEvents)
+          renderGroupedEvents(groupedEvents, viewMode)
         ) : selectedRound === 'all' ? (
-          renderCollapsibleRounds(filteredEvents, expandedRounds, toggleRound)
+          renderCollapsibleRounds(filteredEvents, expandedRounds, toggleRound, viewMode)
         ) : (
           filteredEvents.map((event, idx) => (
-            <EventItem key={idx} event={event} />
+            viewMode === 'narrative' && event.narrative ? (
+              <NarrativeEventItem key={idx} event={event} />
+            ) : viewMode === 'mechanical' ? (
+              <EventItem key={idx} event={event} />
+            ) : null
           ))
         )}
       </div>
+
+      {/* WHY: Custom narrative entry modal (Issue #22 - Phase 5) */}
+      {showNarrativeModal && (
+        <div className="narrative-modal-overlay" style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0, 0, 0, 0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000
+        }}>
+          <div className="narrative-modal" style={{
+            background: 'white',
+            padding: '2rem',
+            borderRadius: '8px',
+            maxWidth: '600px',
+            width: '90%',
+            boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)'
+          }}>
+            <h3 style={{ marginTop: 0, marginBottom: '1rem' }}>Add Custom Narrative Entry</h3>
+            <textarea
+              value={narrativeText}
+              onChange={(e) => setNarrativeText(e.target.value)}
+              placeholder="Write your narrative entry here... (e.g., 'The kill team discovered an ancient artifact pulsing with eldritch energy...')"
+              style={{
+                width: '100%',
+                minHeight: '150px',
+                padding: '0.75rem',
+                border: '1px solid #ccc',
+                borderRadius: '4px',
+                fontFamily: 'inherit',
+                fontSize: '0.875rem',
+                resize: 'vertical'
+              }}
+              maxLength={1000}
+            />
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginTop: '0.5rem'
+            }}>
+              <small style={{ color: '#666' }}>
+                {narrativeText.length}/1000 characters
+              </small>
+            </div>
+            <div style={{
+              display: 'flex',
+              gap: '0.5rem',
+              justifyContent: 'flex-end',
+              marginTop: '1rem'
+            }}>
+              <button
+                onClick={() => {
+                  setShowNarrativeModal(false)
+                  setNarrativeText('')
+                }}
+                style={{
+                  padding: '0.5rem 1rem',
+                  borderRadius: '4px',
+                  border: '1px solid #ccc',
+                  background: '#f0f0f0',
+                  cursor: 'pointer'
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleAddNarrative}
+                disabled={!narrativeText.trim()}
+                style={{
+                  padding: '0.5rem 1rem',
+                  borderRadius: '4px',
+                  border: '1px solid #9C27B0',
+                  background: narrativeText.trim() ? '#9C27B0' : '#ccc',
+                  color: 'white',
+                  cursor: narrativeText.trim() ? 'pointer' : 'not-allowed'
+                }}
+              >
+                Add Entry
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
 
-// Helper component for individual event
+// Helper component for individual event (mechanical view)
 function EventItem({ event }: { event: Event }) {
   return (
     <div className={`event-item ${event.type}`}>
@@ -161,6 +326,63 @@ function EventItem({ event }: { event: Event }) {
       <span className="event-meta">
         R{event.round} • {event.phase} • {event.timestamp}
       </span>
+    </div>
+  )
+}
+
+// WHY: Narrative view component with category badges (Issue #22 - Phase 5)
+function NarrativeEventItem({ event }: { event: Event }) {
+  if (!event.narrative) return null
+
+  const categoryColors = {
+    combat: '#ef4444',
+    exploration: '#3b82f6',
+    movement: '#22c55e',
+    custom: '#a855f7',
+    milestone: '#f59e0b'
+  }
+
+  return (
+    <div className="narrative-event" style={{
+      background: '#f9f9f9',
+      border: '1px solid #e0e0e0',
+      borderRadius: '6px',
+      padding: '1rem',
+      marginBottom: '0.75rem'
+    }}>
+      <div
+        className="category-badge"
+        style={{
+          display: 'inline-block',
+          backgroundColor: categoryColors[event.narrative.category],
+          color: 'white',
+          padding: '0.25rem 0.5rem',
+          borderRadius: '4px',
+          fontSize: '0.75rem',
+          fontWeight: 'bold',
+          marginBottom: '0.5rem',
+          textTransform: 'capitalize'
+        }}
+      >
+        {event.narrative.isCustom ? '✒️' : event.icon} {event.narrative.category}
+      </div>
+      <p className="narrative-flavor" style={{
+        fontSize: '0.95rem',
+        lineHeight: '1.5',
+        margin: '0.5rem 0',
+        fontStyle: event.narrative.isCustom ? 'italic' : 'normal'
+      }}>
+        {event.narrative.flavor}
+      </p>
+      <div className="narrative-meta" style={{
+        fontSize: '0.75rem',
+        color: '#666',
+        marginTop: '0.5rem'
+      }}>
+        Round {event.round} • {event.phase} • {event.timestamp}
+        {event.narrative.locationName && ` • ${event.narrative.locationName}`}
+        {event.narrative.playerNames && ` • ${event.narrative.playerNames.join(', ')}`}
+      </div>
     </div>
   )
 }
@@ -178,11 +400,12 @@ function groupEventsByRound(events: Event[]): Map<number, Event[]> {
   return grouped
 }
 
-// WHY: Render collapsible rounds (Issue #31 - Phase 5)
+// WHY: Render collapsible rounds with view mode support (Issue #31, #22 - Phase 5)
 function renderCollapsibleRounds(
   events: Event[],
   expandedRounds: Set<number>,
-  toggleRound: (round: number) => void
+  toggleRound: (round: number) => void,
+  viewMode: 'mechanical' | 'narrative'
 ) {
   const grouped = groupEventsByRound(events)
   const rounds = Array.from(grouped.keys()).sort((a, b) => b - a)
@@ -200,6 +423,7 @@ function renderCollapsibleRounds(
             events={roundEvents}
             isExpanded={isExpanded}
             onToggle={() => toggleRound(round)}
+            viewMode={viewMode}
           />
         )
       })}
@@ -207,17 +431,19 @@ function renderCollapsibleRounds(
   )
 }
 
-// WHY: Collapsible round component (Issue #31 - Phase 5)
+// WHY: Collapsible round component with view mode support (Issue #31, #22 - Phase 5)
 function CollapsibleRound({
   round,
   events,
   isExpanded,
-  onToggle
+  onToggle,
+  viewMode
 }: {
   round: number
   events: Event[]
   isExpanded: boolean
   onToggle: () => void
+  viewMode: 'mechanical' | 'narrative'
 }) {
   return (
     <div style={{ marginBottom: '0.5rem' }}>
@@ -249,7 +475,11 @@ function CollapsibleRound({
       {isExpanded && (
         <div style={{ marginTop: '0.25rem', marginLeft: '1rem' }}>
           {events.map((event, idx) => (
-            <EventItem key={idx} event={event} />
+            viewMode === 'narrative' && event.narrative ? (
+              <NarrativeEventItem key={idx} event={event} />
+            ) : viewMode === 'mechanical' ? (
+              <EventItem key={idx} event={event} />
+            ) : null
           ))}
         </div>
       )}
@@ -257,8 +487,8 @@ function CollapsibleRound({
   )
 }
 
-// Render grouped events with round headers
-function renderGroupedEvents(grouped: Map<number, Event[]>) {
+// WHY: Render grouped events with view mode support (Issue #31, #22 - Phase 5)
+function renderGroupedEvents(grouped: Map<number, Event[]>, viewMode: 'mechanical' | 'narrative') {
   const rounds = Array.from(grouped.keys()).sort((a, b) => a - b)
 
   return (
@@ -279,7 +509,11 @@ function renderGroupedEvents(grouped: Map<number, Event[]>) {
               Round {round}
             </div>
             {roundEvents.map((event, idx) => (
-              <EventItem key={idx} event={event} />
+              viewMode === 'narrative' && event.narrative ? (
+                <NarrativeEventItem key={idx} event={event} />
+              ) : viewMode === 'mechanical' ? (
+                <EventItem key={idx} event={event} />
+              ) : null
             ))}
           </div>
         )

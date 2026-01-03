@@ -13,6 +13,7 @@ import {
 } from '@/lib/data/campaignData'
 import { rollD36 } from '@/lib/utils/dice'
 import { hexId } from '@/lib/utils/hexUtils'
+import { narrateExploration, narrateBattle } from '@/lib/utils/narrativeTemplates'
 
 /**
  * Campaign store state interface
@@ -42,14 +43,15 @@ interface CampaignStore {
   error: string | null
 
   // Game Actions
-  startGame: (numPlayers: number, isSolo: boolean, names: string[]) => void
+  startGame: (numPlayers: number, isSolo: boolean, names: string[], killTeamNames?: string[], backstories?: string[], factions?: string[]) => void
   exploreHex: (hexKey: string) => void
   movePlayer: (playerIndex: number, targetHex: string, cost: number) => void
   performAction: (action: string, params?: any) => void
   recordBattle: (result: BattleResultInfo, playerIndex: number, opKilled: number) => void
   nextPhase: () => void
   updatePlayer: (playerIndex: number, updates: Partial<Player>) => void
-  addEvent: (message: string, type?: Event['type']) => void
+  addEvent: (message: string, type?: Event['type'], narrativeData?: { flavor: string; category: NonNullable<Event['narrative']>['category']; locationName?: string; playerNames?: string[] }) => void
+  addCustomNarrative: (narrativeText: string, playerName?: string) => void
 
   // Persistence Actions
   createCampaign: (name: string, settings: any) => Promise<void>
@@ -99,12 +101,15 @@ const createPlayer = (
   id: number,
   name: string,
   color: string,
-  startHex: HexPosition
+  startHex: HexPosition,
+  killTeamName?: string,
+  backstory?: string,
+  faction?: string
 ): Player => ({
   id,
   name,
   color,
-  killTeamName: `Kill Team ${id + 1}`,
+  killTeamName: killTeamName || `Kill Team ${id + 1}`,
   position: startHex,
   supplyPoints: 10,
   campaignPoints: 0,
@@ -116,7 +121,11 @@ const createPlayer = (
   bases: [startHex],
   camps: [],
   history: [],
-  battleResult: null
+  battleResult: null,
+  searchedHexes: [],
+  battleHistory: [],
+  backstory,
+  faction
 })
 
 /**
@@ -148,7 +157,7 @@ export const useCampaignStore = create<CampaignStore>()(
         error: null,
 
         // Start Game
-        startGame: (numPlayers, isSolo, names) => {
+        startGame: (numPlayers, isSolo, names, killTeamNames, backstories, factions) => {
           const config = MAP_CONFIGS[numPlayers as keyof typeof MAP_CONFIGS]
           if (!config) {
             console.error('Invalid player count:', numPlayers)
@@ -157,13 +166,16 @@ export const useCampaignStore = create<CampaignStore>()(
 
           const hexes = createInitialHexGrid(config)
 
-          // WHY: Create players with starting positions
+          // WHY: Create players with starting positions and narrative fields (Issue #22)
           const players = Array.from({ length: numPlayers }, (_, i) => {
             const row = i < numPlayers / 2 ? 0 : config.rows - 1
             const col = Math.floor((i % (numPlayers / 2)) * (config.cols / (numPlayers / 2)))
             const playerName = names[i] || `Player ${i + 1}`
             const color = PLAYER_COLORS[i] || '#ffffff'
-            return createPlayer(i, playerName, color, { row, col })
+            const killTeamName = killTeamNames?.[i]
+            const backstory = backstories?.[i]
+            const faction = factions?.[i]
+            return createPlayer(i, playerName, color, { row, col }, killTeamName, backstory, faction)
           })
 
           set({
@@ -209,10 +221,30 @@ export const useCampaignStore = create<CampaignStore>()(
           // WHY: Get location and condition names safely
           const location = locations[locationRoll - 1]
           const condition = conditions[conditionRoll - 1]
-          get().addEvent(
-            `Hex ${hexKey} explored: ${location?.name || 'Unknown'} (${condition?.name || 'Unknown'})`,
-            'exploration'
-          )
+          const currentPlayer = state.players[state.currentPlayerIndex]
+
+          // WHY: Add narrative enrichment to exploration events (Issue #22)
+          if (currentPlayer) {
+            get().addEvent(
+              `Hex ${hexKey} explored: ${location?.name || 'Unknown'} (${condition?.name || 'Unknown'})`,
+              'exploration',
+              {
+                flavor: narrateExploration(
+                  currentPlayer.name,
+                  location?.name || 'Unknown',
+                  hex.type === 'tomb' ? 'tomb' : 'surface'
+                ),
+                category: 'exploration',
+                locationName: location?.name,
+                playerNames: [currentPlayer.name]
+              }
+            )
+          } else {
+            get().addEvent(
+              `Hex ${hexKey} explored: ${location?.name || 'Unknown'} (${condition?.name || 'Unknown'})`,
+              'exploration'
+            )
+          }
         },
 
         // Move Player
@@ -299,9 +331,18 @@ export const useCampaignStore = create<CampaignStore>()(
             operativesKilled: player.operativesKilled + opKilled
           })
 
+          // WHY: Add narrative enrichment to battle events (Issue #22)
           get().addEvent(
             `${player.name} ${result.name}: +${cpGain} CP, +${spGain} SP`,
-            'battle'
+            'battle',
+            {
+              flavor: narrateBattle(
+                player.name,
+                result.name as 'Victory' | 'Defeat' | 'Draw'
+              ),
+              category: 'combat',
+              playerNames: [player.name]
+            }
           )
           get().saveCampaign()
         },
@@ -336,7 +377,7 @@ export const useCampaignStore = create<CampaignStore>()(
         },
 
         // Add Event
-        addEvent: (message, type = 'system') => {
+        addEvent: (message, type = 'system', narrativeData) => {
           const currentPhase = get().currentPhase
           const event: Event = {
             round: get().currentRound,
@@ -347,7 +388,34 @@ export const useCampaignStore = create<CampaignStore>()(
             icon: type === 'system' ? 'ℹ️' : type === 'movement' ? '➡️' :
                   type === 'exploration' ? '🔍' : type === 'reward' ? '🎁' :
                   type === 'action' ? '⚡' : type === 'battle' ? '⚔️' :
-                  type === 'warning' ? '⚠️' : '❌'
+                  type === 'warning' ? '⚠️' : '❌',
+            // WHY: Add narrative enrichment if provided (Issue #22)
+            ...(narrativeData && {
+              narrative: {
+                ...narrativeData,
+                isCustom: false
+              }
+            })
+          }
+          set({ eventLog: [...get().eventLog, event] })
+        },
+
+        // Add Custom Narrative
+        // WHY: Allow players to add custom narrative entries (Issue #22)
+        addCustomNarrative: (narrativeText, playerName) => {
+          const event: Event = {
+            round: get().currentRound,
+            phase: PHASES[get().currentPhase] || 'Unknown',
+            type: 'system',
+            message: `Custom entry: ${narrativeText.substring(0, 50)}${narrativeText.length > 50 ? '...' : ''}`,
+            timestamp: new Date().toISOString(),
+            icon: '✒️',
+            narrative: {
+              flavor: narrativeText,
+              category: 'custom',
+              isCustom: true,
+              playerNames: playerName ? [playerName] : undefined
+            }
           }
           set({ eventLog: [...get().eventLog, event] })
         },

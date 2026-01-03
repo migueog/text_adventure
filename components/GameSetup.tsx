@@ -15,6 +15,15 @@ export default function GameSetup() {
   const [playerNames, setPlayerNames] = useState(
     Array(6).fill('').map((_, i) => `Player ${i + 1}`)
   )
+  const [killTeamNames, setKillTeamNames] = useState<string[]>(
+    Array(6).fill('')
+  )
+  const [factions, setFactions] = useState<string[]>(
+    Array(6).fill('')
+  )
+  const [backstories, setBackstories] = useState<string[]>(
+    Array(6).fill('')
+  )
   const [validationError, setValidationError] = useState('')
 
   // WHY: Access Zustand store for campaign creation
@@ -62,11 +71,14 @@ export default function GameSetup() {
         soloMode
       })
 
-      // WHY: Then start the game with player setup
+      // WHY: Then start the game with player setup including narrative fields (Issue #22)
       startGame(
         playerCount,
         soloMode,
-        playerNames.slice(0, playerCount)
+        playerNames.slice(0, playerCount),
+        killTeamNames.slice(0, playerCount),
+        backstories.slice(0, playerCount),
+        factions.slice(0, playerCount)
       )
     } catch (err) {
       console.error('Failed to start campaign:', err)
@@ -160,24 +172,73 @@ export default function GameSetup() {
         </div>
 
         <div className="setup-section">
-          <h3>Player Names</h3>
+          <h3>Player Setup</h3>
+          <p className="section-hint">Configure your kill teams (all narrative fields are optional)</p>
           <div className="player-inputs">
             {Array(playerCount).fill(null).map((_, idx) => (
-              <div key={idx} className="player-input-row">
-                <div
-                  className="player-color-preview"
-                  style={{ backgroundColor: PLAYER_COLORS[idx] }}
-                />
-                <input
-                  type="text"
-                  value={playerNames[idx]}
-                  onChange={(e) => {
-                    const newNames = [...playerNames]
-                    newNames[idx] = e.target.value
-                    setPlayerNames(newNames)
-                  }}
-                  placeholder={`Player ${idx + 1}`}
-                />
+              <div key={idx} className="player-setup-group">
+                <div className="player-header">
+                  <div
+                    className="player-color-preview"
+                    style={{ backgroundColor: PLAYER_COLORS[idx] }}
+                  />
+                  <h4>Player {idx + 1}</h4>
+                </div>
+
+                <div className="player-fields">
+                  <input
+                    type="text"
+                    value={playerNames[idx]}
+                    onChange={(e) => {
+                      const newNames = [...playerNames]
+                      newNames[idx] = e.target.value
+                      setPlayerNames(newNames)
+                    }}
+                    placeholder={`Player ${idx + 1} Name`}
+                    className="player-name-input"
+                  />
+
+                  <input
+                    type="text"
+                    value={killTeamNames[idx]}
+                    onChange={(e) => {
+                      const newTeamNames = [...killTeamNames]
+                      newTeamNames[idx] = e.target.value
+                      setKillTeamNames(newTeamNames)
+                    }}
+                    placeholder={`Kill Team ${idx + 1} (optional)`}
+                    className="kill-team-input"
+                  />
+
+                  <input
+                    type="text"
+                    value={factions[idx]}
+                    onChange={(e) => {
+                      const newFactions = [...factions]
+                      newFactions[idx] = e.target.value
+                      setFactions(newFactions)
+                    }}
+                    placeholder="Faction (optional)"
+                    className="faction-input"
+                    maxLength={50}
+                  />
+
+                  <textarea
+                    value={backstories[idx]}
+                    onChange={(e) => {
+                      const newBackstories = [...backstories]
+                      newBackstories[idx] = e.target.value
+                      setBackstories(newBackstories)
+                    }}
+                    placeholder="Kill team backstory (optional, max 500 chars)"
+                    className="backstory-input"
+                    maxLength={500}
+                    rows={3}
+                  />
+                  {backstories[idx] && (
+                    <small className="char-count">{backstories[idx].length}/500 characters</small>
+                  )}
+                </div>
               </div>
             ))}
           </div>
