@@ -3897,3 +3897,183 @@ input, select {
   background: #5a6268;
   border-color: #4e555b;
 }
+
+/**
+ * WHY: Tutorial tooltip styles for phase guidance (Issue #33 - Phase 2)
+ * Displays dismissible help tooltips when entering each phase for the first time
+ */
+
+.tutorial-tooltip-overlay {
+  position: fixed;
+  top: 100px;
+  right: 20px;
+  z-index: 999;
+  animation: slideInRight 0.3s ease-out;
+}
+
+.tutorial-tooltip {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 1rem;
+  border-radius: 8px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+  max-width: 350px;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+}
+
+.tutorial-tooltip-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.tutorial-tooltip-header h4 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.tutorial-icon {
+  font-size: 1.5rem;
+}
+
+.tutorial-tooltip-content p {
+  margin: 0;
+  line-height: 1.5;
+  font-size: 0.95rem;
+}
+
+.tutorial-tooltip-footer {
+  margin-top: 1rem;
+  display: flex;
+  justify-content: flex-end;
+}
+
+@keyframes slideInRight {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+/**
+ * WHY: Quick reference component styles (Issue #33 - Phase 3)
+ * Collapsible help section showing phase-specific rules and actions
+ */
+
+.phase-quick-reference {
+  margin-bottom: 1rem;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: var(--bg-secondary);
+}
+
+.quick-ref-toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  background: transparent;
+  border: none;
+  color: var(--text-primary);
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: background 0.2s;
+}
+
+.quick-ref-toggle:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.toggle-icon {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+.toggle-text {
+  flex: 1;
+  text-align: left;
+  font-weight: 600;
+}
+
+.help-icon {
+  font-size: 1rem;
+  opacity: 0.7;
+}
+
+.quick-ref-content {
+  padding: 0 1rem 1rem 1rem;
+  animation: slideDown 0.2s ease-out;
+}
+
+.ref-section {
+  margin-bottom: 1rem;
+}
+
+.ref-section:last-child {
+  margin-bottom: 0;
+}
+
+.ref-section h5 {
+  margin: 0 0 0.5rem 0;
+  font-size: 0.85rem;
+  color: var(--accent-blue);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.ref-section ul {
+  margin: 0;
+  padding-left: 1.5rem;
+  list-style: disc;
+}
+
+.ref-section li {
+  margin-bottom: 0.25rem;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    max-height: 0;
+  }
+  to {
+    opacity: 1;
+    max-height: 500px;
+  }
+}
+
+/**
+ * WHY: Phase instruction header styles (Issue #33 - Phase 4)
+ * Prominent headers showing what to do in each phase
+ */
+
+.phase-instruction-header {
+  background: linear-gradient(135deg, rgba(52, 152, 219, 0.1) 0%, rgba(142, 68, 173, 0.1) 100%);
+  border-left: 4px solid var(--accent-blue);
+  padding: 1rem;
+  margin-bottom: 1rem;
+  border-radius: 4px;
+}
+
+.phase-instruction-header h3 {
+  margin: 0 0 0.5rem 0;
+  font-size: 1.1rem;
+  color: var(--accent-blue);
+}
+
+.phase-instruction {
+  margin: 0;
+  font-size: 0.95rem;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}

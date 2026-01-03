@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useCallback, useEffect, useRef } from 'react'
-import type { Player, Hex, MapConfig, Event, HexPosition, EncampOptions, ThreatWarningLevel, BattleResult, ActiveThreatPhaseRule, ThreatPhaseRuleResolution, ReleasedPrisonerEntity } from '@/types/campaign'
+import type { Player, Hex, MapConfig, Event, HexPosition, EncampOptions, ThreatWarningLevel, BattleResult, ActiveThreatPhaseRule, ThreatPhaseRuleResolution, ReleasedPrisonerEntity, RoundStatistics } from '@/types/campaign'
 import type { ExtendedBattleRecord } from '@/types/battle'
 import {
   MAP_CONFIGS,
@@ -28,6 +28,8 @@ import { createMissingPlayerRecords } from '@/lib/utils/battleRewards'
 import { recordOperativeKill } from '@/lib/utils/operativeKills'  // WHY: Issue #50 - Track detailed operative kills
 import { detectActiveThreatPhaseRules, sortByPriority, hasActiveRules } from '@/lib/utils/threatPhaseRules'
 import { validateMapState as validateMapStateUtil } from '@/lib/utils/mapValidation'  // WHY: Issue #23 - Phase 1
+import { calculateRoundStatistics } from '@/lib/utils/roundStatistics'  // WHY: Issue #31 - Phase 2
+import { detectMilestones } from '@/lib/utils/milestones'  // WHY: Issue #31 - Phase 4
 import { importCampaignData, validateImportData } from '@/lib/utils/campaignImport'  // WHY: Issue #23 - Phase 2
 import { migrateCampaignData } from '@/lib/utils/campaignMigrations'  // WHY: Issue #23 - Phase 2
 import type { CampaignExport } from '@/lib/utils/campaignExport'  // WHY: Issue #23 - Phase 2
@@ -207,6 +209,10 @@ export function useCampaign() {
   const [portalHexId, setPortalHexId] = useState<string | null>(null)
   const [showHexBlockSelector, setShowHexBlockSelector] = useState(false)
   const [fulcrumHexId, setFulcrumHexId] = useState<string | null>(null)
+
+  // WHY: Round summary modal state (Issue #31 - Phase 2)
+  const [showRoundSummary, setShowRoundSummary] = useState(true)
+  const [pendingRoundSummary, setPendingRoundSummary] = useState<RoundStatistics | null>(null)
 
   // WHY: Campaign import modal state (Issue #23 - Phase 2)
   const [importModalOpen, setImportModalOpen] = useState(false)
@@ -1752,6 +1758,13 @@ export function useCampaign() {
           addEvent(`${nextPlayer.name}'s turn`, 'system')
         }
       } else {
+        // WHY: Trigger round summary modal before round increment (Issue #31 - Phase 2)
+        if (showRoundSummary && !pendingRoundSummary) {
+          const stats = calculateRoundStatistics(eventLog, currentPlayers, currentRoundValue)
+          setPendingRoundSummary(stats)
+          return  // Pause execution until modal dismissed
+        }
+
         // End of round - increase threat
         const currentRoundValue = currentRoundRef.current
         const newRound = currentRoundValue + 1
@@ -1784,10 +1797,27 @@ export function useCampaign() {
           // WHY: Log movement order for transparency
           const orderNames = newOrder.map(i => currentPlayers[i]?.name || `Player ${i}`).join(' → ')
           addEvent(`Movement order: ${orderNames}`, 'system')
+
+          // WHY: Detect and log milestones (Issue #31 - Phase 4)
+          const milestones = detectMilestones(newRound, newThreat, targetThreatLevel, currentRoundValue)
+          milestones.forEach(milestone => {
+            addEvent(milestone.message, 'milestone')
+          })
         }
       }
     }
-  }, [currentPhase, currentPlayerIndex, players, threatLevel, targetThreatLevel, currentRound, battleCompleted, extendedMode, addEvent, calculateMovementOrder, increaseThreat])
+  }, [currentPhase, currentPlayerIndex, players, threatLevel, targetThreatLevel, currentRound, battleCompleted, extendedMode, addEvent, calculateMovementOrder, increaseThreat, showRoundSummary, pendingRoundSummary, eventLog])
+
+  /**
+   * WHY: Continue past round summary modal (Issue #31 - Phase 2)
+   * Clears pending summary and re-triggers nextPhase to increment round
+   */
+  const continuePastRoundSummary = useCallback(() => {
+    setPendingRoundSummary(null)
+    // WHY: Re-trigger nextPhase which will now increment the round
+    // since pendingRoundSummary is null
+    nextPhase()
+  }, [nextPhase])
 
   const updatePlayer = useCallback((playerIndex: number, updates: Partial<Player>) => {
     setPlayers(prev => {
@@ -2173,5 +2203,11 @@ export function useCampaign() {
     getHexHistory: (hexId: string) => getHexHistory(auditLog, hexId),
     getPlayerActions: (playerId: number) => getPlayerActions(auditLog, playerId),
     exportAuditLog: (campaignName: string) => exportAuditLog(auditLog, campaignName),
+
+    // Round summary modal (Issue #31 - Phase 2)
+    showRoundSummary,
+    setShowRoundSummary,
+    pendingRoundSummary,
+    continuePastRoundSummary,
   }
 }

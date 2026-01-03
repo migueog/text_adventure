@@ -14,12 +14,37 @@ export default function EventLog({
   groupByRound = false,
   onExport
 }: EventLogProps) {
+  // WHY: Type filter state (existing)
   const [filter, setFilter] = useState<string>('all')
 
-  // Filter events based on selected type
-  const filteredEvents = filter === 'all'
-    ? events
-    : events.filter(event => event.type === filter)
+  // WHY: Round filter state (Issue #31 - Phase 5)
+  const [selectedRound, setSelectedRound] = useState<number | 'all'>('all')
+
+  // WHY: Get unique rounds for initialization (Issue #31 - Phase 5)
+  const allRounds = Array.from(new Set(events.map(e => e.round)))
+
+  // WHY: Track which rounds are expanded in collapsible view (Issue #31 - Phase 5)
+  // Default: expand all rounds for better UX
+  const [expandedRounds, setExpandedRounds] = useState<Set<number>>(new Set(allRounds))
+
+  // WHY: Filter events by type AND round (Issue #31 - Phase 5)
+  const filteredEvents = events
+    .filter(event => filter === 'all' || event.type === filter)
+    .filter(event => selectedRound === 'all' || event.round === selectedRound)
+
+  // WHY: Get unique rounds for round selector (Issue #31 - Phase 5)
+  const availableRounds = Array.from(new Set(events.map(e => e.round))).sort((a, b) => a - b)
+
+  // WHY: Toggle round expansion (Issue #31 - Phase 5)
+  const toggleRound = (round: number) => {
+    const newExpanded = new Set(expandedRounds)
+    if (newExpanded.has(round)) {
+      newExpanded.delete(round)
+    } else {
+      newExpanded.add(round)
+    }
+    setExpandedRounds(newExpanded)
+  }
 
   // Group events by round if enabled
   const groupedEvents = groupByRound
@@ -46,7 +71,7 @@ export default function EventLog({
         <h3>Event Log</h3>
         <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
           <label htmlFor="event-filter" style={{ fontSize: '0.875rem' }}>
-            Filter:
+            Type:
           </label>
           <select
             id="event-filter"
@@ -69,6 +94,27 @@ export default function EventLog({
             <option value="reward">Reward</option>
             <option value="warning">Warning</option>
             <option value="error">Error</option>
+            <option value="milestone">Milestones</option>
+          </select>
+          <label htmlFor="round-filter" style={{ fontSize: '0.875rem' }}>
+            Round:
+          </label>
+          <select
+            id="round-filter"
+            role="combobox"
+            aria-label="Filter events by round"
+            value={selectedRound}
+            onChange={(e) => setSelectedRound(e.target.value === 'all' ? 'all' : parseInt(e.target.value))}
+            style={{
+              padding: '0.25rem 0.5rem',
+              borderRadius: '4px',
+              border: '1px solid #ccc'
+            }}
+          >
+            <option value="all">All Rounds</option>
+            {availableRounds.map(round => (
+              <option key={round} value={round}>Round {round}</option>
+            ))}
           </select>
           <button
             onClick={handleExport}
@@ -94,6 +140,8 @@ export default function EventLog({
           <div className="no-events">No events yet. Start the campaign!</div>
         ) : groupedEvents ? (
           renderGroupedEvents(groupedEvents)
+        ) : selectedRound === 'all' ? (
+          renderCollapsibleRounds(filteredEvents, expandedRounds, toggleRound)
         ) : (
           filteredEvents.map((event, idx) => (
             <EventItem key={idx} event={event} />
@@ -128,6 +176,85 @@ function groupEventsByRound(events: Event[]): Map<number, Event[]> {
   })
 
   return grouped
+}
+
+// WHY: Render collapsible rounds (Issue #31 - Phase 5)
+function renderCollapsibleRounds(
+  events: Event[],
+  expandedRounds: Set<number>,
+  toggleRound: (round: number) => void
+) {
+  const grouped = groupEventsByRound(events)
+  const rounds = Array.from(grouped.keys()).sort((a, b) => b - a)
+
+  return (
+    <>
+      {rounds.map(round => {
+        const roundEvents = grouped.get(round) || []
+        const isExpanded = expandedRounds.has(round)
+
+        return (
+          <CollapsibleRound
+            key={round}
+            round={round}
+            events={roundEvents}
+            isExpanded={isExpanded}
+            onToggle={() => toggleRound(round)}
+          />
+        )
+      })}
+    </>
+  )
+}
+
+// WHY: Collapsible round component (Issue #31 - Phase 5)
+function CollapsibleRound({
+  round,
+  events,
+  isExpanded,
+  onToggle
+}: {
+  round: number
+  events: Event[]
+  isExpanded: boolean
+  onToggle: () => void
+}) {
+  return (
+    <div style={{ marginBottom: '0.5rem' }}>
+      <button
+        onClick={onToggle}
+        aria-expanded={isExpanded}
+        style={{
+          width: '100%',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '0.5rem',
+          background: '#f0f0f0',
+          border: '1px solid #ccc',
+          borderRadius: '4px',
+          cursor: 'pointer',
+          fontSize: '0.875rem',
+          fontWeight: 'bold'
+        }}
+      >
+        <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <span style={{ fontSize: '0.75rem' }}>{isExpanded ? '▼' : '▶'}</span>
+          Round {round}
+        </span>
+        <span style={{ fontWeight: 'normal', color: '#666' }}>
+          {events.length} events
+        </span>
+      </button>
+      {isExpanded && (
+        <div style={{ marginTop: '0.25rem', marginLeft: '1rem' }}>
+          {events.map((event, idx) => (
+            <EventItem key={idx} event={event} />
+          ))}
+        </div>
+      )}
+    </div>
+  )
 }
 
 // Render grouped events with round headers

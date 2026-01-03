@@ -1,9 +1,10 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import type { Player, Hex, SearchRule, HexPosition, ThreatWarningLevel, ActiveThreatPhaseRule } from '@/types/campaign'
 import { PHASES, SURFACE_LOCATIONS, TOMB_LOCATIONS, SURFACE_CONDITIONS, TOMB_CONDITIONS } from '@/lib/data/campaignData'
 import { hexDistance, hexId, isPlayerInBlockedHex } from '@/lib/utils/hexUtils'
+import { estimateTotalRounds, calculateProgress } from '@/lib/utils/roundProgress'
 import type { ExtendedBattleRecord } from '@/types/battle'
 import type { ActiveBattleCondition, KillzoneRecommendation } from '@/types/battleCondition'
 import BattleForm from './BattleForm'
@@ -14,6 +15,10 @@ import CampSelectionModal from './CampSelectionModal'
 import DemolishConfirmationModal from './DemolishConfirmationModal'
 import PortalConfigModal from './PortalConfigModal'
 import HexBlockSelector from './HexBlockSelector'
+import { PHASE_GUIDANCE, loadPhaseGuidanceState, dismissPhaseGuidance } from '@/lib/utils/phaseGuidance'
+import PhaseQuickReference from '@/components/PhaseQuickReference'
+import PhaseTutorialTooltip from '@/components/PhaseTutorialTooltip'
+import type { Phase } from '@/types/campaign'
 
 interface PhaseTrackerProps {
   currentPhase: string
@@ -229,6 +234,22 @@ export default function PhaseTracker({
   const [showDemolishModal, setShowDemolishModal] = useState(false)
   const [demolishTarget, setDemolishTarget] = useState<{playerId: number, playerName: string} | null>(null)
 
+  // WHY: Issue #33 - Phase guidance state
+  const [guidanceState, setGuidanceState] = useState(loadPhaseGuidanceState())
+  const [phaseAnnouncement, setPhaseAnnouncement] = useState('')
+
+  // WHY: Handle dismissal of phase guidance tooltips
+  const handleDismissGuidance = (phase: Phase) => {
+    dismissPhaseGuidance(phase)
+    setGuidanceState(loadPhaseGuidanceState())
+  }
+
+  // WHY: Update ARIA announcement when phase changes
+  useEffect(() => {
+    const announcement = `Entering ${currentPhase} Phase`
+    setPhaseAnnouncement(announcement)
+  }, [currentPhase])
+
   if (!currentPlayer) return null
 
   const currentPosId = hexId(currentPlayer.position.row, currentPlayer.position.col)
@@ -349,8 +370,28 @@ export default function PhaseTracker({
   // Check if player is in blocked hex
   const inBlockedHex = isPlayerInBlockedHex(currentPlayer.position, currentHex)
 
+  // WHY: Calculate round progress for display (Issue #31 - Phase 3)
+  const estimatedTotal = estimateTotalRounds(currentRound, threatLevel, targetThreatLevel)
+  const progress = calculateProgress(threatLevel, targetThreatLevel)
+
   return (
     <div className="phase-tracker">
+      {/* WHY: ARIA live region for screen reader announcements (Issue #33) */}
+      <div
+        role="status"
+        aria-live="polite"
+        aria-atomic="true"
+        style={{
+          position: 'absolute',
+          left: '-10000px',
+          width: '1px',
+          height: '1px',
+          overflow: 'hidden'
+        }}
+      >
+        {phaseAnnouncement}
+      </div>
+
       {/* Warning for blocked hex */}
       {inBlockedHex && currentPhaseIndex === 0 && (
         <div className="blocked-hex-warning" style={{ backgroundColor: '#ff6b6b', color: 'white', padding: '0.5rem', marginBottom: '1rem', borderRadius: '4px' }}>
@@ -361,7 +402,19 @@ export default function PhaseTracker({
       {/* Phase indicator */}
       <div className="phase-indicator">
         <div className="round-info">
-          Round {currentRound} - {currentPlayer.name}&apos;s Turn
+          <div className="round-number">
+            Round {currentRound} of ~{estimatedTotal} ({progress}%)
+          </div>
+          <div className="round-subtitle">
+            {currentPlayer.name}&apos;s Turn
+          </div>
+        </div>
+        <div className="round-progress-bar">
+          <div
+            className="round-progress-fill"
+            style={{ width: `${progress}%` }}
+            aria-label={`${progress}% to target threat level`}
+          />
         </div>
         <div className="phase-tabs">
           {PHASES.map((phase, idx) => (
@@ -430,6 +483,25 @@ export default function PhaseTracker({
       <div className="phase-content">
         {currentPhaseIndex === 0 && (
           <div className="movement-phase">
+            {/* WHY: Phase instruction header (Issue #33 - Phase 4) */}
+            <div className="phase-instruction-header">
+              <h3>{PHASE_GUIDANCE.Movement.title}</h3>
+              <p className="phase-instruction">{PHASE_GUIDANCE.Movement.instruction}</p>
+            </div>
+
+            {/* WHY: Quick reference (Issue #33 - Phase 4) */}
+            <PhaseQuickReference phase="Movement" />
+
+            {/* WHY: Tutorial tooltip (Issue #33 - Phase 4) */}
+            {guidanceState.enabledGlobally && !guidanceState.movement && (
+              <PhaseTutorialTooltip
+                phase="Movement"
+                content={PHASE_GUIDANCE.Movement.tutorialTip}
+                onDismiss={() => handleDismissGuidance('Movement')}
+                show={true}
+              />
+            )}
+
             <h4>Movement Phase</h4>
             <p>Current Position: {currentPosId}</p>
             <p>Supply Points: {currentPlayer.supplyPoints}</p>
@@ -484,6 +556,25 @@ export default function PhaseTracker({
 
         {currentPhaseIndex === 1 && (
           <div className="battle-phase">
+            {/* WHY: Phase instruction header (Issue #33 - Phase 4) */}
+            <div className="phase-instruction-header">
+              <h3>{PHASE_GUIDANCE.Battle.title}</h3>
+              <p className="phase-instruction">{PHASE_GUIDANCE.Battle.instruction}</p>
+            </div>
+
+            {/* WHY: Quick reference (Issue #33 - Phase 4) */}
+            <PhaseQuickReference phase="Battle" />
+
+            {/* WHY: Tutorial tooltip (Issue #33 - Phase 4) */}
+            {guidanceState.enabledGlobally && !guidanceState.battle && (
+              <PhaseTutorialTooltip
+                phase="Battle"
+                content={PHASE_GUIDANCE.Battle.tutorialTip}
+                onDismiss={() => handleDismissGuidance('Battle')}
+                show={true}
+              />
+            )}
+
             <h4>Battle Phase</h4>
             <p>Record the result of your battle this round.</p>
 
@@ -555,6 +646,25 @@ export default function PhaseTracker({
 
         {currentPhaseIndex === 2 && (
           <div className="action-phase">
+            {/* WHY: Phase instruction header (Issue #33 - Phase 4) */}
+            <div className="phase-instruction-header">
+              <h3>{PHASE_GUIDANCE.Action.title}</h3>
+              <p className="phase-instruction">{PHASE_GUIDANCE.Action.instruction}</p>
+            </div>
+
+            {/* WHY: Quick reference (Issue #33 - Phase 4) */}
+            <PhaseQuickReference phase="Action" />
+
+            {/* WHY: Tutorial tooltip (Issue #33 - Phase 4) */}
+            {guidanceState.enabledGlobally && !guidanceState.action && (
+              <PhaseTutorialTooltip
+                phase="Action"
+                content={PHASE_GUIDANCE.Action.tutorialTip}
+                onDismiss={() => handleDismissGuidance('Action')}
+                show={true}
+              />
+            )}
+
             <h4>Action Phase</h4>
 
             {/* WHY: Show action queue when order is calculated */}
@@ -865,6 +975,25 @@ export default function PhaseTracker({
 
         {currentPhaseIndex === 3 && (
           <div className="threat-phase">
+            {/* WHY: Phase instruction header (Issue #33 - Phase 4) */}
+            <div className="phase-instruction-header">
+              <h3>{PHASE_GUIDANCE.Threat.title}</h3>
+              <p className="phase-instruction">{PHASE_GUIDANCE.Threat.instruction}</p>
+            </div>
+
+            {/* WHY: Quick reference (Issue #33 - Phase 4) */}
+            <PhaseQuickReference phase="Threat" />
+
+            {/* WHY: Tutorial tooltip (Issue #33 - Phase 4) */}
+            {guidanceState.enabledGlobally && !guidanceState.threat && (
+              <PhaseTutorialTooltip
+                phase="Threat"
+                content={PHASE_GUIDANCE.Threat.tutorialTip}
+                onDismiss={() => handleDismissGuidance('Threat')}
+                show={true}
+              />
+            )}
+
             <h4>Threat Phase</h4>
 
             {/* Location Rules Section - shows when rules exist and not yet resolved */}

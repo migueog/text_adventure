@@ -14,6 +14,7 @@ import HexDetails from '@/components/HexDetails'
 import VictoryScreen from '@/components/VictoryScreen'
 import CampaignEndModal from '@/components/CampaignEndModal'
 import ExplorationResultModal from '@/components/ExplorationResultModal'
+import RoundSummaryModal from '@/components/RoundSummaryModal'
 import ThreatMeter from '@/components/ThreatMeter'
 
 // Dynamically import Phaser component with no SSR
@@ -225,6 +226,20 @@ export default function Home() {
         <ExplorationResultModal
           result={campaign.explorationResult}
           onClose={campaign.clearExplorationResult}
+        />
+      )}
+
+      {/* Round Summary Modal */}
+      {campaign.pendingRoundSummary && (
+        <RoundSummaryModal
+          roundNumber={campaign.currentRound}
+          statistics={campaign.pendingRoundSummary}
+          players={campaign.players}
+          onContinue={campaign.continuePastRoundSummary}
+          onDisable={() => {
+            campaign.setShowRoundSummary(false)
+            campaign.continuePastRoundSummary()
+          }}
         />
       )}
     </div>

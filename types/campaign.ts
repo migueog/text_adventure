@@ -10,6 +10,9 @@ export type SearchRule =
   | { type: 'both', sp: 'd3' | 'd3+1' | number, cp: number }
   | null  // WHY: null means no search available at this location
 
+// WHY: Define campaign phase type for phase guidance (Issue #33)
+export type Phase = 'Movement' | 'Battle' | 'Action' | 'Threat'
+
 // WHY: Define threat phase rule types for location-based effects during Threat Phase
 // These effects resolve BEFORE the standard +1 threat increase each round
 export type ThreatPhaseRuleType = 'sp_gain' | 'sp_penalty' | 'cp_gain' | 'threat_increase'
@@ -269,12 +272,37 @@ export interface ReleasedPrisonerEntity {
 }
 
 export interface Event {
-  type: 'system' | 'movement' | 'exploration' | 'reward' | 'action' | 'battle' | 'warning' | 'error'
+  type: 'system' | 'movement' | 'exploration' | 'reward' | 'action' | 'battle' | 'warning' | 'error' | 'milestone'
   icon: string
   message: string
   round: number
   phase: string
   timestamp: string
+}
+
+/**
+ * WHY: Phase guidance state for tutorial tooltips (Issue #33)
+ * Tracks which phase guidance tooltips have been dismissed by the user
+ * Stored in localStorage for persistence across sessions
+ */
+export interface PhaseGuidanceState {
+  movement: boolean
+  battle: boolean
+  action: boolean
+  threat: boolean
+  enabledGlobally: boolean
+}
+
+/**
+ * WHY: Phase guidance content structure (Issue #33)
+ * Defines all help text and instructions shown for each campaign phase
+ */
+export interface PhaseGuidanceContent {
+  title: string
+  instruction: string
+  availableActions: string[]
+  keyRules: string[]
+  tutorialTip: string
 }
 
 /**
@@ -411,4 +439,36 @@ export interface MapValidationResult {
   errors: MapValidationError[]
   warnings: MapValidationError[]
   timestamp: string
+}
+
+/**
+ * WHY: Round statistics for summary display (Issue #31 - Phase 1)
+ * Calculated on-demand from event log and player history
+ */
+export interface RoundStatistics {
+  hexesExplored: number
+  battles: {
+    wins: number
+    losses: number
+    draws: number
+    byes: number
+  }
+  spChanges: Record<number, number>  // playerId → SP delta
+  cpChanges: Record<number, number>  // playerId → CP delta
+  threatChange: {
+    from: number
+    to: number
+  }
+  majorEvents: Event[]
+}
+
+/**
+ * WHY: Milestone notification for significant round markers (Issue #31 - Phase 1)
+ * Triggered at intervals, halfway point, and final warning
+ */
+export interface Milestone {
+  type: 'interval' | 'halfway' | 'final-warning'
+  round: number
+  message: string
+  icon: string
 }
