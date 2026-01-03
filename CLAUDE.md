@@ -48,6 +48,8 @@ bun run db:studio        # Open Drizzle Studio
 bunx tsc --noEmit        # Check TypeScript without building
 ```
 
+**IMPORTANT:** Do NOT use `timeout` command in bash - it's not available on macOS. Use commands directly without timeout wrappers.
+
 ## High-Level Architecture
 
 ### Game System

@@ -1,5 +1,5 @@
 import * as Phaser from 'phaser'
-import type { Hex, Player, MapConfig } from '@/types/campaign'
+import type { Hex, Player, MapConfig, HexPosition } from '@/types/campaign'
 import { hexId } from '@/lib/utils/hexUtils'
 import { SURFACE_LOCATIONS, TOMB_LOCATIONS, SURFACE_CONDITIONS, TOMB_CONDITIONS } from '@/lib/data/campaignData'
 
@@ -18,6 +18,7 @@ const COLORS = {
   hover: 0xffffff,
   baseBorder: 0x2ecc71,
   campBorder: 0x3498db,
+  regroupPath: 0x2ecc71, // WHY: Green color for REGROUP path (Issue #38)
   text: 0xffffff,
   textMuted: 0x808080,
 }
@@ -29,6 +30,7 @@ interface SceneData {
   mapConfig?: MapConfig
   selectedHex?: string | null
   onHexClick?: (hexId: string) => void
+  regroupPath?: HexPosition[] | null // WHY: Path for REGROUP visualization (Issue #38)
 }
 
 interface HexGraphicsObject {
@@ -45,6 +47,8 @@ export default class HexMapScene extends Phaser.Scene {
   players: Player[]
   currentPlayerIndex: number
   mapConfig: MapConfig
+  regroupPath: HexPosition[] | null // WHY: Path for REGROUP visualization (Issue #38)
+  regroupPathGraphics: Phaser.GameObjects.Graphics | null
 
   constructor() {
     super({ key: 'HexMapScene' })
@@ -56,6 +60,8 @@ export default class HexMapScene extends Phaser.Scene {
     this.players = []
     this.currentPlayerIndex = 0
     this.mapConfig = { name: '', rows: 7, cols: 7, surfaceRows: 3, tombRows: 4 }
+    this.regroupPath = null
+    this.regroupPathGraphics = null
   }
 
   init(data: SceneData) {
@@ -65,6 +71,7 @@ export default class HexMapScene extends Phaser.Scene {
     this.mapConfig = data.mapConfig || { name: '', rows: 7, cols: 7, surfaceRows: 3, tombRows: 4 }
     this.selectedHex = data.selectedHex || null
     this.onHexClick = data.onHexClick || null
+    this.regroupPath = data.regroupPath ?? null
   }
 
   create() {
@@ -315,12 +322,70 @@ export default class HexMapScene extends Phaser.Scene {
     }
   }
 
+  // WHY: Draw green path for REGROUP movement (Issue #38)
+  drawRegroupPath(): void {
+    // Clear existing path
+    if (this.regroupPathGraphics) {
+      this.regroupPathGraphics.destroy()
+      this.regroupPathGraphics = null
+    }
+
+    if (!this.regroupPath || this.regroupPath.length < 2) return
+
+    this.regroupPathGraphics = this.add.graphics()
+    this.regroupPathGraphics.lineStyle(4, COLORS.regroupPath, 1)
+    this.regroupPathGraphics.setDepth(5)
+
+    // WHY: Draw dashed line between hexes
+    for (let i = 0; i < this.regroupPath.length - 1; i++) {
+      const from = this.regroupPath[i]
+      const to = this.regroupPath[i + 1]
+      if (!from || !to) continue
+
+      const fromPixel = this.getHexPosition(from.row, from.col)
+      const toPixel = this.getHexPosition(to.row, to.col)
+
+      // Draw dashed line
+      const dx = toPixel.x - fromPixel.x
+      const dy = toPixel.y - fromPixel.y
+      const distance = Math.sqrt(dx * dx + dy * dy)
+      const dashLength = 10
+      const gapLength = 5
+      let currentDistance = 0
+
+      while (currentDistance < distance) {
+        const startRatio = currentDistance / distance
+        const endRatio = Math.min((currentDistance + dashLength) / distance, 1)
+
+        this.regroupPathGraphics.lineBetween(
+          fromPixel.x + dx * startRatio,
+          fromPixel.y + dy * startRatio,
+          fromPixel.x + dx * endRatio,
+          fromPixel.y + dy * endRatio
+        )
+
+        currentDistance += dashLength + gapLength
+      }
+    }
+  }
+
+  // WHY: Update REGROUP path from external caller (Issue #38)
+  updateRegroupPath(path: HexPosition[] | null): void {
+    this.regroupPath = path
+    this.drawRegroupPath()
+  }
+
   // Called from React to update the scene
   updateData(data: Partial<SceneData>) {
     this.hexData = data.hexes || this.hexData
     this.players = data.players || this.players
     this.currentPlayerIndex = data.currentPlayerIndex ?? this.currentPlayerIndex
     this.selectedHex = data.selectedHex ?? this.selectedHex
+
+    // WHY: Update regroup path if provided (Issue #38)
+    if (data.regroupPath !== undefined) {
+      this.regroupPath = data.regroupPath
+    }
 
     // Clear and redraw
     this.children.removeAll()
@@ -329,5 +394,6 @@ export default class HexMapScene extends Phaser.Scene {
 
     this.drawHexMap()
     this.drawPlayerTokens()
+    this.drawRegroupPath()
   }
 }

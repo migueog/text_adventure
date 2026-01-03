@@ -186,6 +186,7 @@ export function useCampaign() {
   // WHY: Track movement order and index for priority-based sequential movement
   const [movementOrder, setMovementOrder] = useState<number[]>([])
   const [movementIndex, setMovementIndex] = useState(0)
+  const [regroupPath, setRegroupPath] = useState<HexPosition[] | null>(null) // WHY: Path for REGROUP visualization (Issue #38)
 
   // WHY: Track action order and index for battle result-based turn ordering
   const [actionOrder, setActionOrder] = useState<number[] | null>(null)
@@ -786,17 +787,21 @@ export function useCampaign() {
       if (!player) return prev
 
       // Find nearest base or camp
-      const nearestDest = findNearestBaseOrCamp(
+      const regroupResult = findNearestBaseOrCamp(
         player.position,
         player.bases || [],
         player.camps || []
       )
 
       // If no valid destination, log error and return
-      if (!nearestDest) {
+      if (!regroupResult) {
         addEvent(`${player.name} has no bases or camps to regroup to!`, 'error')
         return prev
       }
+
+      // WHY: Use first destination (UI handles choice if multiple)
+      const nearestDest = regroupResult.destinations[0]
+      if (!nearestDest) return prev
 
       // Move player to nearest destination (no SP cost)
       updated[playerIndex] = {
@@ -1522,6 +1527,13 @@ export function useCampaign() {
         break
       }
 
+      case 'SET_REGROUP_PATH': {
+        // WHY: Set or clear REGROUP path visualization (Issue #38)
+        const { path } = params
+        setRegroupPath(path ?? null)
+        break
+      }
+
       default:
         addEvent(`Unknown action: ${action}`, 'error')
     }
@@ -2146,6 +2158,7 @@ export function useCampaign() {
     selectedOpponentId,
     activeThreatRules,
     threatRulesResolved,
+    regroupPath, // WHY: Path for REGROUP visualization (Issue #38)
 
     // Setters
     setPlayerCount,

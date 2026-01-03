@@ -4077,3 +4077,97 @@ input, select {
   color: var(--text-secondary);
   line-height: 1.4;
 }
+
+/* WHY: Regroup destination modal styles (Issue #38) */
+.regroup-modal {
+  max-width: 500px;
+}
+
+.destination-options {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.destination-option {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem;
+  border: 2px solid var(--border-color);
+  border-radius: 6px;
+  background: var(--bg-secondary);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.destination-option:hover {
+  border-color: var(--accent-green);
+  background: rgba(46, 204, 113, 0.1);
+}
+
+.destination-option.selected {
+  border-color: var(--accent-green);
+  background: rgba(46, 204, 113, 0.15);
+  box-shadow: 0 0 0 3px rgba(46, 204, 113, 0.2);
+}
+
+.destination-hex {
+  font-weight: 600;
+  font-size: 1.1rem;
+  color: var(--text-primary);
+}
+
+.destination-distance {
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+}
+
+.free-badge {
+  margin-left: auto;
+  padding: 0.25rem 0.75rem;
+  background: var(--accent-green);
+  color: white;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+/* WHY: Regroup confirmation dialog styles (Issue #38) */
+.regroup-confirm {
+  max-width: 400px;
+}
+
+.regroup-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 1rem;
+  background: var(--bg-secondary);
+  border-radius: 6px;
+}
+
+.preview-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.preview-label {
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+}
+
+.preview-value {
+  color: var(--text-primary);
+  font-weight: 600;
+  font-size: 1.05rem;
+}
+
+.preview-value.free {
+  color: var(--accent-green);
+  font-size: 1.2rem;
+  font-weight: 700;
+}

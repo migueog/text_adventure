@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useCallback } from 'react'
 import * as Phaser from 'phaser'
-import type { Hex, Player, MapConfig } from '@/types/campaign'
+import type { Hex, Player, MapConfig, HexPosition } from '@/types/campaign'
 import HexMapScene from './PhaserHexMap/HexMapScene'
 
 interface PhaserHexMapProps {
@@ -12,6 +12,7 @@ interface PhaserHexMapProps {
   selectedHex: string | null
   onHexClick: (hex: Hex) => void
   currentPlayerIndex: number
+  regroupPath?: HexPosition[] | null // WHY: Path for REGROUP visualization (Issue #38)
 }
 
 export default function PhaserHexMap({
@@ -20,7 +21,8 @@ export default function PhaserHexMap({
   mapConfig,
   selectedHex,
   onHexClick,
-  currentPlayerIndex
+  currentPlayerIndex,
+  regroupPath
 }: PhaserHexMapProps) {
   const gameRef = useRef<Phaser.Game | null>(null)
   const containerRef = useRef<HTMLDivElement | null>(null)
@@ -68,6 +70,7 @@ export default function PhaserHexMap({
           selectedHex,
           currentPlayerIndex,
           onHexClick: handleHexClick,
+          regroupPath,
         })
       }
     })
@@ -90,9 +93,10 @@ export default function PhaserHexMap({
         players,
         currentPlayerIndex,
         selectedHex,
+        regroupPath,
       })
     }
-  }, [hexes, players, currentPlayerIndex, selectedHex, handleHexClick])
+  }, [hexes, players, currentPlayerIndex, selectedHex, regroupPath, handleHexClick])
 
   if (!mapConfig) return null
 

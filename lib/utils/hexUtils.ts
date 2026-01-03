@@ -1,5 +1,7 @@
 // Hex grid utilities using axial coordinates
 
+import type { RegroupDestinationResult } from '@/types/campaign'
+
 export interface AxialCoords {
   q: number
   r: number
@@ -256,32 +258,41 @@ export function isHexTomb(hex: { type: string } | undefined): boolean {
 }
 
 /**
- * WHY: Find nearest base or camp for REGROUP action
- * Returns null if no bases/camps exist
- * If already at nearest, returns next nearest
+ * WHY: Find nearest base or camp for REGROUP action (Issue #38)
+ * Returns ALL equidistant destinations for tie-breaking
+ * Returns null if no bases/camps exist or player is at all of them
  */
 export function findNearestBaseOrCamp(
   currentPos: HexPosition,
   bases: HexPosition[],
   camps: HexPosition[]
-): HexPosition | null {
-  const destinations = [...bases, ...camps]
+): RegroupDestinationResult | null {
+  const allDestinations = [...bases, ...camps]
+  if (allDestinations.length === 0) return null
 
-  if (destinations.length === 0) return null
-
-  // Calculate distances to all destinations
-  const withDistances = destinations.map(dest => ({
+  // WHY: Calculate distance to each destination
+  const withDistances = allDestinations.map(dest => ({
     position: dest,
     distance: hexDistance(currentPos.row, currentPos.col, dest.row, dest.col)
   }))
 
-  // Filter out current position (distance 0) if at a destination
+  // WHY: Filter out current position (distance 0)
   const validDestinations = withDistances.filter(d => d.distance > 0)
-
-  // If filtered all out, player is at their only base/camp
   if (validDestinations.length === 0) return null
 
-  // Sort by distance and return nearest
+  // WHY: Sort by distance to find minimum
   validDestinations.sort((a, b) => a.distance - b.distance)
-  return validDestinations[0]?.position || null
+  const minDistance = validDestinations[0]?.distance
+  if (minDistance === undefined) return null
+
+  // WHY: Get ALL destinations at minimum distance (for tie-breaking)
+  const nearestDestinations = validDestinations
+    .filter(d => d.distance === minDistance)
+    .map(d => d.position)
+
+  return {
+    destinations: nearestDestinations,
+    distance: minDistance,
+    requiresChoice: nearestDestinations.length > 1
+  }
 }

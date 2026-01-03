@@ -14,7 +14,8 @@ import {
   canExploreHex,
   isPlayerInBlockedHex,
   isHexSurface,
-  isHexTomb
+  isHexTomb,
+  findNearestBaseOrCamp
 } from './hexUtils';
 
 describe('hexUtils', () => {
@@ -378,4 +379,96 @@ describe('hexUtils', () => {
       expect(isHexTomb(undefined)).toBe(false);
     });
   });
+
+  /**
+   * WHY: Enhanced tests for REGROUP tie-breaking (Issue #38)
+   * Tests new return type with multiple equidistant destinations
+   */
+  describe('findNearestBaseOrCamp - enhanced for tie-breaking', () => {
+    it('should return all equidistant destinations when tied', () => {
+      // WHY: Two bases equidistant from current position
+      const result = findNearestBaseOrCamp(
+        { row: 2, col: 2 },
+        [{ row: 0, col: 2 }, { row: 4, col: 2 }],  // Both 2 hexes away
+        []
+      )
+
+      expect(result).not.toBeNull()
+      expect(result?.destinations).toHaveLength(2)
+      expect(result?.distance).toBe(2)
+      expect(result?.requiresChoice).toBe(true)
+    })
+
+    it('should return requiresChoice=false for single destination', () => {
+      // WHY: Only one base, no choice needed
+      const result = findNearestBaseOrCamp(
+        { row: 2, col: 2 },
+        [{ row: 0, col: 2 }],
+        []
+      )
+
+      expect(result?.destinations).toHaveLength(1)
+      expect(result?.requiresChoice).toBe(false)
+    })
+
+    it('should include both bases and camps in tie', () => {
+      // WHY: Base and camp both 3 hexes away - player chooses
+      const result = findNearestBaseOrCamp(
+        { row: 3, col: 3 },
+        [{ row: 0, col: 3 }],  // 3 hexes away
+        [{ row: 6, col: 3 }]   // 3 hexes away
+      )
+
+      expect(result?.destinations).toHaveLength(2)
+      expect(result?.requiresChoice).toBe(true)
+    })
+
+    it('should only return nearest destinations, not all', () => {
+      // WHY: One base at 2 hexes, another at 4 - only return nearest
+      const result = findNearestBaseOrCamp(
+        { row: 2, col: 2 },
+        [{ row: 0, col: 2 }, { row: 6, col: 2 }],
+        []
+      )
+
+      expect(result?.destinations).toHaveLength(1)
+      expect(result?.distance).toBe(2)
+    })
+
+    it('should return null when no bases or camps exist', () => {
+      // WHY: Edge case - no destinations available
+      const result = findNearestBaseOrCamp(
+        { row: 2, col: 2 },
+        [],
+        []
+      )
+
+      expect(result).toBeNull()
+    })
+
+    it('should return null when already at all destinations', () => {
+      // WHY: Player is at their only base (distance 0)
+      const result = findNearestBaseOrCamp(
+        { row: 2, col: 2 },
+        [{ row: 2, col: 2 }],
+        []
+      )
+
+      expect(result).toBeNull()
+    })
+
+    it('should move to next nearest when at nearest', () => {
+      // WHY: Player at one base, should move to farther base
+      const result = findNearestBaseOrCamp(
+        { row: 2, col: 2 },
+        [{ row: 2, col: 2 }, { row: 4, col: 2 }],
+        []
+      )
+
+      expect(result).not.toBeNull()
+      expect(result?.destinations).toHaveLength(1)
+      expect(result?.destinations[0]).toEqual({ row: 4, col: 2 })
+      expect(result?.distance).toBe(2)
+    })
+  })
 });

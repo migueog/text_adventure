@@ -13,6 +13,16 @@ export type SearchRule =
 // WHY: Define campaign phase type for phase guidance (Issue #33)
 export type Phase = 'Movement' | 'Battle' | 'Action' | 'Threat'
 
+/**
+ * WHY: Return type for REGROUP destination calculation (Issue #38)
+ * Supports tie-breaking when multiple destinations are equidistant
+ */
+export interface RegroupDestinationResult {
+  destinations: HexPosition[]
+  distance: number
+  requiresChoice: boolean
+}
+
 // WHY: Define threat phase rule types for location-based effects during Threat Phase
 // These effects resolve BEFORE the standard +1 threat increase each round
 export type ThreatPhaseRuleType = 'sp_gain' | 'sp_penalty' | 'cp_gain' | 'threat_increase'

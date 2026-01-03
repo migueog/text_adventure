@@ -1,9 +1,9 @@
 'use client'
 
-import { useState, useMemo, useEffect } from 'react'
-import type { Player, Hex, SearchRule, HexPosition, ThreatWarningLevel, ActiveThreatPhaseRule } from '@/types/campaign'
+import { useState, useMemo, useEffect, useCallback } from 'react'
+import type { Player, Hex, SearchRule, HexPosition, ThreatWarningLevel, ActiveThreatPhaseRule, RegroupDestinationResult } from '@/types/campaign'
 import { PHASES, SURFACE_LOCATIONS, TOMB_LOCATIONS, SURFACE_CONDITIONS, TOMB_CONDITIONS } from '@/lib/data/campaignData'
-import { hexDistance, hexId, isPlayerInBlockedHex } from '@/lib/utils/hexUtils'
+import { hexDistance, hexId, isPlayerInBlockedHex, findNearestBaseOrCamp } from '@/lib/utils/hexUtils'
 import { estimateTotalRounds, calculateProgress } from '@/lib/utils/roundProgress'
 import type { ExtendedBattleRecord } from '@/types/battle'
 import type { ActiveBattleCondition, KillzoneRecommendation } from '@/types/battleCondition'
@@ -15,6 +15,8 @@ import CampSelectionModal from './CampSelectionModal'
 import DemolishConfirmationModal from './DemolishConfirmationModal'
 import PortalConfigModal from './PortalConfigModal'
 import HexBlockSelector from './HexBlockSelector'
+import RegroupDestinationModal from './RegroupDestinationModal'
+import RegroupConfirmDialog from './RegroupConfirmDialog'
 import { PHASE_GUIDANCE, loadPhaseGuidanceState, dismissPhaseGuidance } from '@/lib/utils/phaseGuidance'
 import PhaseQuickReference from '@/components/PhaseQuickReference'
 import PhaseTutorialTooltip from '@/components/PhaseTutorialTooltip'
@@ -39,6 +41,7 @@ interface PhaseTrackerProps {
   onAction: (action: string, params?: any) => void
   onBattle: (record: Omit<ExtendedBattleRecord, 'round' | 'timestamp'>) => void
   calculateEncampCost: (playerIndex: number) => number
+  regroupPlayer: (playerIndex: number) => void
   validateDemolish: (playerIndex: number) => {
     valid: boolean
     reason?: string
@@ -202,6 +205,7 @@ export default function PhaseTracker({
   onAction,
   onBattle,
   calculateEncampCost,
+  regroupPlayer,
   validateDemolish,
   conditionEnabled,
   selectedOpponentId,
@@ -237,6 +241,13 @@ export default function PhaseTracker({
   // WHY: Issue #33 - Phase guidance state
   const [guidanceState, setGuidanceState] = useState(loadPhaseGuidanceState())
   const [phaseAnnouncement, setPhaseAnnouncement] = useState('')
+
+  // WHY: REGROUP modal state (Issue #38)
+  const [showRegroupChoice, setShowRegroupChoice] = useState(false)
+  const [regroupDestinations, setRegroupDestinations] = useState<HexPosition[]>([])
+  const [regroupDistance, setRegroupDistance] = useState(0)
+  const [showRegroupConfirm, setShowRegroupConfirm] = useState(false)
+  const [selectedRegroupDest, setSelectedRegroupDest] = useState<HexPosition | null>(null)
 
   // WHY: Handle dismissal of phase guidance tooltips
   const handleDismissGuidance = (phase: Phase) => {
@@ -351,6 +362,66 @@ export default function PhaseTracker({
     setPendingEncampCost(0)
   }
 
+  // WHY: Handle REGROUP button click (Issue #38)
+  const handleRegroupClick = useCallback(() => {
+    const result = findNearestBaseOrCamp(
+      currentPlayer.position,
+      currentPlayer.bases || [],
+      currentPlayer.camps || []
+    )
+
+    if (!result) {
+      return // Button should be disabled, but defensive check
+    }
+
+    setRegroupDistance(result.distance)
+
+    // WHY: If multiple equidistant destinations, show choice modal
+    if (result.requiresChoice) {
+      setRegroupDestinations(result.destinations)
+      setShowRegroupChoice(true)
+    } else {
+      // WHY: Single destination, go straight to confirmation
+      const destination = result.destinations[0]
+      setSelectedRegroupDest(destination || null)
+      setShowRegroupConfirm(true)
+
+      // WHY: Draw path on map (Issue #38)
+      if (destination) {
+        onAction('SET_REGROUP_PATH', { path: [currentPlayer.position, destination] })
+      }
+    }
+  }, [currentPlayer, onAction])
+
+  // WHY: Handle destination choice from modal (Issue #38)
+  const handleRegroupDestinationChosen = useCallback((destination: HexPosition) => {
+    setSelectedRegroupDest(destination)
+    setShowRegroupChoice(false)
+    setShowRegroupConfirm(true)
+
+    // WHY: Draw path to chosen destination (Issue #38)
+    onAction('SET_REGROUP_PATH', { path: [currentPlayer.position, destination] })
+  }, [currentPlayer.position, onAction])
+
+  // WHY: Execute REGROUP movement (Issue #38)
+  const handleRegroupConfirm = useCallback(() => {
+    regroupPlayer(currentPlayer.id)
+    setShowRegroupConfirm(false)
+    setSelectedRegroupDest(null)
+    // WHY: Clear path after movement (Issue #38)
+    onAction('SET_REGROUP_PATH', { path: null })
+  }, [currentPlayer.id, regroupPlayer, onAction])
+
+  // WHY: Cancel REGROUP flow (Issue #38)
+  const handleRegroupCancel = useCallback(() => {
+    setShowRegroupChoice(false)
+    setShowRegroupConfirm(false)
+    setSelectedRegroupDest(null)
+    setRegroupDestinations([])
+    // WHY: Clear path when cancelled (Issue #38)
+    onAction('SET_REGROUP_PATH', { path: null })
+  }, [onAction])
+
   const movementOptions = getMovementOptions()
   const scoutOptions = getScoutOptions()
 
@@ -366,6 +437,16 @@ export default function PhaseTracker({
     if (playerIndex === -1) return { valid: false, reason: 'Player not found', cost: 3 }
     return validateDemolish(playerIndex)
   }, [players, currentPlayer.id, validateDemolish])
+
+  // WHY: Calculate if REGROUP is available (Issue #38)
+  const regroupAvailable = useMemo(() => {
+    const result = findNearestBaseOrCamp(
+      currentPlayer.position,
+      currentPlayer.bases || [],
+      currentPlayer.camps || []
+    )
+    return result !== null
+  }, [currentPlayer])
 
   // Check if player is in blocked hex
   const inBlockedHex = isPlayerInBlockedHex(currentPlayer.position, currentHex)
@@ -536,21 +617,37 @@ export default function PhaseTracker({
               </button>
               <button
                 className="action-btn"
-                onClick={() => {
-                  // Regroup to nearest base/camp for free
-                  const bases = currentPlayer.bases
-                  if (bases.length > 0) {
-                    const basePos = bases[0]
-                    if (basePos) {
-                      const baseId = hexId(basePos.row, basePos.col)
-                      onMove(currentPlayer.id, baseId, 0)
-                    }
-                  }
-                }}
+                onClick={handleRegroupClick}
+                disabled={!regroupAvailable}
+                title={
+                  regroupAvailable
+                    ? "Move to nearest base/camp for free"
+                    : "Build a base or camp first"
+                }
               >
-                Regroup to Base (Free)
+                Regroup to Base/Camp (Free)
               </button>
             </div>
+
+            {/* WHY: REGROUP modals (Issue #38) */}
+            {showRegroupChoice && (
+              <RegroupDestinationModal
+                isOpen={showRegroupChoice}
+                destinations={regroupDestinations}
+                distance={regroupDistance}
+                onConfirm={handleRegroupDestinationChosen}
+                onCancel={handleRegroupCancel}
+              />
+            )}
+
+            {showRegroupConfirm && selectedRegroupDest && (
+              <RegroupConfirmDialog
+                destination={selectedRegroupDest}
+                distance={regroupDistance}
+                onConfirm={handleRegroupConfirm}
+                onCancel={handleRegroupCancel}
+              />
+            )}
           </div>
         )}
 

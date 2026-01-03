@@ -167,6 +167,7 @@ export default function Home() {
             selectedHex={campaign.selectedHex}
             onHexClick={handleHexClick}
             currentPlayerIndex={campaign.currentPlayerIndex}
+            regroupPath={campaign.regroupPath}
           />
         </section>
 
@@ -190,6 +191,7 @@ export default function Home() {
             onAction={campaign.performAction}
             onBattle={campaign.recordBattle}
             calculateEncampCost={campaign.calculateEncampCost}
+            regroupPlayer={campaign.regroupPlayer}
             validateDemolish={campaign.validateDemolish}
             conditionEnabled={campaign.conditionEnabled}
             selectedOpponentId={campaign.selectedOpponentId}
