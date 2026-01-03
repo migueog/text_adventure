@@ -76,6 +76,8 @@ interface PhaseTrackerProps {
   fulcrumHexId?: string | null
   onHexBlock?: (targetHexId: string) => void
   onCancelHexBlock?: () => void
+  // WHY: Issue #53 - Solo campaign mode
+  soloMode?: boolean
 }
 
 interface MovementOption {
@@ -226,7 +228,8 @@ export default function PhaseTracker({
   showHexBlockSelector,
   fulcrumHexId,
   onHexBlock,
-  onCancelHexBlock
+  onCancelHexBlock,
+  soloMode
 }: PhaseTrackerProps) {
   const [moveTarget, setMoveTarget] = useState<Hex | null>(null)
   // WHY: Issue #41 - Missing player modal state
@@ -583,7 +586,19 @@ export default function PhaseTracker({
               />
             )}
 
-            <h4>Movement Phase</h4>
+            <h4>{soloMode ? '🎯 Movement Phase (Solo)' : '➡️ Movement Phase'}</h4>
+
+            {/* WHY: Solo vs competitive instructions (Issue #53) */}
+            {soloMode ? (
+              <div className="solo-phase-note">
+                <p><strong>Solo Mode:</strong> Move and act immediately. No turn order.</p>
+              </div>
+            ) : (
+              <div className="competitive-phase-note">
+                <p><strong>Current Player:</strong> {currentPlayer?.name}</p>
+              </div>
+            )}
+
             <p>Current Position: {currentPosId}</p>
             <p>Supply Points: {currentPlayer.supplyPoints}</p>
 
@@ -672,8 +687,17 @@ export default function PhaseTracker({
               />
             )}
 
-            <h4>Battle Phase</h4>
-            <p>Record the result of your battle this round.</p>
+            <h4>{soloMode ? '🎯 Battle Phase (Solo Campaign)' : '⚔️ Battle Phase'}</h4>
+
+            {/* WHY: All campaigns allow solo battles vs non-campaign opponents (Issue #53) */}
+            <div className="battle-instructions">
+              <p><strong>Play against:</strong></p>
+              <ul>
+                {!soloMode && <li>Another campaign player, OR</li>}
+                <li>Any non-campaign opponent, OR</li>
+                <li>Joint Ops NPC mission</li>
+              </ul>
+            </div>
 
             {/* WHY: Battle Condition Display (Issue #40) */}
             {(() => {
@@ -762,7 +786,14 @@ export default function PhaseTracker({
               />
             )}
 
-            <h4>Action Phase</h4>
+            <h4>{soloMode ? '🎯 Action Phase (Solo)' : '⚡ Action Phase'}</h4>
+
+            {/* WHY: Solo mode threat check reminder (Issue #53) */}
+            {soloMode && (
+              <div className="solo-action-note">
+                <p><strong>Note:</strong> Tomb searches and battles may trigger threat checks (see rules).</p>
+              </div>
+            )}
 
             {/* WHY: Show action queue when order is calculated */}
             {actionOrder && (
@@ -1091,7 +1122,21 @@ export default function PhaseTracker({
               />
             )}
 
-            <h4>Threat Phase</h4>
+            <h4>{soloMode ? '🎯 Threat Phase (Solo)' : '⚠️ Threat Phase'}</h4>
+
+            {/* WHY: Solo mode threat instructions (Issue #53) */}
+            {soloMode ? (
+              <div className="solo-threat-instructions">
+                <p><strong>Dynamic Threat:</strong> Threat may increase based on your actions this round.</p>
+                <p className="threat-reminder">
+                  Campaign ends if threat reaches 10!
+                </p>
+              </div>
+            ) : (
+              <div className="competitive-threat-instructions">
+                <p>Threat level increases by 1 at the end of each round.</p>
+              </div>
+            )}
 
             {/* Location Rules Section - shows when rules exist and not yet resolved */}
             {activeThreatRules && activeThreatRules.length > 0 && !threatRulesResolved && (

@@ -33,6 +33,11 @@ export default function Home() {
   // WHY: GameSetup uses Zustand for campaign creation
   const gameStarted = useCampaignStore((state) => state.gameStarted)
 
+  // WHY: Solo mode banner data (Issue #53)
+  const soloMode = useCampaignStore((state) => state.soloMode)
+  const soloBannerPlayers = useCampaignStore((state) => state.players)
+  const soloBannerThreat = useCampaignStore((state) => state.threatLevel)
+
   // WHY: Campaign end modal and victory screen state management
   const [showEndModal, setShowEndModal] = useState(false)
   const [showVictoryScreen, setShowVictoryScreen] = useState(false)
@@ -141,6 +146,33 @@ export default function Home() {
           </span>
         </div>
       </header>
+
+      {/* WHY: Show solo mode indicator if in solo campaign (Issue #53) */}
+      {soloMode && (
+        <div className="solo-mode-banner">
+          <div className="solo-icon">🎯</div>
+          <div className="solo-info">
+            <strong>SOLO CAMPAIGN MODE</strong>
+            <p className="solo-goal">
+              Goal: Reach 10+ CP before Threat Level 10
+            </p>
+          </div>
+          <div className="solo-progress">
+            <div className="solo-stat">
+              <label>Campaign Points:</label>
+              <span className={(soloBannerPlayers[0]?.campaignPoints ?? 0) >= 10 ? 'goal-reached' : ''}>
+                {soloBannerPlayers[0]?.campaignPoints ?? 0}/10
+              </span>
+            </div>
+            <div className="solo-stat">
+              <label>Threat Level:</label>
+              <span className={soloBannerThreat >= 9 ? 'danger' : ''}>
+                {soloBannerThreat}/10
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
 
       <main className="app-main">
         <aside className="sidebar left">

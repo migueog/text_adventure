@@ -14,6 +14,8 @@ interface VictoryScreenProps {
   targetThreatLevel?: number
   onRestart: () => void
   onExport?: () => void
+  soloMode?: boolean           // WHY: Determine display mode (Issue #53)
+  soloVictory?: boolean        // WHY: Solo success/failure state (Issue #53)
 }
 
 interface CategoryResult {
@@ -48,7 +50,9 @@ export default function VictoryScreen({
   threatLevel,
   targetThreatLevel,
   onRestart,
-  onExport
+  onExport,
+  soloMode,
+  soloVictory
 }: VictoryScreenProps) {
   // WHY: Issue #51 - Calculate winners for each category with tie-breaking
   const results: CategoryResult[] = VICTORY_CATEGORIES.map(category => {
@@ -106,6 +110,97 @@ export default function VictoryScreen({
   const victoryCategory = results.find(r => r.winner.id === champion.player.id)?.name || 'Champion'
   const narrativeSummary = generateNarrativeSummary(champion.player, victoryCategory)
 
+  // WHY: Solo mode shows success/failure, not rankings (Issue #53)
+  if (soloMode) {
+    const soloPlayer = players[0]
+    if (!soloPlayer) return null
+
+    return (
+      <div className="victory-screen solo-victory-screen">
+        {soloVictory ? (
+          <div className="solo-success">
+            <h2>✅ CAMPAIGN SUCCESSFUL</h2>
+            <p className="solo-subtitle">Ctesiphus Expedition Complete</p>
+
+            <div className="solo-final-status">
+              <h3>Final Status</h3>
+              <div className="solo-stat-row">
+                <label>Campaign Points:</label>
+                <span className="success">{soloPlayer.campaignPoints}/10 ✓</span>
+              </div>
+              <div className="solo-stat-row">
+                <label>Threat Level:</label>
+                <span>{threatLevel}/10</span>
+              </div>
+              <div className="solo-stat-row">
+                <label>Rounds Survived:</label>
+                <span>{currentRound}</span>
+              </div>
+            </div>
+
+            <div className="solo-performance">
+              <h3>Performance Summary</h3>
+              <ul>
+                <li>Hexes Explored: {soloPlayer.exploredHexes}</li>
+                <li>Battles Won: {soloPlayer.gamesWon}/{soloPlayer.gamesPlayed}</li>
+                <li>Enemy Operatives Eliminated: {soloPlayer.operativesKilled}</li>
+              </ul>
+            </div>
+
+            {narrativeSummary && (
+              <div className="solo-narrative">
+                <h3>Expedition Summary</h3>
+                <p>{narrativeSummary}</p>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="solo-failure">
+            <h2>❌ CAMPAIGN FAILED</h2>
+            <p className="solo-subtitle">Threat Level Reached Maximum</p>
+
+            <div className="solo-final-status">
+              <h3>Final Status</h3>
+              <div className="solo-stat-row">
+                <label>Campaign Points:</label>
+                <span className="failure">{soloPlayer.campaignPoints}/10 ✗</span>
+              </div>
+              <div className="solo-stat-row">
+                <label>Threat Level:</label>
+                <span className="danger">10/10 ✗</span>
+              </div>
+              <div className="solo-stat-row">
+                <label>Rounds Survived:</label>
+                <span>{currentRound}</span>
+              </div>
+            </div>
+
+            <div className="solo-performance">
+              <h3>Final Achievements</h3>
+              <ul>
+                <li>Hexes Explored: {soloPlayer.exploredHexes}</li>
+                <li>Battles Fought: {soloPlayer.gamesPlayed}</li>
+                <li>Enemy Operatives Eliminated: {soloPlayer.operativesKilled}</li>
+              </ul>
+            </div>
+          </div>
+        )}
+
+        <div className="victory-actions">
+          {onExport && (
+            <button className="export-btn" onClick={onExport}>
+              Export Campaign Narrative
+            </button>
+          )}
+          <button className="restart-btn" onClick={onRestart}>
+            Start New Campaign
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  // WHY: Competitive mode shows rankings and category winners (Issue #53)
   return (
     <div className="victory-screen">
       <div className="victory-header">

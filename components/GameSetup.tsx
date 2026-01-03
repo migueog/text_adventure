@@ -26,6 +26,10 @@ export default function GameSetup() {
   )
   const [validationError, setValidationError] = useState('')
 
+  // WHY: Solo mode options (Issue #53)
+  const [jointOpsMode, setJointOpsMode] = useState(false)
+  const [ignoreConditions, setIgnoreConditions] = useState(false)
+
   // WHY: Access Zustand store for campaign creation
   const createCampaign = useCampaignStore((state) => state.createCampaign)
   const startGame = useCampaignStore((state) => state.startGame)
@@ -64,11 +68,16 @@ export default function GameSetup() {
     if (!validateCampaignName()) return
 
     try {
-      // WHY: Create campaign in database first
+      // WHY: Create campaign in database first (Issue #53 - includes solo settings)
       await createCampaign(campaignName, {
         playerCount,
         targetThreatLevel: targetThreat,
-        soloMode
+        soloMode,
+        soloSettings: soloMode ? {
+          jointOpsMode,
+          ignoreConditions,
+          resupplyReductionsUsed: 0
+        } : undefined
       })
 
       // WHY: Then start the game with player setup including narrative fields (Issue #22)
@@ -169,6 +178,43 @@ export default function GameSetup() {
               </p>
             )}
           </div>
+
+          {/* WHY: Solo mode options (Issue #53) */}
+          {soloMode && (
+            <div className="solo-options-section">
+              <h4>Solo Mode Options</h4>
+
+              <div className="solo-option">
+                <label className="checkbox-label">
+                  <input
+                    type="checkbox"
+                    checked={jointOpsMode}
+                    onChange={(e) => setJointOpsMode(e.target.checked)}
+                  />
+                  <span>Playing with Joint Ops missions</span>
+                </label>
+                <p className="option-hint">
+                  Recommended: Use Joint Ops mission packs for solo play
+                </p>
+              </div>
+
+              {jointOpsMode && (
+                <div className="solo-option nested">
+                  <label className="checkbox-label">
+                    <input
+                      type="checkbox"
+                      checked={ignoreConditions}
+                      onChange={(e) => setIgnoreConditions(e.target.checked)}
+                    />
+                    <span>Ignore hex conditions for Joint Ops battles</span>
+                  </label>
+                  <p className="option-hint">
+                    Complex Joint Ops missions may already include environmental rules
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         <div className="setup-section">

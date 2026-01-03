@@ -406,6 +406,16 @@ export interface CampaignState {
   hexes: Record<string, Hex>
   mapConfig: MapConfig | null
   eventLog: Event[]
+
+  // WHY: Solo campaign mode tracking (Issue #53)
+  soloVictory?: boolean  // true = 10+ CP success, false = threat 10 failure, undefined = ongoing
+
+  // WHY: Solo campaign settings (Issue #53 - future-ready for Issue #35)
+  soloSettings?: {
+    jointOpsMode: boolean           // Playing with Joint Ops missions
+    ignoreConditions: boolean       // Skip hex conditions for battles
+    resupplyReductionsUsed: number  // Track 0-3 uses (not enforced yet)
+  }
 }
 
 export type ActionType = 'scout' | 'resupply' | 'search' | 'encamp' | 'demolish'

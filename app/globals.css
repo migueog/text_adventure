@@ -1686,6 +1686,266 @@ input, select {
   box-shadow: 0 0 0 2px rgba(156, 39, 176, 0.2);
 }
 
+/* WHY: Solo mode indicator banner (Issue #53) */
+.solo-mode-banner {
+  background: linear-gradient(135deg, #6B46C1 0%, #9333EA 100%);
+  color: white;
+  padding: 1rem 1.5rem;
+  border-radius: 8px;
+  margin-bottom: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.solo-icon {
+  font-size: 2rem;
+  line-height: 1;
+}
+
+.solo-info {
+  flex: 1;
+}
+
+.solo-info strong {
+  font-size: 1.1rem;
+  display: block;
+  margin-bottom: 0.25rem;
+}
+
+.solo-goal {
+  font-size: 0.85rem;
+  opacity: 0.9;
+  margin: 0;
+}
+
+.solo-progress {
+  display: flex;
+  gap: 1.5rem;
+}
+
+.solo-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.solo-stat label {
+  font-size: 0.75rem;
+  opacity: 0.8;
+  text-transform: uppercase;
+}
+
+.solo-stat span {
+  font-size: 1.25rem;
+  font-weight: bold;
+}
+
+.solo-stat .goal-reached {
+  color: #4ADE80;
+}
+
+.solo-stat .danger {
+  color: #FCA5A5;
+}
+
+/* WHY: Phase instruction styles (Issue #53) */
+.solo-phase-note,
+.competitive-phase-note,
+.battle-instructions,
+.solo-action-note,
+.solo-threat-instructions,
+.competitive-threat-instructions {
+  background: #F3F4F6;
+  border-left: 3px solid #6B46C1;
+  padding: 0.75rem;
+  margin: 0.5rem 0;
+  font-size: 0.9rem;
+}
+
+.competitive-phase-note,
+.competitive-threat-instructions {
+  border-left-color: #3B82F6;
+}
+
+.battle-instructions ul {
+  margin: 0.5rem 0 0 1.5rem;
+  padding: 0;
+}
+
+.joint-ops-note {
+  background: #DBEAFE;
+  border-radius: 4px;
+  padding: 0.5rem;
+  margin-top: 0.5rem;
+  font-size: 0.85rem;
+}
+
+.condition-ignore {
+  color: #059669;
+  font-weight: 500;
+}
+
+.threat-reminder {
+  color: #DC2626;
+  font-weight: 600;
+  margin-top: 0.5rem;
+}
+
+/* WHY: Solo victory screen styles (Issue #53) */
+.solo-victory-screen {
+  max-width: 600px;
+  margin: 0 auto;
+  padding: 2rem;
+}
+
+.solo-success h2 {
+  color: #059669;
+  text-align: center;
+  font-size: 2rem;
+  margin-bottom: 0.5rem;
+}
+
+.solo-failure h2 {
+  color: #DC2626;
+  text-align: center;
+  font-size: 2rem;
+  margin-bottom: 0.5rem;
+}
+
+.solo-subtitle {
+  text-align: center;
+  font-size: 1.1rem;
+  color: #6B7280;
+  margin-bottom: 2rem;
+}
+
+.solo-final-status,
+.solo-performance {
+  background: white;
+  border-radius: 8px;
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.solo-final-status h3,
+.solo-performance h3 {
+  margin-top: 0;
+  margin-bottom: 1rem;
+  color: #374151;
+}
+
+.solo-stat-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid #E5E7EB;
+}
+
+.solo-stat-row:last-child {
+  border-bottom: none;
+}
+
+.solo-stat-row label {
+  font-weight: 500;
+  color: #6B7280;
+}
+
+.solo-stat-row span {
+  font-weight: 600;
+}
+
+.solo-stat-row .success {
+  color: #059669;
+}
+
+.solo-stat-row .failure {
+  color: #DC2626;
+}
+
+.solo-stat-row .danger {
+  color: #DC2626;
+  font-weight: bold;
+}
+
+.solo-performance ul {
+  margin: 0;
+  padding-left: 1.5rem;
+}
+
+.solo-performance li {
+  padding: 0.25rem 0;
+  color: #374151;
+}
+
+.solo-narrative {
+  background: #F9FAFB;
+  border-radius: 8px;
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.solo-narrative h3 {
+  margin-top: 0;
+  color: #6B46C1;
+}
+
+.solo-narrative p {
+  font-style: italic;
+  line-height: 1.6;
+  color: #4B5563;
+}
+
+/* WHY: Solo setup options (Issue #53) */
+.solo-options-section {
+  margin-top: 1rem;
+  padding: 1rem;
+  background: #F9FAFB;
+  border-radius: 6px;
+  border: 1px solid #E5E7EB;
+}
+
+.solo-options-section h4 {
+  margin-top: 0;
+  margin-bottom: 1rem;
+  color: #6B46C1;
+  font-size: 1rem;
+}
+
+.solo-option {
+  margin-bottom: 1rem;
+}
+
+.solo-option.nested {
+  margin-left: 1.5rem;
+  padding-left: 1rem;
+  border-left: 2px solid #6B46C1;
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.checkbox-label input[type="checkbox"] {
+  cursor: pointer;
+  width: 18px;
+  height: 18px;
+}
+
+.option-hint {
+  margin: 0.25rem 0 0 1.75rem;
+  font-size: 0.85rem;
+  color: #6B7280;
+  font-style: italic;
+}
+
 /* Victory Screen */
 .victory-screen {
   min-height: 100vh;

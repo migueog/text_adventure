@@ -36,6 +36,14 @@ interface CampaignStore {
   targetThreatLevel: number
   eventLog: Event[]
 
+  // WHY: Solo campaign state (Issue #53)
+  soloVictory: boolean | undefined
+  soloSettings: {
+    jointOpsMode: boolean
+    ignoreConditions: boolean
+    resupplyReductionsUsed: number
+  } | undefined
+
   // API State
   isLoading: boolean
   isSaving: boolean
@@ -52,6 +60,9 @@ interface CampaignStore {
   updatePlayer: (playerIndex: number, updates: Partial<Player>) => void
   addEvent: (message: string, type?: Event['type'], narrativeData?: { flavor: string; category: NonNullable<Event['narrative']>['category']; locationName?: string; playerNames?: string[] }) => void
   addCustomNarrative: (narrativeText: string, playerName?: string) => void
+
+  // WHY: Check campaign end conditions (Issue #53)
+  checkCampaignEnd: () => void
 
   // Persistence Actions
   createCampaign: (name: string, settings: any) => Promise<void>
@@ -151,6 +162,11 @@ export const useCampaignStore = create<CampaignStore>()(
         threatLevel: 1,
         targetThreatLevel: 7,
         eventLog: [],
+
+        // WHY: Solo campaign state (Issue #53)
+        soloVictory: undefined,
+        soloSettings: undefined,
+
         isLoading: false,
         isSaving: false,
         lastSaved: null,
@@ -344,6 +360,12 @@ export const useCampaignStore = create<CampaignStore>()(
               playerNames: [player.name]
             }
           )
+
+          // WHY: Solo player might have reached 10+ CP (Issue #53)
+          if (get().soloMode) {
+            get().checkCampaignEnd()
+          }
+
           get().saveCampaign()
         },
 
@@ -361,6 +383,9 @@ export const useCampaignStore = create<CampaignStore>()(
               threatLevel: state.threatLevel + 1
             })
             get().addEvent(`Round ${state.currentRound + 1} begins`, 'system')
+
+            // WHY: Check if campaign should end (Issue #53)
+            get().checkCampaignEnd()
           } else {
             set({ currentPhase: nextPhase })
           }
@@ -418,6 +443,53 @@ export const useCampaignStore = create<CampaignStore>()(
             }
           }
           set({ eventLog: [...get().eventLog, event] })
+        },
+
+        // WHY: Check if campaign should end based on mode (Issue #53)
+        checkCampaignEnd: () => {
+          const state = get()
+
+          if (state.soloMode) {
+            // Solo mode: End on threat 10 (failure) OR 10+ CP (success)
+            const soloPlayer = state.players[0]
+
+            if (state.threatLevel >= 10) {
+              set({
+                gameEnded: true,
+                soloVictory: false
+              })
+              get().addEvent(
+                'Campaign failed: Necron threat overwhelmed the expedition',
+                'error',
+                {
+                  flavor: 'The tomb fully awakened. The kill team was forced to flee Ctesiphus, their mission incomplete.',
+                  category: 'milestone'
+                }
+              )
+            } else if (soloPlayer && soloPlayer.campaignPoints >= 10) {
+              set({
+                gameEnded: true,
+                soloVictory: true
+              })
+              get().addEvent(
+                `Campaign successful: Achieved ${soloPlayer.campaignPoints} CP!`,
+                'milestone',
+                {
+                  flavor: `${soloPlayer.name} completed the Ctesiphus Expedition, escaping with vital intelligence before the tomb fully awakened.`,
+                  category: 'milestone'
+                }
+              )
+            }
+          } else {
+            // Competitive mode: End when threat reaches target
+            if (state.threatLevel >= state.targetThreatLevel) {
+              set({ gameEnded: true })
+              get().addEvent(
+                `Campaign ended at threat level ${state.targetThreatLevel}`,
+                'system'
+              )
+            }
+          }
         },
 
         // Create Campaign
