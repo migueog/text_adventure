@@ -16,6 +16,7 @@ import CampaignEndModal from '@/components/CampaignEndModal'
 import ExplorationResultModal from '@/components/ExplorationResultModal'
 import RoundSummaryModal from '@/components/RoundSummaryModal'
 import ThreatMeter from '@/components/ThreatMeter'
+import CategoryStandings from '@/components/CategoryStandings'
 
 // Dynamically import Phaser component with no SSR
 const PhaserHexMap = dynamic(() => import('@/components/PhaserHexMap'), {
@@ -216,6 +217,8 @@ export default function Home() {
             hex={campaign.selectedHex ? campaign.hexes[campaign.selectedHex] : undefined}
             players={campaign.players}
           />
+          {/* WHY: Show victory category leaders during campaign (Issue #21) */}
+          <CategoryStandings players={campaign.players} />
         </aside>
       </main>
 
