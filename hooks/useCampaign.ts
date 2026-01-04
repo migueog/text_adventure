@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useCallback, useEffect, useRef } from 'react'
-import type { Player, Hex, MapConfig, Event, HexPosition, EncampOptions, ThreatWarningLevel, BattleResult, ActiveThreatPhaseRule, ThreatPhaseRuleResolution, ReleasedPrisonerEntity, RoundStatistics } from '@/types/campaign'
+import type { Player, Hex, MapConfig, Event, HexPosition, EncampOptions, ThreatWarningLevel, BattleResult, ActiveThreatPhaseRule, ThreatPhaseRuleResolution, ReleasedPrisonerEntity, RoundStatistics, ThreatCheckResult, ResupplyReductionResult } from '@/types/campaign'
 import type { ExtendedBattleRecord } from '@/types/battle'
 import {
   MAP_CONFIGS,
@@ -54,6 +54,17 @@ import {
   rollConditionWithRerolls
 } from '@/lib/utils/explorationUtils'
 import type { ActiveBattleCondition, KillzoneRecommendation } from '@/types/battleCondition'
+import {
+  checkTombExplorationThreat,
+  checkBattleThreat,
+  checkSearchThreat,
+  isVoidShieldGenerator,
+  executeVoidShieldThreat,
+  isTrophyHall,
+  executeTrophyHallThreat,
+  calculateResupplyReduction,
+  executeResupplyReduction
+} from '@/lib/utils/soloThreatChecks'  // WHY: Issue #54 - Solo mode threat checks
 
 // Constants for SP management
 const SP_MIN = 0
@@ -224,6 +235,17 @@ export function useCampaign() {
     version: '1.0.0'
   })
 
+  // WHY: Threat check dialog state (Issue #54 - Solo mode threat checks)
+  const [showThreatCheckDialog, setShowThreatCheckDialog] = useState(false)
+  const [pendingThreatCheck, setPendingThreatCheck] = useState<ThreatCheckResult | null>(null)
+
+  // WHY: Threat prevention dialog state (Issue #54 - Search action threat prevention)
+  const [showThreatPreventionDialog, setShowThreatPreventionDialog] = useState(false)
+
+  // WHY: Resupply reduction dialog state (Issue #54 - Resupply threat reduction)
+  const [showResupplyReductionDialog, setShowResupplyReductionDialog] = useState(false)
+  const [pendingResupplyReduction, setPendingResupplyReduction] = useState<ResupplyReductionResult | null>(null)
+
   // WHY: Use refs to avoid stale closure issues in callbacks
   // Refs are updated synchronously in setState callbacks, not via useEffect
   const currentRoundRef = useRef(currentRound)
@@ -305,6 +327,84 @@ export function useCampaign() {
       return newThreat
     })
   }, [targetThreatLevel, calculateThreatWarning, addEvent])
+
+  /**
+   * Handle threat check confirmation
+   * WHY: Process dice roll result and increase threat if successful (Issue #54)
+   */
+  const handleThreatCheckConfirm = useCallback(() => {
+    if (pendingThreatCheck?.success) {
+      increaseThreat(pendingThreatCheck.increase, pendingThreatCheck.description)
+    }
+    setShowThreatCheckDialog(false)
+    setPendingThreatCheck(null)
+  }, [pendingThreatCheck, increaseThreat])
+
+  /**
+   * Handle threat prevention (spend SP to prevent threat increase)
+   * WHY: Allow player to spend SP to prevent search action threat (Issue #54)
+   */
+  const handleThreatPrevention = useCallback((spCost: number) => {
+    const currentPlayer = players[currentPlayerIndex]
+    if (currentPlayer && currentPlayer.supplyPoints >= spCost) {
+      updatePlayer(currentPlayerIndex, {
+        supplyPoints: currentPlayer.supplyPoints - spCost
+      })
+      addEvent(`${currentPlayer.name} spent ${spCost} SP to prevent threat increase`, 'system')
+    }
+    setShowThreatPreventionDialog(false)
+    setPendingThreatCheck(null)
+  }, [players, currentPlayerIndex, updatePlayer, addEvent])
+
+  /**
+   * Handle threat acceptance (player chooses not to prevent)
+   * WHY: Player accepts threat increase to save SP (Issue #54)
+   */
+  const handleThreatAcceptance = useCallback(() => {
+    if (pendingThreatCheck?.success) {
+      increaseThreat(pendingThreatCheck.increase, pendingThreatCheck.description)
+    }
+    setShowThreatPreventionDialog(false)
+    setPendingThreatCheck(null)
+  }, [pendingThreatCheck, increaseThreat])
+
+  /**
+   * Handle resupply reduction acceptance
+   * WHY: Player chooses to reduce threat after resupplying (Issue #54)
+   */
+  const handleResupplyReductionAccept = useCallback(() => {
+    if (pendingResupplyReduction) {
+      const amount = executeResupplyReduction(pendingResupplyReduction)
+      const newThreat = Math.max(1, threatLevel - amount)
+
+      setThreatLevel(newThreat)
+
+      // WHY: Update solo settings to track reduction use
+      setSoloSettings(prev => ({
+        ...prev,
+        resupplyReductionsUsed: prev.resupplyReductionsUsed + 1
+      }))
+
+      const remaining = 3 - soloSettings.resupplyReductionsUsed - 1
+      addEvent(
+        `Resupply reduced threat by ${amount} (${remaining} use${remaining !== 1 ? 's' : ''} remaining)`,
+        'system'
+      )
+    }
+
+    setShowResupplyReductionDialog(false)
+    setPendingResupplyReduction(null)
+  }, [pendingResupplyReduction, threatLevel, soloSettings, addEvent])
+
+  /**
+   * Handle resupply reduction decline
+   * WHY: Player chooses to skip threat reduction (Issue #54)
+   */
+  const handleResupplyReductionDecline = useCallback(() => {
+    addEvent('Skipped threat reduction', 'system')
+    setShowResupplyReductionDialog(false)
+    setPendingResupplyReduction(null)
+  }, [addEvent])
 
   /**
    * Enable extended campaign mode
@@ -694,11 +794,12 @@ export function useCampaign() {
         })
       }
 
-      // Handle threat increase from tomb exploration in solo mode
-      if (soloMode && hex.type === 'tomb' && condition && condition.effect === 'threatIncrease') {
-        const threatInc = typeof condition.value === 'number' ? condition.value : 1
-        // WHY: Use centralized threat increase with warning logic
-        increaseThreat(threatInc, condition.name || 'Tomb exploration')
+      // WHY: Check for solo mode tomb exploration threat (Issue #54)
+      // Non-Scout tomb explorations trigger D6 roll (4+ = +1 threat)
+      if (soloMode && hex.type === 'tomb') {
+        const threatCheck = checkTombExplorationThreat()
+        setPendingThreatCheck(threatCheck)
+        setShowThreatCheckDialog(true)
       }
 
       // WHY: Create updated hex for after snapshot (Issue #23 - Phase 3)
@@ -1005,6 +1106,22 @@ export function useCampaign() {
           ? `camp (D3=${resupplyResult.roll}, base +${resupplyResult.amount})`
           : resupplyResult.type
         addEvent(`${player.name} resupplied at ${locationMsg}: +${actualGain} SP`, 'action')
+
+        // WHY: Solo mode resupply threat reduction (Issue #54)
+        // Players can reduce threat when resupplying (max 3 times per campaign)
+        if (soloMode && soloSettings.resupplyReductionsUsed < 3) {
+          const reductionResult = calculateResupplyReduction(
+            player,
+            hex,
+            3 - soloSettings.resupplyReductionsUsed
+          )
+
+          if (reductionResult?.available) {
+            setPendingResupplyReduction(reductionResult)
+            setShowResupplyReductionDialog(true)
+          }
+        }
+
         break
       }
 
@@ -1162,6 +1279,25 @@ export function useCampaign() {
           setFulcrumHexId(hexKey)
           setShowHexBlockSelector(true)
           addEvent(`${player.name} can now configure hex blocking at ${hexKey}`, 'reward')
+        }
+
+        // WHY: Solo mode search threat check (Issue #54)
+        // Search actions trigger D6 roll (5+) for threat increase (preventable with 1 SP)
+        // Void Shield Generator (TL35) always adds D3 threat (automatic, not preventable)
+        if (soloMode) {
+          if (isVoidShieldGenerator(hex)) {
+            // WHY: Void Shield Generator automatic threat (D3)
+            const threatCheck = executeVoidShieldThreat()
+            increaseThreat(threatCheck.increase, threatCheck.description)
+            addEvent(threatCheck.description, 'warning')
+          } else {
+            // WHY: Normal search with prevention option
+            const threatCheck = checkSearchThreat()
+            if (threatCheck.success) {
+              setPendingThreatCheck(threatCheck)
+              setShowThreatPreventionDialog(true)
+            }
+          }
         }
 
         break
@@ -1366,6 +1502,18 @@ export function useCampaign() {
 
           addEvent(`${player.name} demolished ${target.name}'s camp at ${playerHexId}!`, 'action')
         }
+
+        // WHY: Solo mode Trophy Hall demolish threat (Issue #54)
+        // Demolishing Trophy Hall (TL24) adds D3 threat automatically
+        if (soloMode) {
+          const currentHex = hexes[playerHexId]
+          if (currentHex && isTrophyHall(currentHex)) {
+            const threatCheck = executeTrophyHallThreat()
+            increaseThreat(threatCheck.increase, threatCheck.description)
+            addEvent(threatCheck.description, 'warning')
+          }
+        }
+
         break
       }
 
@@ -1614,7 +1762,15 @@ export function useCampaign() {
 
     // Mark battle phase as completed
     setBattleCompleted(true)
-  }, [players, currentPlayerIndex, currentPhase, addEvent])
+
+    // WHY: Check for solo mode battle threat (Issue #54)
+    // WIN: D6, 3+ = +1 threat | LOSS/DRAW: D6, 5+ = +1 threat
+    if (soloMode) {
+      const threatCheck = checkBattleThreat(record.result)
+      setPendingThreatCheck(threatCheck)
+      setShowThreatCheckDialog(true)
+    }
+  }, [players, currentPlayerIndex, currentPhase, addEvent, soloMode])
 
   /**
    * Record missing player scenario (Issue #41)
@@ -1784,9 +1940,13 @@ export function useCampaign() {
         currentPhaseRef.current = 0  // WHY: Update ref BEFORE setState
         currentPlayerIndexRef.current = 0  // WHY: Update ref BEFORE setState
 
-        // WHY: Use centralized threat increase with warning logic
-        increaseThreat(1, 'End of round')
-        const newThreat = threatLevel + 1  // WHY: Local value for campaign end check
+        // WHY: Issue #54 - Solo mode uses dynamic threat only (no automatic increase)
+        if (!soloMode) {
+          increaseThreat(1, 'End of round')
+        } else {
+          addEvent('Threat phase complete (solo mode - dynamic threat only)', 'system')
+        }
+        const newThreat = threatLevel + (soloMode ? 0 : 1)  // WHY: Local value for campaign end check
 
         setCurrentRound(newRound)
         setCurrentPlayerIndex(0)
@@ -2150,6 +2310,11 @@ export function useCampaign() {
     battleCompleted,
     extendedMode,
     explorationResult,
+    showThreatCheckDialog,  // WHY: Issue #54 - Solo mode threat check dialog
+    pendingThreatCheck,  // WHY: Issue #54 - Threat check result to display
+    showThreatPreventionDialog,  // WHY: Issue #54 - Solo mode threat prevention dialog
+    showResupplyReductionDialog,  // WHY: Issue #54 - Solo mode resupply reduction dialog
+    pendingResupplyReduction,  // WHY: Issue #54 - Resupply reduction result to display
     movementOrder,
     movementIndex,
     actionOrder,
@@ -2186,6 +2351,11 @@ export function useCampaign() {
     checkRollOff,
     enableExtendedMode,
     clearExplorationResult,
+    handleThreatCheckConfirm,  // WHY: Issue #54 - Handle threat check dialog confirmation
+    handleThreatPrevention,  // WHY: Issue #54 - Handle threat prevention (spend SP)
+    handleThreatAcceptance,  // WHY: Issue #54 - Handle threat acceptance (save SP)
+    handleResupplyReductionAccept,  // WHY: Issue #54 - Handle resupply reduction accept
+    handleResupplyReductionDecline,  // WHY: Issue #54 - Handle resupply reduction decline
     calculateMovementOrder,
     advanceActionTurn,
     getActiveBattleCondition,

@@ -418,6 +418,37 @@ export interface CampaignState {
   }
 }
 
+// WHY: Solo mode threat trigger types (Issue #54)
+export type SoloThreatTrigger =
+  | 'TOMB_EXPLORATION'
+  | 'BATTLE_WIN'
+  | 'BATTLE_LOSS_DRAW'
+  | 'SEARCH_ACTION'
+  | 'TROPHY_HALL_DEMOLISH'      // TL24
+  | 'VOID_SHIELD_SEARCH'         // TL35
+
+// WHY: Structured result for threat check execution (Issue #54)
+export interface ThreatCheckResult {
+  trigger: SoloThreatTrigger
+  triggerName: string           // Human-readable name
+  roll: number                  // Dice roll value (1-6 for D6, 1-3 for D3)
+  threshold?: number            // Required roll (undefined = automatic)
+  success: boolean              // Did threat increase?
+  increase: number              // Amount threat increased (0-3)
+  preventable: boolean          // Can player spend SP to prevent?
+  prevented: boolean            // Did player prevent it?
+  description: string           // Event log message
+}
+
+// WHY: Resupply threat reduction result (Issue #54)
+export interface ResupplyReductionResult {
+  available: boolean            // Can reduction be used?
+  usesRemaining: number         // 0-3 uses left
+  reductionAmount: number | 'D3'  // Fixed amount or roll D3
+  location: 'base' | 'camp' | 'other'  // Location type
+  roll?: number                 // Actual D3 roll (only if D3)
+}
+
 export type ActionType = 'scout' | 'resupply' | 'search' | 'encamp' | 'demolish'
 
 // WHY: Issue #51 - Victory tie-breaking system

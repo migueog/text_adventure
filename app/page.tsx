@@ -17,6 +17,9 @@ import ExplorationResultModal from '@/components/ExplorationResultModal'
 import RoundSummaryModal from '@/components/RoundSummaryModal'
 import ThreatMeter from '@/components/ThreatMeter'
 import CategoryStandings from '@/components/CategoryStandings'
+import ThreatCheckDialog from '@/components/ThreatCheckDialog'
+import ThreatPreventionDialog from '@/components/ThreatPreventionDialog'
+import ResupplyReductionDialog from '@/components/ResupplyReductionDialog'
 
 // Dynamically import Phaser component with no SSR
 const PhaserHexMap = dynamic(() => import('@/components/PhaserHexMap'), {
@@ -277,6 +280,39 @@ export default function Home() {
             campaign.setShowRoundSummary(false)
             campaign.continuePastRoundSummary()
           }}
+        />
+      )}
+
+      {/* Threat Check Dialog (Issue #54) */}
+      {campaign.showThreatCheckDialog && campaign.pendingThreatCheck && (
+        <ThreatCheckDialog
+          isOpen={campaign.showThreatCheckDialog}
+          result={campaign.pendingThreatCheck}
+          currentThreat={campaign.threatLevel}
+          onConfirm={campaign.handleThreatCheckConfirm}
+        />
+      )}
+
+      {/* Threat Prevention Dialog (Issue #54) */}
+      {campaign.showThreatPreventionDialog && campaign.pendingThreatCheck && (
+        <ThreatPreventionDialog
+          isOpen={campaign.showThreatPreventionDialog}
+          result={campaign.pendingThreatCheck}
+          currentThreat={campaign.threatLevel}
+          playerSP={campaign.players[campaign.currentPlayerIndex]?.supplyPoints || 0}
+          onPrevent={campaign.handleThreatPrevention}
+          onAccept={campaign.handleThreatAcceptance}
+        />
+      )}
+
+      {/* Resupply Reduction Dialog (Issue #54) */}
+      {campaign.showResupplyReductionDialog && campaign.pendingResupplyReduction && (
+        <ResupplyReductionDialog
+          isOpen={campaign.showResupplyReductionDialog}
+          result={campaign.pendingResupplyReduction}
+          currentThreat={campaign.threatLevel}
+          onAccept={campaign.handleResupplyReductionAccept}
+          onDecline={campaign.handleResupplyReductionDecline}
         />
       )}
     </div>
