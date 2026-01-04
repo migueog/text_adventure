@@ -28,6 +28,8 @@ import { createMissingPlayerRecords } from '@/lib/utils/battleRewards'
 import { recordOperativeKill } from '@/lib/utils/operativeKills'  // WHY: Issue #50 - Track detailed operative kills
 import { detectActiveThreatPhaseRules, sortByPriority, hasActiveRules } from '@/lib/utils/threatPhaseRules'
 import { validateMapState as validateMapStateUtil } from '@/lib/utils/mapValidation'  // WHY: Issue #23 - Phase 1
+import { buildPerformanceRecord } from '@/lib/utils/performanceCalculations'  // WHY: Issue #56 - Solo performance tracking
+import { savePerformanceRecord } from '@/lib/utils/performanceStorage'  // WHY: Issue #56 - Save performance to localStorage
 import { calculateRoundStatistics } from '@/lib/utils/roundStatistics'  // WHY: Issue #31 - Phase 2
 import { detectMilestones } from '@/lib/utils/milestones'  // WHY: Issue #31 - Phase 4
 import { importCampaignData, validateImportData } from '@/lib/utils/campaignImport'  // WHY: Issue #23 - Phase 2
@@ -2061,6 +2063,21 @@ export function useCampaign() {
                 `Threat level ${newThreat} forced withdrawal before goal achieved`,
                 'system'
               )
+            }
+
+            // WHY: Issue #56 - Save solo performance record to localStorage
+            if (currentPlayers.length === 1) {
+              const campaignId = `campaign-${Date.now()}`
+
+              const performanceRecord = buildPerformanceRecord(
+                campaignId,
+                victoryAchieved,
+                newThreat,
+                currentRoundRef.current,
+                soloPlayer
+              )
+
+              savePerformanceRecord(performanceRecord)
             }
           } else {
             // Competitive mode unchanged
