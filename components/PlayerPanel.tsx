@@ -14,9 +14,10 @@ interface PlayerCardProps {
   currentPhase: string
   hexes: Record<string, Hex>
   onUpdate: (playerId: number, updates: Partial<Player>) => void
+  soloMode?: boolean  // WHY: Issue #55 - Show CP progress in solo mode
 }
 
-function PlayerCard({ player, allPlayers, isActive, currentPhase, hexes, onUpdate }: PlayerCardProps) {
+function PlayerCard({ player, allPlayers, isActive, currentPhase, hexes, onUpdate, soloMode }: PlayerCardProps) {
   const [editing, setEditing] = useState(false)
   const [showHistory, setShowHistory] = useState(false)
   const [editName, setEditName] = useState(player.name)
@@ -105,6 +106,45 @@ function PlayerCard({ player, allPlayers, isActive, currentPhase, hexes, onUpdat
           <span className="waiting-text">Waiting for turn...</span>
         </div>
       )}
+
+      {/* WHY: Issue #55 - Solo mode CP progress tracking */}
+      {soloMode && (() => {
+        const cpGoal = 10
+        const cpProgress = Math.min(player.campaignPoints, cpGoal)
+        const cpNeeded = Math.max(0, cpGoal - player.campaignPoints)
+        const cpPercentage = (cpProgress / cpGoal) * 100
+
+        let cpStatus = ''
+        let cpStatusClass = ''
+        if (player.campaignPoints >= cpGoal) {
+          cpStatus = '✅ Victory goal achieved!'
+          cpStatusClass = 'success'
+        } else if (player.campaignPoints >= 6) {
+          cpStatus = `📊 ${cpNeeded} CP needed for victory`
+          cpStatusClass = 'warning'
+        } else {
+          cpStatus = `⚠️ ${cpNeeded} CP needed for victory`
+          cpStatusClass = 'critical'
+        }
+
+        return (
+          <div className="solo-cp-progress">
+            <div className="cp-goal-label">Campaign Goal: {cpGoal} CP</div>
+            <div className="cp-progress-bar">
+              <div
+                className="cp-progress-fill"
+                style={{ width: `${cpPercentage}%` }}
+              />
+            </div>
+            <div className="cp-progress-text">
+              {player.campaignPoints}/{cpGoal} CP
+            </div>
+            <div className={`cp-status ${cpStatusClass}`}>
+              {cpStatus}
+            </div>
+          </div>
+        )
+      })()}
 
       <div className="player-stats">
         <div className="stat">
@@ -240,6 +280,7 @@ interface PlayerPanelProps {
   currentPhase: string
   hexes: Record<string, Hex>
   onUpdatePlayer: (playerId: number, updates: Partial<Player>) => void
+  soloMode?: boolean  // WHY: Issue #55 - Pass to PlayerCard for CP progress display
 }
 
 export default function PlayerPanel({
@@ -247,7 +288,8 @@ export default function PlayerPanel({
   currentPlayerIndex,
   currentPhase,
   hexes,
-  onUpdatePlayer
+  onUpdatePlayer,
+  soloMode
 }: PlayerPanelProps) {
   return (
     <div className="player-panel">
@@ -262,6 +304,7 @@ export default function PlayerPanel({
             isActive={player.id === currentPlayerIndex}
             currentPhase={currentPhase}
             onUpdate={onUpdatePlayer}
+            soloMode={soloMode}
           />
         ))}
       </div>

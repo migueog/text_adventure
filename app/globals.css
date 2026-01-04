@@ -3025,6 +3025,74 @@ input, select {
   font-style: italic;
 }
 
+/* WHY: Issue #55 - Solo mode CP progress display */
+.solo-cp-progress {
+  margin: 12px 0;
+  padding: 12px;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.cp-goal-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #ffd700;
+  margin-bottom: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.cp-progress-bar {
+  width: 100%;
+  height: 24px;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 12px;
+  overflow: hidden;
+  margin-bottom: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.cp-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #4caf50, #8bc34a);
+  transition: width 0.3s ease;
+  box-shadow: 0 0 10px rgba(76, 175, 80, 0.5);
+}
+
+.cp-progress-text {
+  font-size: 14px;
+  font-weight: 600;
+  color: #fff;
+  text-align: center;
+  margin-bottom: 6px;
+}
+
+.cp-status {
+  font-size: 12px;
+  text-align: center;
+  padding: 4px 8px;
+  border-radius: 4px;
+}
+
+.cp-status.success {
+  background: rgba(76, 175, 80, 0.2);
+  color: #8bc34a;
+  border: 1px solid rgba(76, 175, 80, 0.4);
+}
+
+.cp-status.warning {
+  background: rgba(255, 152, 0, 0.2);
+  color: #ffb74d;
+  border: 1px solid rgba(255, 152, 0, 0.4);
+}
+
+.cp-status.critical {
+  background: rgba(244, 67, 54, 0.2);
+  color: #ef5350;
+  border: 1px solid rgba(244, 67, 54, 0.4);
+}
+
 /* WHY: Flash animation draws attention to active player */
 @keyframes flash {
   0%, 100% {

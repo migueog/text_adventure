@@ -129,6 +129,8 @@ export default function Home() {
         targetThreatLevel={campaign.targetThreatLevel}
         onRestart={handleRestart}
         onExport={handleExportCampaign}
+        soloMode={campaign.soloMode}
+        soloVictory={campaign.soloVictory}
       />
     )
   }
@@ -185,6 +187,7 @@ export default function Home() {
             currentPhase={campaign.currentPhase}
             hexes={campaign.hexes}
             onUpdatePlayer={campaign.updatePlayer}
+            soloMode={campaign.soloMode}
           />
           <ThreatMeter
             currentThreat={campaign.threatLevel}

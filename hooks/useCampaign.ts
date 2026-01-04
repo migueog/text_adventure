@@ -179,6 +179,16 @@ export function useCampaign() {
   const [threatWarning, setThreatWarning] = useState<ThreatWarningLevel>('none')
   const [eventLog, setEventLog] = useState<Event[]>([])
   const [soloMode, setSoloMode] = useState(false)
+  // WHY: Issue #54/#55 - Solo campaign settings
+  const [soloSettings, setSoloSettings] = useState<{
+    jointOpsMode: boolean
+    ignoreConditions: boolean
+    resupplyReductionsUsed: number
+  }>({
+    jointOpsMode: false,
+    ignoreConditions: false,
+    resupplyReductionsUsed: 0
+  })
   const [mapConfig, setMapConfig] = useState<MapConfig | null>(null)
   const [selectedHex, setSelectedHex] = useState<string | null>(null)
   const [gameEnded, setGameEnded] = useState(false)
@@ -246,17 +256,25 @@ export function useCampaign() {
   const [showResupplyReductionDialog, setShowResupplyReductionDialog] = useState(false)
   const [pendingResupplyReduction, setPendingResupplyReduction] = useState<ResupplyReductionResult | null>(null)
 
+  // WHY: Solo mode victory/failure tracking (Issue #55 - 10 CP goal)
+  const [soloVictory, setSoloVictory] = useState<boolean | undefined>(undefined)
+
   // WHY: Use refs to avoid stale closure issues in callbacks
   // Refs are updated synchronously in setState callbacks, not via useEffect
   const currentRoundRef = useRef(currentRound)
   const currentPhaseRef = useRef(currentPhase)
   const currentPlayerIndexRef = useRef(currentPlayerIndex)
   const playersRef = useRef(players)
+  const threatLevelRef = useRef(threatLevel)  // WHY: Issue #55 - Track threat level for campaign end detection
 
-  // WHY: Keep playersRef in sync (players array changes frequently)
+  // WHY: Keep refs in sync with state
   useEffect(() => {
     playersRef.current = players
   }, [players])
+
+  useEffect(() => {
+    threatLevelRef.current = threatLevel
+  }, [threatLevel])
 
   const addEvent = useCallback((message: string, type: Event['type'] = 'system') => {
     const event: Event = {
@@ -305,6 +323,35 @@ export function useCampaign() {
   }, [players, currentPlayerIndex, currentRound, currentPhase])
 
   /**
+   * WHY: Issue #55 - Warn players when approaching campaign end with insufficient CP
+   * Provides strategic awareness of remaining opportunities to earn CP in solo mode
+   */
+  const checkSoloProgressWarning = useCallback((threat: number, cp: number) => {
+    if (!soloMode) return
+
+    const cpNeeded = 10 - cp
+
+    if (threat >= 9) {
+      if (cp >= 10) {
+        addEvent(
+          '✅ Victory secured! You have 10+ CP. Campaign will end successfully when threat reaches 10.',
+          'milestone'
+        )
+      } else {
+        addEvent(
+          `🚨 CRITICAL: Campaign will likely end next round! You need ${cpNeeded} more CP for victory!`,
+          'warning'
+        )
+      }
+    } else if (threat >= 8 && cp < 8) {
+      addEvent(
+        `⚠️ WARNING: Only ~2 rounds likely remain. You need ${cpNeeded} more CP for victory.`,
+        'warning'
+      )
+    }
+  }, [soloMode, addEvent])
+
+  /**
    * Increase threat level with warning updates and event logging
    * WHY: Centralize threat logic for consistency and event logging
    * Uses calculateThreatWarning from lib/utils/threatWarning (Issue #29)
@@ -324,9 +371,14 @@ export function useCampaign() {
         addEvent(`⚠️ WARNING: ${targetThreatLevel - newThreat} levels from campaign end`, 'warning')
       }
 
+      // WHY: Issue #55 - Check solo mode progress warnings
+      if (soloMode && players[0]) {
+        checkSoloProgressWarning(newThreat, players[0].campaignPoints)
+      }
+
       return newThreat
     })
-  }, [targetThreatLevel, calculateThreatWarning, addEvent])
+  }, [targetThreatLevel, calculateThreatWarning, addEvent, soloMode, players, checkSoloProgressWarning])
 
   /**
    * Handle threat check confirmation
@@ -347,14 +399,20 @@ export function useCampaign() {
   const handleThreatPrevention = useCallback((spCost: number) => {
     const currentPlayer = players[currentPlayerIndex]
     if (currentPlayer && currentPlayer.supplyPoints >= spCost) {
-      updatePlayer(currentPlayerIndex, {
-        supplyPoints: currentPlayer.supplyPoints - spCost
+      // WHY: Use setPlayers directly to avoid circular dependency with updatePlayer
+      setPlayers(prev => {
+        const updated = [...prev]
+        updated[currentPlayerIndex] = {
+          ...updated[currentPlayerIndex],
+          supplyPoints: currentPlayer.supplyPoints - spCost
+        }
+        return updated
       })
       addEvent(`${currentPlayer.name} spent ${spCost} SP to prevent threat increase`, 'system')
     }
     setShowThreatPreventionDialog(false)
     setPendingThreatCheck(null)
-  }, [players, currentPlayerIndex, updatePlayer, addEvent])
+  }, [players, currentPlayerIndex, addEvent])
 
   /**
    * Handle threat acceptance (player chooses not to prevent)
@@ -379,13 +437,15 @@ export function useCampaign() {
 
       setThreatLevel(newThreat)
 
+      // WHY: Calculate remaining BEFORE updating state (setState is async)
+      const remaining = 3 - soloSettings.resupplyReductionsUsed - 1
+
       // WHY: Update solo settings to track reduction use
       setSoloSettings(prev => ({
         ...prev,
         resupplyReductionsUsed: prev.resupplyReductionsUsed + 1
       }))
 
-      const remaining = 3 - soloSettings.resupplyReductionsUsed - 1
       addEvent(
         `Resupply reduced threat by ${amount} (${remaining} use${remaining !== 1 ? 's' : ''} remaining)`,
         'system'
@@ -1897,7 +1957,8 @@ export function useCampaign() {
     const phase = currentPhaseRef.current
 
     // Validate Battle phase completion (phase index 1)
-    if (phase === 1 && !battleCompleted) {
+    // WHY: Issue #55 - In solo mode, battles are optional (can't battle against yourself)
+    if (phase === 1 && !battleCompleted && !soloMode) {
       addEvent('Cannot advance: You must record a battle result first', 'error')
       return
     }
@@ -1926,6 +1987,9 @@ export function useCampaign() {
           addEvent(`${nextPlayer.name}'s turn`, 'system')
         }
       } else {
+        // End of round - increase threat
+        const currentRoundValue = currentRoundRef.current
+
         // WHY: Trigger round summary modal before round increment (Issue #31 - Phase 2)
         if (showRoundSummary && !pendingRoundSummary) {
           const stats = calculateRoundStatistics(eventLog, currentPlayers, currentRoundValue)
@@ -1933,20 +1997,31 @@ export function useCampaign() {
           return  // Pause execution until modal dismissed
         }
 
-        // End of round - increase threat
-        const currentRoundValue = currentRoundRef.current
         const newRound = currentRoundValue + 1
         currentRoundRef.current = newRound  // WHY: Update ref BEFORE setState
         currentPhaseRef.current = 0  // WHY: Update ref BEFORE setState
         currentPlayerIndexRef.current = 0  // WHY: Update ref BEFORE setState
 
         // WHY: Issue #54 - Solo mode uses dynamic threat only (no automatic increase)
+        // WHY: Issue #55 - Calculate new threat and update ref BEFORE setState (avoids stale closure)
+        const currentThreat = threatLevelRef.current
+        const newThreat = soloMode ? currentThreat : Math.min(currentThreat + 1, 10)
+
         if (!soloMode) {
-          increaseThreat(1, 'End of round')
+          threatLevelRef.current = newThreat  // WHY: Update ref BEFORE setState
+          setThreatLevel(newThreat)
+          const warning = calculateThreatWarning(newThreat, targetThreatLevel)
+          setThreatWarning(warning)
+          addEvent('Threat increased by 1: End of round', 'warning')
+
+          if (warning === 'critical') {
+            addEvent(`⚠️ CRITICAL: Only ${targetThreatLevel - newThreat} level(s) from campaign end!`, 'warning')
+          } else if (warning === 'moderate') {
+            addEvent(`⚠️ WARNING: ${targetThreatLevel - newThreat} levels from campaign end`, 'warning')
+          }
         } else {
           addEvent('Threat phase complete (solo mode - dynamic threat only)', 'system')
         }
-        const newThreat = threatLevel + (soloMode ? 0 : 1)  // WHY: Local value for campaign end check
 
         setCurrentRound(newRound)
         setCurrentPlayerIndex(0)
@@ -1959,11 +2034,39 @@ export function useCampaign() {
         setMovementOrder(newOrder)
         setMovementIndex(0)
 
-        // Only end game if NOT in extended mode
+        // WHY: Issue #55 - Solo mode victory determined by 10+ CP goal
         if (newThreat >= targetThreatLevel && !extendedMode) {
           setGameEnded(true)
-          addEvent(`🔴 CAMPAIGN ENDED! Target threat level ${targetThreatLevel} reached.`, 'system')
-          addEvent(`The Necrons have fully awakened at threat level ${newThreat}: ${THREAT_LEVELS[newThreat]}`, 'system')
+
+          if (soloMode) {
+            const soloPlayer = currentPlayers[0]
+            const victoryAchieved = soloPlayer && soloPlayer.campaignPoints >= 10
+            setSoloVictory(victoryAchieved)
+
+            if (victoryAchieved) {
+              addEvent(
+                `🎉 CAMPAIGN SUCCESS! You reached ${soloPlayer.campaignPoints} CP (10+ required)`,
+                'system'
+              )
+              addEvent(
+                `The expedition was successful despite threat level ${newThreat}`,
+                'system'
+              )
+            } else {
+              addEvent(
+                `❌ CAMPAIGN FAILED. Only ${soloPlayer?.campaignPoints || 0} CP reached (10 required)`,
+                'system'
+              )
+              addEvent(
+                `Threat level ${newThreat} forced withdrawal before goal achieved`,
+                'system'
+              )
+            }
+          } else {
+            // Competitive mode unchanged
+            addEvent(`🔴 CAMPAIGN ENDED! Target threat level ${targetThreatLevel} reached.`, 'system')
+            addEvent(`The Necrons have fully awakened at threat level ${newThreat}: ${THREAT_LEVELS[newThreat]}`, 'system')
+          }
         } else {
           addEvent(`Round ${currentRoundRef.current} begins. Threat level: ${newThreat}`, 'system')
           // WHY: Log movement order for transparency
@@ -2315,6 +2418,7 @@ export function useCampaign() {
     showThreatPreventionDialog,  // WHY: Issue #54 - Solo mode threat prevention dialog
     showResupplyReductionDialog,  // WHY: Issue #54 - Solo mode resupply reduction dialog
     pendingResupplyReduction,  // WHY: Issue #54 - Resupply reduction result to display
+    soloVictory,  // WHY: Issue #55 - Solo mode victory/failure state (true = success, false = failure)
     movementOrder,
     movementIndex,
     actionOrder,
@@ -2351,6 +2455,7 @@ export function useCampaign() {
     checkRollOff,
     enableExtendedMode,
     clearExplorationResult,
+    increaseThreat,  // WHY: Issue #55 - Exported for testing solo victory warnings
     handleThreatCheckConfirm,  // WHY: Issue #54 - Handle threat check dialog confirmation
     handleThreatPrevention,  // WHY: Issue #54 - Handle threat prevention (spend SP)
     handleThreatAcceptance,  // WHY: Issue #54 - Handle threat acceptance (save SP)

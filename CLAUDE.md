@@ -286,6 +286,20 @@ export default function Component({ name, onAction }: ComponentProps) {
 - Campaign ends when threat reaches target level
 - D36 system uses 3d6 for all random generation
 
+## Planning and Documentation
+
+### Implementation Plans
+- **NEVER create separate markdown plan files** (*.md) in `.claude/plans/` or elsewhere
+- When planning implementation for GitHub issues, **edit the GitHub issue directly** using `gh issue comment`
+- Add implementation details, phases, and acceptance criteria as comments on the issue itself
+- Keep all planning artifacts in GitHub for team visibility
+
+### Documentation Files
+- **NEVER proactively create documentation files** unless explicitly requested
+- Do not create README files, PLAN files, or other markdown documentation
+- Focus on code comments and inline documentation instead
+- Use GitHub issues and PR descriptions for feature documentation
+
 ## Common Workflows
 
 ### Starting a New Feature
