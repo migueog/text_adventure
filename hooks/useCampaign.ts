@@ -1,187 +1,53 @@
 'use client'
 
-import { useState, useCallback, useEffect, useRef } from 'react'
-import type { Player, Hex, MapConfig, Event, HexPosition, EncampOptions, ThreatWarningLevel, BattleResult, ActiveThreatPhaseRule, ThreatPhaseRuleResolution, ReleasedPrisonerEntity, RoundStatistics, ThreatCheckResult, ResupplyReductionResult } from '@/types/campaign'
-import type { ExtendedBattleRecord } from '@/types/battle'
-import {
-  MAP_CONFIGS,
-  SURFACE_LOCATIONS,
-  TOMB_LOCATIONS,
-  SURFACE_CONDITIONS,
-  TOMB_CONDITIONS,
-  PLAYER_COLORS,
-  PHASES,
-  THREAT_LEVELS,
-  BattleResultInfo
-} from '@/lib/data/campaignData'
-import { rollD36, parseValue, rollD6 } from '@/lib/utils/dice'
-import { hexId, hexDistance, canExploreHex, findNearestBaseOrCamp } from '@/lib/utils/hexUtils'
-import { determinePriority, needsRollOff } from '@/lib/utils/priority'
-import { calculateActionPhaseOrder } from '@/lib/utils/actionPhaseUtils'
-import { calculateResupply } from '@/lib/utils/resupply'
-import { resolveSearchRule, canPerformSearch, providesDimensionalKey, canAcquireKey } from '@/lib/utils/search'
-import { initializeIntelHex, gainIntel, canUseIntelScout } from '@/lib/utils/intel'
-import { configurePortalNetwork, canUsePortal, toggleHexBlocking } from '@/lib/utils/hexManipulation'
+import { useState, useCallback } from 'react'
+import type {
+  ThreatWarningLevel,
+  ActiveBattleCondition,
+  KillzoneRecommendation,
+  ReleasedPrisonerEntity,
+  RoundStatistics
+} from '@/types/campaign'
+import { PHASES } from '@/lib/data/campaignData'
 import { calculateThreatWarning } from '@/lib/utils/threatWarning'
 import { determineActiveCondition, getKillzoneRecommendation } from '@/lib/utils/battleCondition'
-import { createMissingPlayerRecords } from '@/lib/utils/battleRewards'
-import { recordOperativeKill } from '@/lib/utils/operativeKills'  // WHY: Issue #50 - Track detailed operative kills
-import { detectActiveThreatPhaseRules, sortByPriority, hasActiveRules } from '@/lib/utils/threatPhaseRules'
-import { validateMapState as validateMapStateUtil } from '@/lib/utils/mapValidation'  // WHY: Issue #23 - Phase 1
-import { buildPerformanceRecord } from '@/lib/utils/performanceCalculations'  // WHY: Issue #56 - Solo performance tracking
-import { savePerformanceRecord } from '@/lib/utils/performanceStorage'  // WHY: Issue #56 - Save performance to localStorage
-import { calculateRoundStatistics } from '@/lib/utils/roundStatistics'  // WHY: Issue #31 - Phase 2
-import { detectMilestones } from '@/lib/utils/milestones'  // WHY: Issue #31 - Phase 4
-import { importCampaignData, validateImportData } from '@/lib/utils/campaignImport'  // WHY: Issue #23 - Phase 2
-import { migrateCampaignData } from '@/lib/utils/campaignMigrations'  // WHY: Issue #23 - Phase 2
-import type { CampaignExport } from '@/lib/utils/campaignExport'  // WHY: Issue #23 - Phase 2
-import {
-  createHexSnapshot,
-  recordAudit,
-  getHexHistory,
-  getPlayerActions,
-  exportAuditLog
-} from '@/lib/utils/auditTrail'  // WHY: Issue #23 - Phase 3
-import type { CampaignAuditLog, HexSnapshot, AuditActionType } from '@/types/campaign'  // WHY: Issue #23 - Phase 3
-import {
-  findPlayersInBeastRange,
-  resolveBeastAttack,
-  getValidPrisonerMoves,
-  resolvePrisonerAttack
-} from '@/lib/utils/threatPhaseAttacks'
-import {
-  getExploredLocationIds,
-  getExploredConditionIds,
-  rollWithRerolls,
-  rollConditionWithRerolls
-} from '@/lib/utils/explorationUtils'
-import type { ActiveBattleCondition, KillzoneRecommendation } from '@/types/battleCondition'
-import {
-  checkTombExplorationThreat,
-  checkBattleThreat,
-  checkSearchThreat,
-  isVoidShieldGenerator,
-  executeVoidShieldThreat,
-  isTrophyHall,
-  executeTrophyHallThreat,
-  calculateResupplyReduction,
-  executeResupplyReduction
-} from '@/lib/utils/soloThreatChecks'  // WHY: Issue #54 - Solo mode threat checks
+import { configurePortalNetwork, toggleHexBlocking } from '@/lib/utils/hexManipulation'
+import { calculateRoundStatistics } from '@/lib/utils/roundStatistics'
+import { detectMilestones } from '@/lib/utils/milestones'
 
-// Constants for SP management
-const SP_MIN = 0
-const SP_MAX = 10
-
-// Helper function to clamp SP within valid range
-const clampSP = (value: number): number => Math.max(SP_MIN, Math.min(SP_MAX, value))
-
-// Helper function to add history entry
-const addHistoryEntry = (
-  player: Player,
-  round: number,
-  phase: string,
-  spChange: number,
-  cpChange: number,
-  reason: string
-) => {
-  const entry = {
-    round,
-    phase,
-    timestamp: new Date().toISOString(),
-    action: reason,
-    spBefore: player.supplyPoints,
-    spAfter: clampSP(player.supplyPoints + spChange),
-    cpBefore: player.campaignPoints,
-    cpAfter: player.campaignPoints + cpChange,
-  }
-  
-  return [...(player.history || []), entry]
-}
+// Import all campaign hooks
+import { useCampaignState } from './campaign/useCampaignState'
+import { useAudit } from './campaign/useAudit'
+import { useExploration } from './campaign/useExploration'
+import { useMovementPhase } from './campaign/useMovementPhase'
+import { useBattlePhase } from './campaign/useBattlePhase'
+import { useActionPhase } from './campaign/useActionPhase'
+import { useThreatPhase } from './campaign/useThreatPhase'
+import { useSoloMode } from './campaign/useSoloMode'
+import { useVictory } from './campaign/useVictory'
+import { useImportExport } from './campaign/useImportExport'
 
 /**
- * Helper function to deduct SP and track cumulative spending
- * WHY: Issue #50 - Track total SP spent for PIONEER victory category
- *
- * @param player - Player to deduct SP from
- * @param amount - Amount of SP to deduct
- * @returns Updated player with deducted SP and tracked spending
+ * Main campaign hook - composes all specialized hooks
+ * WHY: Orchestrates campaign state and phase management
+ * Refactored from 2,518-line monolith into 10 focused hooks
  */
-const deductSupplyPoints = (player: Player, amount: number): Player => {
-  const newSP = clampSP(player.supplyPoints - amount)
-  const spSpent = (player.supplyPointsSpent || 0) + amount
-
-  return {
-    ...player,
-    supplyPoints: newSP,
-    supplyPointsSpent: spSpent
-  }
-}
-
-const createInitialHexGrid = (config: MapConfig): Record<string, Hex> => {
-  const hexes: Record<string, Hex> = {}
-  for (let row = 0; row < config.rows; row++) {
-    for (let col = 0; col < config.cols; col++) {
-      const id = hexId(row, col)
-      const isSurface = row < config.surfaceRows
-      hexes[id] = {
-        id,
-        row,
-        col,
-        type: isSurface ? 'surface' : 'tomb',
-        explored: false,
-        location: 0,
-        condition: 0,
-        exploredBy: [],
-      }
-    }
-  }
-  return hexes
-}
-
-const createPlayer = (id: number, name: string, color: string, startHex: HexPosition): Player => ({
-  id,
-  name,
-  color,
-  killTeamName: `Kill Team ${id + 1}`,
-  position: startHex,
-  supplyPoints: 10,
-  campaignPoints: 0,
-  exploredHexes: 0,
-  operativesKilled: 0,
-  gamesPlayed: 0,
-  gamesWon: 0,
-  gamesLost: 0,
-  bases: [startHex],
-  camps: [],
-  history: [],
-  battleResult: null,
-  searchedHexes: [],  // WHY: Track which hexes this player has searched (one-time use)
-  battleHistory: [],  // WHY: Initialize empty battle history for Demolish prerequisites
-  supplyPointsSpent: 0,  // WHY: Track cumulative SP spent for PIONEER victory category (Issue #50)
-  operativeKillDetails: [],  // WHY: Track kill details for wound-based HEADHUNTER category (Issue #50)
-})
-
-interface PerformActionParams {
-  targetHex?: string
-  distance?: number
-  cost?: number
-  options?: EncampOptions | import('@/types/campaign').DemolishOptions  // WHY: Encamp and Demolish action options
-}
-
 export function useCampaign() {
-  const [gameStarted, setGameStarted] = useState(false)
-  const [playerCount, setPlayerCount] = useState(4)
-  const [players, setPlayers] = useState<Player[]>([])
-  const [hexes, setHexes] = useState<Record<string, Hex>>({})
-  const [currentRound, setCurrentRound] = useState(1)
-  const [currentPhase, setCurrentPhase] = useState(0)
-  const [currentPlayerIndex, setCurrentPlayerIndex] = useState(0)
+  // ============================================================================
+  // CORE STATE (Foundation Hook)
+  // ============================================================================
+  const state = useCampaignState()
+
+  // ============================================================================
+  // ADDITIONAL STATE (Not managed by specialized hooks)
+  // ============================================================================
+
+  // Threat level state (core campaign mechanic)
   const [threatLevel, setThreatLevel] = useState(1)
-  const [targetThreatLevel, setTargetThreatLevel] = useState(7)
   const [threatWarning, setThreatWarning] = useState<ThreatWarningLevel>('none')
-  const [eventLog, setEventLog] = useState<Event[]>([])
+
+  // Solo mode state (initialized by GameSetup component)
   const [soloMode, setSoloMode] = useState(false)
-  // WHY: Issue #54/#55 - Solo campaign settings
   const [soloSettings, setSoloSettings] = useState<{
     jointOpsMode: boolean
     ignoreConditions: boolean
@@ -191,2328 +57,524 @@ export function useCampaign() {
     ignoreConditions: false,
     resupplyReductionsUsed: 0
   })
-  const [mapConfig, setMapConfig] = useState<MapConfig | null>(null)
-  const [selectedHex, setSelectedHex] = useState<string | null>(null)
-  const [gameEnded, setGameEnded] = useState(false)
-  const [battleCompleted, setBattleCompleted] = useState(false)
-  const [extendedMode, setExtendedMode] = useState(false)
-  const [explorationResult, setExplorationResult] = useState<{
-    hexId: string
-    hexNumber: number
-    location: { name: string; description: string; effect: string }
-    condition: { name: string; description: string; effect: string }
-    locationRoll: number
-    conditionRoll: number
-    playerName: string
-  } | null>(null)
 
-  // WHY: Track movement order and index for priority-based sequential movement
-  const [movementOrder, setMovementOrder] = useState<number[]>([])
-  const [movementIndex, setMovementIndex] = useState(0)
-  const [regroupPath, setRegroupPath] = useState<HexPosition[] | null>(null) // WHY: Path for REGROUP visualization (Issue #38)
-
-  // WHY: Track action order and index for battle result-based turn ordering
-  const [actionOrder, setActionOrder] = useState<number[] | null>(null)
-  const [actionIndex, setActionIndex] = useState(0)
-
-  // WHY: Track battle condition state for Issue #40
+  // Battle condition state (Issue #40)
   const [conditionEnabled, setConditionEnabled] = useState(true)
   const [selectedOpponentId, setSelectedOpponentId] = useState<number | null>(null)
 
-  // WHY: Track threat phase location rules for Issue #48
-  // Rules must resolve before standard +1 threat increase
-  const [activeThreatRules, setActiveThreatRules] = useState<ActiveThreatPhaseRule[]>([])
-  const [threatRulesResolved, setThreatRulesResolved] = useState(false)
-
-  // WHY: Track Released Prisoner entities for Issue #59
-  // Prisoners spawn when camping at Hyperfractal Gaol (TL32), move and attack during Threat Phase
+  // Released Prisoner entities (Issue #59)
   const [releasedPrisoners, setReleasedPrisoners] = useState<ReleasedPrisonerEntity[]>([])
 
-  // WHY: Portal and Hex Blocking modal state (Issue #59 - Phase 4)
+  // Portal and Hex Blocking modal state (Issue #59 - Phase 4)
   const [showPortalConfigModal, setShowPortalConfigModal] = useState(false)
   const [portalHexId, setPortalHexId] = useState<string | null>(null)
   const [showHexBlockSelector, setShowHexBlockSelector] = useState(false)
   const [fulcrumHexId, setFulcrumHexId] = useState<string | null>(null)
 
-  // WHY: Round summary modal state (Issue #31 - Phase 2)
+  // Round summary modal state (Issue #31 - Phase 2)
   const [showRoundSummary, setShowRoundSummary] = useState(true)
   const [pendingRoundSummary, setPendingRoundSummary] = useState<RoundStatistics | null>(null)
 
-  // WHY: Campaign import modal state (Issue #23 - Phase 2)
+  // Campaign import modal state (Issue #23 - Phase 2)
   const [importModalOpen, setImportModalOpen] = useState(false)
 
-  // WHY: Audit log for tracking hex modifications (Issue #23 - Phase 3)
-  const [auditLog, setAuditLog] = useState<CampaignAuditLog>({
-    entries: [],
-    version: '1.0.0'
-  })
-
-  // WHY: Threat check dialog state (Issue #54 - Solo mode threat checks)
-  const [showThreatCheckDialog, setShowThreatCheckDialog] = useState(false)
-  const [pendingThreatCheck, setPendingThreatCheck] = useState<ThreatCheckResult | null>(null)
-
-  // WHY: Threat prevention dialog state (Issue #54 - Search action threat prevention)
-  const [showThreatPreventionDialog, setShowThreatPreventionDialog] = useState(false)
-
-  // WHY: Resupply reduction dialog state (Issue #54 - Resupply threat reduction)
-  const [showResupplyReductionDialog, setShowResupplyReductionDialog] = useState(false)
-  const [pendingResupplyReduction, setPendingResupplyReduction] = useState<ResupplyReductionResult | null>(null)
-
-  // WHY: Solo mode victory/failure tracking (Issue #55 - 10 CP goal)
-  const [soloVictory, setSoloVictory] = useState<boolean | undefined>(undefined)
-
-  // WHY: Use refs to avoid stale closure issues in callbacks
-  // Refs are updated synchronously in setState callbacks, not via useEffect
-  const currentRoundRef = useRef(currentRound)
-  const currentPhaseRef = useRef(currentPhase)
-  const currentPlayerIndexRef = useRef(currentPlayerIndex)
-  const playersRef = useRef(players)
-  const threatLevelRef = useRef(threatLevel)  // WHY: Issue #55 - Track threat level for campaign end detection
-
-  // WHY: Keep refs in sync with state
-  useEffect(() => {
-    playersRef.current = players
-  }, [players])
-
-  useEffect(() => {
-    threatLevelRef.current = threatLevel
-  }, [threatLevel])
-
-  const addEvent = useCallback((message: string, type: Event['type'] = 'system') => {
-    const event: Event = {
-      type,
-      icon: type === 'system' ? 'ℹ️' : type === 'movement' ? '➡️' : type === 'exploration' ? '🔍' :
-            type === 'reward' ? '🎁' : type === 'action' ? '⚡' : type === 'battle' ? '⚔️' :
-            type === 'warning' ? '⚠️' : '❌',
-      message,
-      round: currentRound,
-      phase: PHASES[currentPhase] || 'Unknown',
-      timestamp: new Date().toLocaleTimeString(),
-    }
-    setEventLog(prev => [event, ...prev])
-  }, [currentRound, currentPhase])
+  // ============================================================================
+  // THREAT LEVEL MANAGEMENT
+  // ============================================================================
 
   /**
-   * Record audit entry for hex modification (Issue #23 - Phase 3)
-   * WHY: Track before/after snapshots for all hex-modifying actions
-   */
-  const addAudit = useCallback((
-    hexId: string,
-    action: AuditActionType,
-    before: HexSnapshot,
-    after: HexSnapshot,
-    reason: string
-  ) => {
-    const player = players[currentPlayerIndex]
-    if (!player) return
-
-    const entry = recordAudit(
-      hexId,
-      action,
-      before,
-      after,
-      player.id,
-      player.name,
-      currentRound,
-      PHASES[currentPhase] || 'Unknown',
-      reason
-    )
-
-    setAuditLog(prev => ({
-      ...prev,
-      entries: [...prev.entries, entry]
-    }))
-  }, [players, currentPlayerIndex, currentRound, currentPhase])
-
-  /**
-   * WHY: Issue #55 - Warn players when approaching campaign end with insufficient CP
-   * Provides strategic awareness of remaining opportunities to earn CP in solo mode
-   */
-  const checkSoloProgressWarning = useCallback((threat: number, cp: number) => {
-    if (!soloMode) return
-
-    const cpNeeded = 10 - cp
-
-    if (threat >= 9) {
-      if (cp >= 10) {
-        addEvent(
-          '✅ Victory secured! You have 10+ CP. Campaign will end successfully when threat reaches 10.',
-          'milestone'
-        )
-      } else {
-        addEvent(
-          `🚨 CRITICAL: Campaign will likely end next round! You need ${cpNeeded} more CP for victory!`,
-          'warning'
-        )
-      }
-    } else if (threat >= 8 && cp < 8) {
-      addEvent(
-        `⚠️ WARNING: Only ~2 rounds likely remain. You need ${cpNeeded} more CP for victory.`,
-        'warning'
-      )
-    }
-  }, [soloMode, addEvent])
-
-  /**
-   * Increase threat level with warning updates and event logging
-   * WHY: Centralize threat logic for consistency and event logging
-   * Uses calculateThreatWarning from lib/utils/threatWarning (Issue #29)
+   * WHY: Centralized threat increase with warning calculation
+   * Updates threat level, calculates warning, and logs event
    */
   const increaseThreat = useCallback((amount: number, reason: string): void => {
     setThreatLevel(prev => {
       const newThreat = Math.min(prev + amount, 10)
-      const warning = calculateThreatWarning(newThreat, targetThreatLevel)
+      const warning = calculateThreatWarning(newThreat, state.targetThreatLevel)
 
       setThreatWarning(warning)
-      addEvent(`Threat increased by ${amount}: ${reason}`, 'warning')
-
-      // WHY: Inform players when approaching campaign end
-      if (warning === 'critical') {
-        addEvent(`⚠️ CRITICAL: Only ${targetThreatLevel - newThreat} level(s) from campaign end!`, 'warning')
-      } else if (warning === 'moderate') {
-        addEvent(`⚠️ WARNING: ${targetThreatLevel - newThreat} levels from campaign end`, 'warning')
-      }
-
-      // WHY: Issue #55 - Check solo mode progress warnings
-      if (soloMode && players[0]) {
-        checkSoloProgressWarning(newThreat, players[0].campaignPoints)
-      }
+      state.addEvent(`Threat increased by ${amount}: ${reason}`, 'warning')
 
       return newThreat
     })
-  }, [targetThreatLevel, calculateThreatWarning, addEvent, soloMode, players, checkSoloProgressWarning])
+  }, [state.targetThreatLevel, state.addEvent])
+
+  // ============================================================================
+  // SPECIALIZED HOOKS (Phase-specific logic)
+  // ============================================================================
+
+  // Audit trail hook (Issue #23 - Phase 3)
+  const audit = useAudit({
+    players: state.players,
+    currentPlayerIndex: state.currentPlayerIndex,
+    currentRound: state.currentRound,
+    currentPhase: state.currentPhase,
+    hexes: state.hexes,
+    addEvent: state.addEvent
+  })
+
+  // Exploration hook (D36 rolls, location/condition assignment)
+  const exploration = useExploration({
+    players: state.players,
+    hexes: state.hexes,
+    currentRound: state.currentRound,
+    currentPhase: state.currentPhase,
+    soloMode,
+    setHexes: state.setHexes,
+    setPlayers: state.setPlayers,
+    addEvent: state.addEvent,
+    addAudit: audit.addAudit
+  })
+
+  // Movement phase hook
+  const movement = useMovementPhase({
+    players: state.players,
+    hexes: state.hexes,
+    currentPhase: state.currentPhase,
+    setPlayers: state.setPlayers,
+    setHexes: state.setHexes,
+    addEvent: state.addEvent,
+    addAudit: audit.addAudit
+  })
+
+  // Battle phase hook
+  const battle = useBattlePhase({
+    players: state.players,
+    hexes: state.hexes,
+    currentRound: state.currentRound,
+    currentPhase: state.currentPhase,
+    conditionEnabled,
+    setPlayers: state.setPlayers,
+    setConditionEnabled,
+    addEvent: state.addEvent
+  })
+
+  // Action phase hook
+  const action = useActionPhase({
+    players: state.players,
+    hexes: state.hexes,
+    currentRound: state.currentRound,
+    currentPhase: state.currentPhase,
+    soloMode,
+    setPlayers: state.setPlayers,
+    setHexes: state.setHexes,
+    increaseThreat,
+    addEvent: state.addEvent,
+    addAudit: audit.addAudit
+  })
+
+  // Threat phase hook (Issue #48, #54)
+  const threat = useThreatPhase({
+    players: state.players,
+    hexes: state.hexes,
+    threatLevel,
+    targetThreatLevel: state.targetThreatLevel,
+    currentRound: state.currentRound,
+    currentPhase: state.currentPhase,
+    soloMode,
+    soloSettings,
+    releasedPrisoners,
+    setPlayers: state.setPlayers,
+    setHexes: state.setHexes,
+    setSoloSettings,
+    setReleasedPrisoners,
+    increaseThreat,
+    addEvent: state.addEvent,
+    addAudit: audit.addAudit
+  })
+
+  // Solo mode hook (Issue #54, #55, #56)
+  const solo = useSoloMode({
+    soloMode,
+    soloSettings,
+    players: state.players,
+    threatLevel,
+    targetThreatLevel: state.targetThreatLevel,
+    addEvent: state.addEvent
+  })
+
+  // Victory hook (Issue #53, #55)
+  const victory = useVictory({
+    gameEnded: state.gameEnded,
+    extendedMode: state.extendedMode,
+    soloMode,
+    threatLevel,
+    targetThreatLevel: state.targetThreatLevel,
+    players: state.players,
+    addEvent: state.addEvent
+  })
+
+  // Import/Export hook (Issue #23 - Phase 2)
+  const importExport = useImportExport({
+    importModalOpen,
+    players: state.players,
+    hexes: state.hexes,
+    threatLevel,
+    targetThreatLevel: state.targetThreatLevel,
+    currentRound: state.currentRound,
+    currentPhase: state.currentPhase,
+    eventLog: state.eventLog,
+    auditLog: audit.auditLog,
+    setPlayers: state.setPlayers,
+    setHexes: state.setHexes,
+    setThreatLevel,
+    setTargetThreatLevel: state.setTargetThreatLevel,
+    setCurrentRound: state.setCurrentRound,
+    setCurrentPhase: state.setCurrentPhase,
+    setEventLog: state.setEventLog,
+    setSoloMode,
+    addEvent: state.addEvent
+  })
+
+  // ============================================================================
+  // PHASE TRANSITION LOGIC
+  // ============================================================================
 
   /**
-   * Handle threat check confirmation
-   * WHY: Process dice roll result and increase threat if successful (Issue #54)
+   * WHY: Advance to next phase with validation and milestone detection
+   * Enforces phase order: Movement → Battle → Action → Threat → (next round)
    */
-  const handleThreatCheckConfirm = useCallback(() => {
-    if (pendingThreatCheck?.success) {
-      increaseThreat(pendingThreatCheck.increase, pendingThreatCheck.description)
-    }
-    setShowThreatCheckDialog(false)
-    setPendingThreatCheck(null)
-  }, [pendingThreatCheck, increaseThreat])
-
-  /**
-   * Handle threat prevention (spend SP to prevent threat increase)
-   * WHY: Allow player to spend SP to prevent search action threat (Issue #54)
-   */
-  const handleThreatPrevention = useCallback((spCost: number) => {
-    const currentPlayer = players[currentPlayerIndex]
-    if (currentPlayer && currentPlayer.supplyPoints >= spCost) {
-      // WHY: Use setPlayers directly to avoid circular dependency with updatePlayer
-      setPlayers(prev => {
-        const updated = [...prev]
-        updated[currentPlayerIndex] = {
-          ...updated[currentPlayerIndex],
-          supplyPoints: currentPlayer.supplyPoints - spCost
-        }
-        return updated
-      })
-      addEvent(`${currentPlayer.name} spent ${spCost} SP to prevent threat increase`, 'system')
-    }
-    setShowThreatPreventionDialog(false)
-    setPendingThreatCheck(null)
-  }, [players, currentPlayerIndex, addEvent])
-
-  /**
-   * Handle threat acceptance (player chooses not to prevent)
-   * WHY: Player accepts threat increase to save SP (Issue #54)
-   */
-  const handleThreatAcceptance = useCallback(() => {
-    if (pendingThreatCheck?.success) {
-      increaseThreat(pendingThreatCheck.increase, pendingThreatCheck.description)
-    }
-    setShowThreatPreventionDialog(false)
-    setPendingThreatCheck(null)
-  }, [pendingThreatCheck, increaseThreat])
-
-  /**
-   * Handle resupply reduction acceptance
-   * WHY: Player chooses to reduce threat after resupplying (Issue #54)
-   */
-  const handleResupplyReductionAccept = useCallback(() => {
-    if (pendingResupplyReduction) {
-      const amount = executeResupplyReduction(pendingResupplyReduction)
-      const newThreat = Math.max(1, threatLevel - amount)
-
-      setThreatLevel(newThreat)
-
-      // WHY: Calculate remaining BEFORE updating state (setState is async)
-      const remaining = 3 - soloSettings.resupplyReductionsUsed - 1
-
-      // WHY: Update solo settings to track reduction use
-      setSoloSettings(prev => ({
-        ...prev,
-        resupplyReductionsUsed: prev.resupplyReductionsUsed + 1
-      }))
-
-      addEvent(
-        `Resupply reduced threat by ${amount} (${remaining} use${remaining !== 1 ? 's' : ''} remaining)`,
-        'system'
-      )
-    }
-
-    setShowResupplyReductionDialog(false)
-    setPendingResupplyReduction(null)
-  }, [pendingResupplyReduction, threatLevel, soloSettings, addEvent])
-
-  /**
-   * Handle resupply reduction decline
-   * WHY: Player chooses to skip threat reduction (Issue #54)
-   */
-  const handleResupplyReductionDecline = useCallback(() => {
-    addEvent('Skipped threat reduction', 'system')
-    setShowResupplyReductionDialog(false)
-    setPendingResupplyReduction(null)
-  }, [addEvent])
-
-  /**
-   * Enable extended campaign mode
-   * WHY: Allows campaign to continue beyond target threat level
-   */
-  const enableExtendedMode = useCallback(() => {
-    setExtendedMode(true)
-    setGameEnded(false) // Re-open the game
-    addEvent('Campaign extended beyond target threat level', 'system')
-  }, [addEvent])
-
-  /**
-   * Detect active threat phase location rules for current game state
-   * WHY: Identifies which players have location rules that trigger this Threat Phase
-   */
-  const detectThreatRules = useCallback((): ActiveThreatPhaseRule[] => {
-    const rules = detectActiveThreatPhaseRules(players, hexes)
-    return sortByPriority(rules, players)
-  }, [players, hexes])
-
-  /**
-   * Resolve all threat phase location rules in priority order
-   * WHY: Location rules resolve BEFORE standard threat increase per game rules
-   * Returns array of resolutions for UI display/logging
-   */
-  const resolveThreatPhaseLocationRules = useCallback((): ThreatPhaseRuleResolution[] => {
-    const sortedRules = detectThreatRules()
-
-    if (sortedRules.length === 0) {
-      setThreatRulesResolved(true)
-      return []
-    }
-
-    const resolutions: ThreatPhaseRuleResolution[] = []
-
-    setPlayers(prevPlayers => {
-      const updatedPlayers = [...prevPlayers]
-
-      for (const activeRule of sortedRules) {
-        const { player, location, rule, hexId: ruleHexId } = activeRule
-        const playerIndex = updatedPlayers.findIndex(p => p.id === player.id)
-        if (playerIndex === -1) continue
-
-        const currentPlayer = updatedPlayers[playerIndex]!
-        let spChange = 0
-        let cpChange = 0
-        let threatChange = 0
-
-        // Calculate effect based on rule type
-        switch (rule.type) {
-          case 'sp_gain':
-            spChange = rule.amount
-            break
-          case 'sp_penalty':
-            spChange = -rule.amount
-            break
-          case 'cp_gain':
-            cpChange = rule.amount
-            break
-          case 'threat_increase':
-            threatChange = rule.amount
-            break
-        }
-
-        // Apply SP/CP changes to player
-        if (spChange !== 0 || cpChange !== 0) {
-          const newSP = clampSP(currentPlayer.supplyPoints + spChange)
-          const newCP = currentPlayer.campaignPoints + cpChange
-
-          // Update history
-          const newHistory = addHistoryEntry(
-            currentPlayer,
-            currentRound,
-            'Threat',
-            spChange,
-            cpChange,
-            `${location.name}: ${rule.description}`
-          )
-
-          updatedPlayers[playerIndex] = {
-            ...currentPlayer,
-            supplyPoints: newSP,
-            campaignPoints: newCP,
-            history: newHistory
-          }
-        }
-
-        // Apply threat change (via centralized function outside the setter)
-        if (threatChange > 0) {
-          // Defer threat increase to after players update
-          setTimeout(() => {
-            increaseThreat(threatChange, location.name)
-          }, 0)
-        }
-
-        // Build resolution for logging
-        const resolution: ThreatPhaseRuleResolution = {
-          playerId: player.id,
-          playerName: player.name,
-          locationName: location.name,
-          hexId: ruleHexId,
-          effect: rule.description,
-          spChange: spChange !== 0 ? spChange : undefined,
-          cpChange: cpChange !== 0 ? cpChange : undefined,
-          threatChange: threatChange !== 0 ? threatChange : undefined
-        }
-        resolutions.push(resolution)
-
-        // Log the resolution
-        const changeText = spChange > 0 ? `gained ${spChange} SP` :
-          spChange < 0 ? `lost ${Math.abs(spChange)} SP` :
-          cpChange > 0 ? `gained ${cpChange} CP` :
-          threatChange > 0 ? `increased threat by ${threatChange}` : rule.description
-        addEvent(`${player.name} at ${location.name}: ${changeText}`, 'action')
-      }
-
-      return updatedPlayers
-    })
-
-    setThreatRulesResolved(true)
-    setActiveThreatRules([])
-    return resolutions
-  }, [detectThreatRules, currentRound, increaseThreat, addEvent])
-
-  /**
-   * Resolve Beast Lair and Released Prisoner attacks during Threat Phase
-   * WHY: Threat phase attacks resolve AFTER location rules but BEFORE standard threat increase (Issue #59)
-   */
-  const resolveThreatPhaseAttacks = useCallback((): void => {
-    // Find all active Beast Lairs
-    const beastLairs = Object.values(hexes).filter(hex =>
-      hex.location === 23 && hex.state?.beastLairActive !== false
-    )
-
-    // Resolve each Beast Lair attack
-    for (const beastLair of beastLairs) {
-      const playersInRange = findPlayersInBeastRange(beastLair.id, players, hexes)
-
-      if (playersInRange.length > 0) {
-        const { targetPlayerId, damage, roll } = resolveBeastAttack(playersInRange, beastLair.id, hexes)
-
-        if (targetPlayerId !== -1) {
-          setPlayers(prevPlayers => {
-            const updatedPlayers = [...prevPlayers]
-            const targetIndex = updatedPlayers.findIndex(p => p.id === targetPlayerId)
-
-            if (targetIndex !== -1) {
-              const target = updatedPlayers[targetIndex]!
-              const newSP = clampSP(target.supplyPoints - damage)
-
-              updatedPlayers[targetIndex] = {
-                ...target,
-                supplyPoints: newSP
-              }
-            }
-
-            return updatedPlayers
-          })
-
-          const target = players.find(p => p.id === targetPlayerId)
-          addEvent(`Beast Lair attacks ${target?.name}! (Roll: ${roll}, Damage: ${damage} SP)`, 'warning')
-        }
-      }
-    }
-
-    // TODO: Released Prisoner movement and attacks (requires UI for player movement choice)
-    // For each active prisoner in releasedPrisoners array:
-    // 1. Player chooses movement path (UI modal needed)
-    // 2. Call resolvePrisonerAttack() for target hex
-    // 3. Update player SP, remove camps, potentially remove prisoner
-    // This will be implemented in Phase 1 UI integration step
-  }, [players, hexes, releasedPrisoners, addEvent])
-
-  /**
-   * Check if there are active threat phase rules to resolve
-   * WHY: Allows UI to conditionally show location rules section
-   */
-  const checkForThreatRules = useCallback((): boolean => {
-    return hasActiveRules(players, hexes)
-  }, [players, hexes])
-
-  const startGame = useCallback((numPlayers: number, isSolo = false) => {
-    const config = MAP_CONFIGS[numPlayers] || MAP_CONFIGS[4]
-    if (!config) return
-
-    setMapConfig(config)
-    setSoloMode(isSolo)
-
-    const initialHexes = createInitialHexGrid(config)
-
-    // Set up starting positions (spread across top row for surface)
-    const startPositions: HexPosition[] = []
-    const spacing = Math.floor(config.cols / numPlayers)
-    for (let i = 0; i < numPlayers; i++) {
-      const col = Math.min(Math.floor(spacing * i + spacing / 2), config.cols - 1)
-      startPositions.push({ row: 0, col })
-    }
-
-    // Mark starting hexes as explored with base location
-    startPositions.forEach((pos, idx) => {
-      const posId = hexId(pos.row, pos.col)
-      if (initialHexes[posId]) {
-        initialHexes[posId].explored = true
-        initialHexes[posId].exploredBy = [idx]
-        initialHexes[posId].location = 11 // Base location
-        initialHexes[posId].condition = 11 // Clear condition
-      }
-    })
-
-    // Create players
-    const newPlayers: Player[] = []
-    for (let i = 0; i < numPlayers; i++) {
-      newPlayers.push(createPlayer(i, `Player ${i + 1}`, PLAYER_COLORS[i] || '#ffffff', startPositions[i] || { row: 0, col: 0 }))
-    }
-
-    setHexes(initialHexes)
-    setPlayers(newPlayers)
-    setCurrentRound(1)
-    setCurrentPhase(0)
-    setCurrentPlayerIndex(0)
-    setThreatLevel(1)
-    setGameStarted(true)
-    setGameEnded(false)
-    setEventLog([])
-
-    // WHY: Calculate initial movement order based on priority
-    const initialOrder = isSolo ? [0] : determinePriority(newPlayers).map(p => p.id)
-    setMovementOrder(initialOrder)
-    setMovementIndex(0)
-
-    addEvent(`Campaign started with ${numPlayers} players. Target threat level: ${targetThreatLevel}.`, 'system')
-    // WHY: Show movement order for first round
-    if (!isSolo) {
-      const orderNames = initialOrder.map(i => newPlayers[i]?.name || `Player ${i + 1}`).join(' → ')
-      addEvent(`Movement order: ${orderNames}`, 'system')
-    }
-  }, [targetThreatLevel, addEvent])
-
-  // WHY: Reset battleResult fields at Battle Phase start (new round)
-  useEffect(() => {
-    if (currentPhase === 1 && PHASES[currentPhase] === 'Battle') {  // Battle Phase index is 1
-      setPlayers(prev => prev.map(p => ({ ...p, battleResult: null })))
-    }
-  }, [currentPhase])
-
-  // WHY: Calculate action order when entering Action Phase
-  useEffect(() => {
-    if (currentPhase === 2 && PHASES[currentPhase] === 'Action' && actionOrder === null) {  // Action Phase index is 2
-      const order = calculateActionPhaseOrder(players, determinePriority)
-      setActionOrder(order)
-      setActionIndex(0)
-
-      // Log action order for transparency
-      if (order.length > 0) {
-        const orderNames = order.map(i => players[i]?.name || `Player ${i}`).join(' → ')
-        addEvent(`Action order: ${orderNames}`, 'system')
-      }
-    }
-  }, [currentPhase, actionOrder, players, addEvent])
-
-  // WHY: Reset action order when leaving Action Phase
-  useEffect(() => {
-    if (currentPhase !== 2 && actionOrder !== null) {  // Not in Action Phase
-      setActionOrder(null)
-      setActionIndex(0)
-    }
-  }, [currentPhase, actionOrder])
-
-  /**
-   * Clear the exploration result modal state
-   * WHY: Allows closing the exploration result modal after user reviews it
-   */
-  const clearExplorationResult = useCallback(() => {
-    setExplorationResult(null)
-  }, [])
-
-  const exploreHex = useCallback((hexKey: string) => {
-    setHexes(prev => {
-      const hex = prev[hexKey]
-      if (!hex) return prev
-
-      // WHY: Capture before snapshot for audit trail (Issue #23 - Phase 3)
-      const beforeSnapshot = createHexSnapshot(hex)
-
-      // Validate hex can be explored (not blocked, not already explored)
-      if (!canExploreHex(hex)) {
-        if (hex.type === 'blocked') {
-          addEvent('Cannot explore blocked hex', 'error')
-        } else if (hex.explored) {
-          addEvent('Hex already explored', 'warning')
-        }
-        return prev
-      }
-
-      const locations = hex.type === 'surface' ? SURFACE_LOCATIONS : TOMB_LOCATIONS
-      const conditions = hex.type === 'surface' ? SURFACE_CONDITIONS : TOMB_CONDITIONS
-
-      // WHY: Get explored IDs for re-roll duplicate detection (Issue #58)
-      const exploredLocationIds = getExploredLocationIds(prev)
-      const exploredConditionIds = getExploredConditionIds(prev)
-
-      // WHY: Roll with automatic re-rolls for unique locations/conditions (Issue #58)
-      const locationRoll = rollWithRerolls(rollD36, exploredLocationIds, locations)
-      const conditionRoll = rollConditionWithRerolls(rollD36, exploredConditionIds, conditions)
-
-      const location = locations[locationRoll] || locations[11]
-      const condition = conditions[conditionRoll] || conditions[11]
-
-      // WHY: Initialize hex state for special locations (Issue #58, #59)
-      const initialState: Record<string, any> = {}
-      if (location.initialState?.supplyCount !== undefined) {
-        initialState.supplyCount = rollD6() // Roll D6 for Abandoned Camp supplies
-      }
-      if (location.initialState?.intelGained !== undefined) {
-        initialState.intelGained = 0 // 0 = not claimed, 1 = claimed
-      }
-      // WHY: Initialize Intel Cache with D6 intel (Issue #59)
-      if (location.specialRules?.includes('INTEL_CACHE')) {
-        initialState.intelRemaining = rollD6()
-      }
-
-      addEvent(`Explored hex ${hexKey}: ${location?.name || 'Unknown'} (${condition?.name || 'Clear'})`, 'exploration')
-
-      // Set exploration result for modal display
-      const hexNumber = hex.row * (mapConfig?.cols || 5) + hex.col + 1
-      const currentPlayer = players[currentPlayerIndex]
-      setExplorationResult({
-        hexId: hexKey,
-        hexNumber,
-        location: {
-          name: location?.name || 'Unknown',
-          description: location?.description || '',
-          effect: location?.effect || ''
-        },
-        condition: {
-          name: condition?.name || 'Clear',
-          description: condition?.description || '',
-          effect: condition?.effect || ''
-        },
-        locationRoll,
-        conditionRoll,
-        playerName: currentPlayer?.name || 'Unknown Player'
-      })
-
-      // Handle immediate exploration effects
-      let spGain = 0
-      let cpGain = 0
-
-      if (location && location.effect === 'gainSP' && location.value) {
-        spGain = parseValue(location.value)
-      }
-      if (location && location.effect === 'gainCP' && location.value) {
-        cpGain = typeof location.value === 'number' ? location.value : parseValue(location.value)
-      }
-
-      if (spGain > 0 || cpGain > 0) {
-        setPlayers(prevPlayers => {
-          const updated = [...prevPlayers]
-          const player = updated[currentPlayerIndex]
-          if (!player) return prevPlayers
-
-          const newSP = clampSP(player.supplyPoints + spGain)
-          const newCP = player.campaignPoints + cpGain
-          
-          updated[currentPlayerIndex] = {
-            ...player,
-            supplyPoints: newSP,
-            campaignPoints: newCP,
-            exploredHexes: player.exploredHexes + 1,
-            history: addHistoryEntry(player, currentRound, PHASES[currentPhase] || 'Unknown', spGain, cpGain, `Explored ${location?.name || 'Unknown'}`)
-          }
-          if (spGain > 0) addEvent(`Gained ${spGain} SP from ${location?.name || 'Unknown'}`, 'reward')
-          if (cpGain > 0) addEvent(`Gained ${cpGain} CP from ${location?.name || 'Unknown'}`, 'reward')
-          return updated
-        })
-      } else {
-        setPlayers(prevPlayers => {
-          const updated = [...prevPlayers]
-          const player = updated[currentPlayerIndex]
-          if (!player) return prevPlayers
-
-          updated[currentPlayerIndex] = {
-            ...player,
-            exploredHexes: player.exploredHexes + 1
-          }
-          return updated
-        })
-      }
-
-      // WHY: Check for solo mode tomb exploration threat (Issue #54)
-      // Non-Scout tomb explorations trigger D6 roll (4+ = +1 threat)
-      if (soloMode && hex.type === 'tomb') {
-        const threatCheck = checkTombExplorationThreat()
-        setPendingThreatCheck(threatCheck)
-        setShowThreatCheckDialog(true)
-      }
-
-      // WHY: Create updated hex for after snapshot (Issue #23 - Phase 3)
-      const updatedHex = {
-        ...hex,
-        explored: true,
-        location: locationRoll,
-        condition: conditionRoll,
-        exploredBy: [...hex.exploredBy, currentPlayerIndex],
-        exploredLocation: location.id,
-        exploredCondition: condition.id,
-        state: Object.keys(initialState).length > 0 ? initialState : undefined
-      }
-
-      // WHY: Record audit entry for exploration (Issue #23 - Phase 3)
-      const afterSnapshot = createHexSnapshot(updatedHex)
-      addAudit(hexKey, 'EXPLORE', beforeSnapshot, afterSnapshot, `Explored ${location?.name || 'Unknown'}`)
-
-      return {
-        ...prev,
-        [hexKey]: updatedHex
-      }
-    })
-  }, [currentPlayerIndex, currentRound, currentPhase, soloMode, addEvent, addAudit, players, mapConfig])
-
-  const movePlayer = useCallback((playerIndex: number, targetHex: string, cost: number) => {
-    setPlayers(prev => {
-      const updated = [...prev]
-      const player = updated[playerIndex]
-      if (!player) return prev
-
-      // WHY: Validate maximum distance (3 hexes)
-      if (cost > 3) {
-        addEvent(`${player.name} cannot move more than 3 hexes! (attempted: ${cost})`, 'error')
-        return prev
-      }
-
-      // WHY: Validate blocked hex
-      const targetHexData = hexes[targetHex]
-      if (targetHexData && targetHexData.type === 'blocked') {
-        addEvent(`${player.name} cannot move to blocked hex!`, 'error')
-        return prev
-      }
-
-      // WHY: Validate hex capacity (max 2 players per hex)
-      const playersInTargetHex = updated.filter(p => {
-        const pHexId = hexId(p.position.row, p.position.col)
-        return pHexId === targetHex && p.id !== player.id
-      })
-      if (playersInTargetHex.length >= 2) {
-        addEvent(`${player.name} cannot move to ${targetHex} - already has 2 kill teams!`, 'error')
-        return prev
-      }
-
-      // WHY: Validate SP availability
-      if (player.supplyPoints < cost) {
-        addEvent(`${player.name} doesn't have enough SP to move!`, 'error')
-        return prev
-      }
-
-      // WHY: Issue #50 - Track SP spent for PIONEER category
-      const updatedPlayer = deductSupplyPoints(player, cost)
-
-      const targetPos = targetHex.split(',').map(Number)
-      updated[playerIndex] = {
-        ...updatedPlayer,
-        position: { row: targetPos[0] ?? 0, col: targetPos[1] ?? 0 },
-        history: addHistoryEntry(player, currentRound, PHASES[currentPhase] || 'Unknown', -cost, 0, `Moved to hex ${targetHex}`)
-      }
-
-      addEvent(`${player.name} moved to ${targetHex} (cost: ${cost} SP)`, 'movement')
-      return updated
-    })
-
-    // Check if hex needs exploration
-    if (hexes[targetHex] && !hexes[targetHex].explored) {
-      exploreHex(targetHex)
-    }
-  }, [hexes, currentRound, currentPhase, exploreHex, addEvent])
-
-  // WHY: REGROUP action - move to nearest base/camp for free
-  const regroupPlayer = useCallback((playerIndex: number) => {
-    setPlayers(prev => {
-      const updated = [...prev]
-      const player = updated[playerIndex]
-      if (!player) return prev
-
-      // Find nearest base or camp
-      const regroupResult = findNearestBaseOrCamp(
-        player.position,
-        player.bases || [],
-        player.camps || []
-      )
-
-      // If no valid destination, log error and return
-      if (!regroupResult) {
-        addEvent(`${player.name} has no bases or camps to regroup to!`, 'error')
-        return prev
-      }
-
-      // WHY: Use first destination (UI handles choice if multiple)
-      const nearestDest = regroupResult.destinations[0]
-      if (!nearestDest) return prev
-
-      // Move player to nearest destination (no SP cost)
-      updated[playerIndex] = {
-        ...player,
-        position: nearestDest,
-        history: addHistoryEntry(
-          player,
-          currentRound,
-          PHASES[currentPhase] || 'Unknown',
-          0,
-          0,
-          `Regrouped to ${hexId(nearestDest.row, nearestDest.col)}`
-        )
-      }
-
-      addEvent(
-        `${player.name} Regroup to ${hexId(nearestDest.row, nearestDest.col)} (free movement)`,
-        'movement'
-      )
-      return updated
-    })
-  }, [currentRound, currentPhase, addEvent])
-
-  // WHY: HOLD action - stay in current position (no cost, no movement)
-  const holdPosition = useCallback((playerIndex: number) => {
-    setPlayers(prev => {
-      const updated = [...prev]
-      const player = updated[playerIndex]
-      if (!player) return prev
-
-      updated[playerIndex] = {
-        ...player,
-        history: addHistoryEntry(
-          player,
-          currentRound,
-          PHASES[currentPhase] || 'Unknown',
-          0,
-          0,
-          `Held position at ${hexId(player.position.row, player.position.col)}`
-        )
-      }
-
-      addEvent(
-        `${player.name} Hold position at ${hexId(player.position.row, player.position.col)}`,
-        'movement'
-      )
-      return updated
-    })
-  }, [currentRound, currentPhase, addEvent])
-
-  /**
-   * WHY: Validate scout action parameters and target hex
-   * Returns null if valid, error message string if invalid
-   */
-  function validateScout(
-    targetHex: string | undefined,
-    distance: number | undefined,
-    hexes: Record<string, Hex>,
-    playerSP: number
-  ): string | null {
-    if (!targetHex || !distance) {
-      return 'Invalid scout parameters'
-    }
-
-    const targetHexData = hexes[targetHex]
-
-    if (!targetHexData) {
-      return `Cannot scout invalid hex ${targetHex}`
-    }
-
-    if (targetHexData.type === 'blocked') {
-      return `Cannot scout blocked hex ${targetHex}`
-    }
-
-    if (targetHexData.explored) {
-      return `Cannot scout ${targetHex} - already explored`
-    }
-
-    if (playerSP < distance) {
-      return `Not enough SP to scout (need ${distance}, have ${playerSP})`
-    }
-
-    return null // Valid
-  }
-
-  /**
-   * WHY: Validate encamp action parameters and enforce camp limit
-   * Returns error message or null if valid
-   */
-  function validateEncamp(
-    currentHex: HexPosition,
-    hexes: Record<string, Hex>,
-    players: Player[],
-    currentPlayerIndex: number,
-    campToRemove: HexPosition | undefined
-  ): string | null {
-    const currentHexId = hexId(currentHex.row, currentHex.col)
-    const hex = hexes[currentHexId]
-    const player = players[currentPlayerIndex]
-
-    if (!hex || !player) {
-      return 'Invalid hex or player'
-    }
-
-    // WHY: Cannot camp in blocked hexes
-    if (hex.type === 'blocked') {
-      return `Cannot build camp in blocked hex ${currentHexId}`
-    }
-
-    // WHY: Cannot camp where opponent has base
-    for (let i = 0; i < players.length; i++) {
-      if (i === currentPlayerIndex) continue
-      const opponent = players[i]!
-
-      if (opponent.bases.some(b => b.row === currentHex.row && b.col === currentHex.col)) {
-        return `Cannot build camp - opponent has base at ${currentHexId}`
-      }
-
-      if (opponent.camps.some(c => c.row === currentHex.row && c.col === currentHex.col)) {
-        return `Cannot build camp - opponent has camp at ${currentHexId}`
-      }
-    }
-
-    // WHY: Enforce 2-camp maximum
-    const campCount = player.camps.length
-    if (campCount >= 2 && !campToRemove) {
-      return 'Cannot build camp - maximum 2 camps allowed. Remove one first.'
-    }
-
-    // WHY: Validate campToRemove exists if provided
-    if (campToRemove) {
-      const campExists = player.camps.some(
-        c => c.row === campToRemove.row && c.col === campToRemove.col
-      )
-      if (!campExists) {
-        return `Cannot remove camp at ${hexId(campToRemove.row, campToRemove.col)} - not found`
-      }
-    }
-
-    return null // Valid
-  }
-
-  const performAction = useCallback((action: string, params: PerformActionParams = {}) => {
-    const player = players[currentPlayerIndex]
-    if (!player) return
-
-    const playerPosId = hexId(player.position.row, player.position.col)
-
-    switch (action) {
-      case 'RESUPPLY': {
-        const hex = hexes[playerPosId]
-        if (!hex) {
-          addEvent(`${player.name} cannot resupply - invalid hex`, 'warning')
-          break
-        }
-
-        // WHY: Use new calculateResupply utility for location-based rewards
-        const resupplyResult = calculateResupply(player, hex)
-        let spGain = resupplyResult.amount
-
-        // WHY: Apply condition modifiers as additional game mechanic
-        if (hex.condition && SURFACE_CONDITIONS[hex.condition]?.effect === 'bonusResupply') spGain += 1
-        if (hex.condition && TOMB_CONDITIONS[hex.condition]?.effect === 'bonusResupply') spGain += 1
-        if (hex.condition && SURFACE_CONDITIONS[hex.condition]?.effect === 'reducedResupply') spGain -= 1
-        if (hex.condition && TOMB_CONDITIONS[hex.condition]?.effect === 'reducedResupply') spGain -= 1
-
-        // WHY: Cap at maximum SP (10)
-        const actualGain = Math.max(0, Math.min(spGain, SP_MAX - player.supplyPoints))
-
-        if (actualGain === 0) {
-          addEvent(`${player.name} is already at max SP (10)`, 'system')
-          break
-        }
-
-        setPlayers(prev => {
-          const updated = [...prev]
-          const currentPlayer = updated[currentPlayerIndex]
-          if (!currentPlayer) return prev
-
-          const newSP = clampSP(currentPlayer.supplyPoints + actualGain)
-
-          updated[currentPlayerIndex] = {
-            ...currentPlayer,
-            supplyPoints: newSP,
-            history: addHistoryEntry(
-              currentPlayer,
-              currentRound,
-              PHASES[currentPhase] || 'Unknown',
-              actualGain,
-              0,
-              resupplyResult.type === 'camp' && resupplyResult.roll
-                ? `Resupply at camp (rolled ${resupplyResult.roll}, +${resupplyResult.amount} base)`
-                : `Resupply at ${resupplyResult.type}`
-            )
-          }
-          return updated
-        })
-
-        // WHY: Create informative event log message
-        const locationMsg = resupplyResult.type === 'camp' && resupplyResult.roll
-          ? `camp (D3=${resupplyResult.roll}, base +${resupplyResult.amount})`
-          : resupplyResult.type
-        addEvent(`${player.name} resupplied at ${locationMsg}: +${actualGain} SP`, 'action')
-
-        // WHY: Solo mode resupply threat reduction (Issue #54)
-        // Players can reduce threat when resupplying (max 3 times per campaign)
-        if (soloMode && soloSettings.resupplyReductionsUsed < 3) {
-          const reductionResult = calculateResupplyReduction(
-            player,
-            hex,
-            3 - soloSettings.resupplyReductionsUsed
-          )
-
-          if (reductionResult?.available) {
-            setPendingResupplyReduction(reductionResult)
-            setShowResupplyReductionDialog(true)
-          }
-        }
-
-        break
-      }
-
-      case 'SCOUT': {
-        const { targetHex, distance } = params
-
-        // WHY: Validate all scout preconditions
-        const validationError = validateScout(targetHex, distance, hexes, player.supplyPoints)
-        if (validationError) {
-          const errorType = validationError.includes('already explored') ? 'warning' : 'error'
-          addEvent(`${player.name}: ${validationError}`, errorType)
-          return
-        }
-
-        const cost = distance!
-
-        setPlayers(prev => {
-          const updated = [...prev]
-          const currentPlayer = updated[currentPlayerIndex]
-          if (!currentPlayer) return prev
-
-          // WHY: Issue #50 - Track SP spent for PIONEER category
-          const updatedPlayer = deductSupplyPoints(currentPlayer, cost)
-
-          updated[currentPlayerIndex] = {
-            ...updatedPlayer,
-            history: addHistoryEntry(currentPlayer, currentRound, PHASES[currentPhase] || 'Unknown', -cost, 0, `Scouted hex ${targetHex}`)
-          }
-          return updated
-        })
-
-        exploreHex(targetHex!)
-        addEvent(`${player.name} scouted ${targetHex} (cost: ${cost} SP)`, 'action')
-        break
-      }
-
-      case 'SEARCH': {
-        const hexKey = hexId(player.position.row, player.position.col)
-        const hex = hexes[hexKey]
-        if (!hex) {
-          addEvent(`${player.name} cannot search - invalid hex`, 'warning')
-          break
-        }
-
-        // WHY: Validate search is allowed
-        const validation = canPerformSearch(player, hex, hexKey)
-        if (!validation.canSearch) {
-          addEvent(`${player.name} cannot search: ${validation.reason}`, 'warning')
-          break
-        }
-
-        // WHY: Get location and resolve search rule
-        const location = hex.type === 'surface'
-          ? SURFACE_LOCATIONS[hex.location]
-          : TOMB_LOCATIONS[hex.location]
-
-        const result = resolveSearchRule(location?.searchRule)
-        if (!result) {
-          addEvent(`${player.name} searched but found nothing`, 'action')
-          break
-        }
-
-        // WHY: Deduct 1 SP cost (Issue #50 - track SP spent)
-        const spCost = 1
-        const updatedPlayer = deductSupplyPoints(player, spCost)
-        const finalSP = clampSP(updatedPlayer.supplyPoints + result.spGained)  // WHY: Add search rewards
-        const finalCP = player.campaignPoints + result.cpGained
-
-        setPlayers(prev => {
-          const updated = [...prev]
-          const currentPlayer = updated[currentPlayerIndex]
-          if (!currentPlayer) return prev
-
-          updated[currentPlayerIndex] = {
-            ...updatedPlayer,
-            supplyPoints: finalSP,
-            campaignPoints: finalCP,
-            searchedHexes: [...currentPlayer.searchedHexes, hexKey],  // WHY: Mark hex as searched (one-time use)
-            history: addHistoryEntry(
-              currentPlayer,
-              currentRound,
-              PHASES[currentPhase] || 'Unknown',
-              -spCost + result.spGained,
-              result.cpGained,
-              `Search: ${result.description}`
-            )
-          }
-          return updated
-        })
-
-        addEvent(`${player.name} searched ${location.name}: ${result.description}`, 'action')
-
-        // WHY: Check for Dimensional Key acquisition (Issue #59)
-        if (location && providesDimensionalKey(location)) {
-          const keyValidation = canAcquireKey(players, currentPlayerIndex)
-          if (keyValidation.canAcquire) {
-            setPlayers(prev => {
-              const updated = [...prev]
-              updated[currentPlayerIndex] = {
-                ...updated[currentPlayerIndex]!,
-                hasDimensionalKey: true
-              }
-              return updated
-            })
-            addEvent(`${player.name} acquired the Dimensional Key!`, 'reward')
-          } else {
-            addEvent(`${player.name}: ${keyValidation.reason}`, 'warning')
-          }
-        }
-
-        // WHY: Check for Intel Cache and gain intel (Issue #59)
-        if (location?.specialRules?.includes('INTEL_CACHE') && hex) {
-          const intelResult = gainIntel(hex, player)
-
-          if (intelResult.intelGained > 0) {
-            // Update both hex and player state
-            setHexes(prev => ({
-              ...prev,
-              [hexKey]: {
-                ...prev[hexKey]!,
-                state: {
-                  ...prev[hexKey]!.state,
-                  intelRemaining: intelResult.remaining
-                }
-              }
-            }))
-
-            setPlayers(prev => {
-              const updated = [...prev]
-              updated[currentPlayerIndex] = {
-                ...updated[currentPlayerIndex]!,
-                intelCount: intelResult.playerIntelCount
-              }
-              return updated
-            })
-
-            addEvent(
-              `${player.name} gained ${intelResult.intelGained} intel! (${intelResult.remaining} remaining at this location)`,
-              'reward'
-            )
-          } else {
-            addEvent(`${player.name}: Intel Cache depleted`, 'warning')
-          }
-        }
-
-        // WHY: Check for Portal (TL11 Tomb Ruin) configuration trigger (Issue #59)
-        if (location?.specialRules?.includes('PORTAL')) {
-          setPortalHexId(hexKey)
-          setShowPortalConfigModal(true)
-          addEvent(`${player.name} can now configure the portal network at ${hexKey}`, 'reward')
-        }
-
-        // WHY: Check for Hex Blocking (TL25 Transtechnic Fulcrum) trigger (Issue #59)
-        if (location?.specialRules?.includes('HEX_BLOCK')) {
-          setFulcrumHexId(hexKey)
-          setShowHexBlockSelector(true)
-          addEvent(`${player.name} can now configure hex blocking at ${hexKey}`, 'reward')
-        }
-
-        // WHY: Solo mode search threat check (Issue #54)
-        // Search actions trigger D6 roll (5+) for threat increase (preventable with 1 SP)
-        // Void Shield Generator (TL35) always adds D3 threat (automatic, not preventable)
-        if (soloMode) {
-          if (isVoidShieldGenerator(hex)) {
-            // WHY: Void Shield Generator automatic threat (D3)
-            const threatCheck = executeVoidShieldThreat()
-            increaseThreat(threatCheck.increase, threatCheck.description)
-            addEvent(threatCheck.description, 'warning')
-          } else {
-            // WHY: Normal search with prevention option
-            const threatCheck = checkSearchThreat()
-            if (threatCheck.success) {
-              setPendingThreatCheck(threatCheck)
-              setShowThreatPreventionDialog(true)
-            }
-          }
-        }
-
-        break
-      }
-
-      case 'ENCAMP': {
-        const { options } = params
-        if (!options) return
-
-        const { cost, campToRemove } = options
-
-        // WHY: Validate all encamp preconditions
-        const validationError = validateEncamp(
-          player.position,
-          hexes,
-          players,
-          currentPlayerIndex,
-          campToRemove
-        )
-
-        if (validationError) {
-          addEvent(`${player.name}: ${validationError}`, 'error')
-          return
-        }
-
-        // WHY: Check sufficient SP AFTER validation
-        if (player.supplyPoints < cost) {
-          addEvent(
-            `${player.name}: Not enough SP to build camp (need ${cost}, have ${player.supplyPoints})`,
-            'error'
-          )
-          return
-        }
-
-        setPlayers(prev => {
-          const updated = [...prev]
-          const currentPlayer = updated[currentPlayerIndex]
-          if (!currentPlayer) return prev
-
-          let newCamps = [...currentPlayer.camps]
-
-          // WHY: Remove old camp before adding new one (if specified)
-          if (campToRemove) {
-            newCamps = newCamps.filter(
-              c => !(c.row === campToRemove.row && c.col === campToRemove.col)
-            )
-            addEvent(
-              `${player.name} removed camp at ${hexId(campToRemove.row, campToRemove.col)}`,
-              'action'
-            )
-          }
-
-          // WHY: Add new camp at current position
-          newCamps.push({ row: player.position.row, col: player.position.col })
-
-          // WHY: Issue #50 - Track SP spent for PIONEER category
-          const updatedPlayer = deductSupplyPoints(currentPlayer, cost)
-
-          updated[currentPlayerIndex] = {
-            ...updatedPlayer,
-            camps: newCamps,
-            history: addHistoryEntry(
-              currentPlayer,
-              currentRound,
-              PHASES[currentPhase] || 'Unknown',
-              -cost,
-              0,
-              `Built camp at ${playerPosId}${campToRemove ? ` (removed camp at ${hexId(campToRemove.row, campToRemove.col)})` : ''}`
-            )
-          }
-
-          return updated
-        })
-
-        addEvent(
-          `${player.name} built camp at ${playerPosId} (cost: ${cost} SP)`,
-          'action'
-        )
-        break
-      }
-
-      case 'DEMOLISH': {
-        // WHY: Demolish action - destroy camps, Beast Lair, or Released Prisoner (Issue #47, #59)
-        const { options } = params
-        if (!options) {
-          addEvent('No demolish options provided', 'error')
-          return
-        }
-
-        // WHY: Validate prerequisites before allowing demolish
-        const validation = validateDemolish(currentPlayerIndex)
-        if (!validation.valid) {
-          addEvent(`Cannot demolish: ${validation.reason}`, 'error')
-          return
-        }
-
-        // WHY: Extract target type and target player ID (if applicable)
-        const { targetType, targetPlayerId } = options as { targetType?: string; targetPlayerId?: number }
-
-        if (!targetType) {
-          addEvent('No target type selected for demolish', 'error')
-          return
-        }
-
-        // WHY: Verify target is in validated targets list (security check)
-        const validTarget = validation.targets?.find(t => {
-          if (t.type === 'CAMP') {
-            return t.type === targetType && t.playerId === targetPlayerId
-          }
-          return t.type === targetType
-        })
-
-        if (!validTarget) {
-          addEvent('Cannot demolish: target not available or prerequisite not met', 'error')
-          return
-        }
-
-        const DEMOLISH_COST = 3
-        const playerHexId = hexId(player.position.row, player.position.col)
-
-        // WHY: Handle different target types (Issue #59 - Phase 5)
-        if (targetType === 'BEAST_LAIR') {
-          // WHY: Destroy Beast Lair - update hex state
-          setHexes(prev => ({
-            ...prev,
-            [playerHexId]: {
-              ...prev[playerHexId]!,
-              state: { ...prev[playerHexId]!.state, beastLairActive: false }
-            }
-          }))
-
-          setPlayers(prev => {
-            const updated = [...prev]
-            // WHY: Issue #50 - Track SP spent for PIONEER category
-            const updatedPlayer = deductSupplyPoints(player, DEMOLISH_COST)
-            updated[currentPlayerIndex] = {
-              ...updatedPlayer,
-              history: addHistoryEntry(player, currentRound, PHASES[currentPhase] || 'Unknown', -DEMOLISH_COST, 0, 'Demolished Beast Lair')
-            }
-            return updated
-          })
-
-          addEvent(`${player.name} destroyed the Beast Lair at ${playerHexId}!`, 'action')
-        } else if (targetType === 'RELEASED_PRISONER') {
-          // WHY: Destroy Released Prisoner - remove from array
-          setReleasedPrisoners(prev => prev?.filter(p => p.currentHexId !== playerHexId) || [])
-
-          setPlayers(prev => {
-            const updated = [...prev]
-            // WHY: Issue #50 - Track SP spent for PIONEER category
-            const updatedPlayer = deductSupplyPoints(player, DEMOLISH_COST)
-            updated[currentPlayerIndex] = {
-              ...updatedPlayer,
-              history: addHistoryEntry(player, currentRound, PHASES[currentPhase] || 'Unknown', -DEMOLISH_COST, 0, 'Demolished Released Prisoner')
-            }
-            return updated
-          })
-
-          addEvent(`${player.name} destroyed the Released Prisoner at ${playerHexId}!`, 'action')
-        } else if (targetType === 'CAMP') {
-          // WHY: Demolish opponent camp - existing logic
-          if (!targetPlayerId) {
-            addEvent('No target player selected for camp demolish', 'error')
-            return
-          }
-
-          const targetIdx = players.findIndex(p => p.id === targetPlayerId)
-          if (targetIdx === -1) {
-            addEvent('Target player not found', 'error')
-            return
-          }
-
-          const target = players[targetIdx]
-          if (!target) {
-            addEvent('Target player not found', 'error')
-            return
-          }
-
-          setPlayers(prev => {
-            const updated = [...prev]
-            const currentPlayer = updated[currentPlayerIndex]
-            const targetPlayer = updated[targetIdx]
-            if (!currentPlayer || !targetPlayer) return prev
-
-            // WHY: Remove camp from target player
-            updated[targetIdx] = {
-              ...targetPlayer,
-              camps: targetPlayer.camps.filter(c =>
-                !(c.row === currentPlayer.position.row && c.col === currentPlayer.position.col)
-              )
-            }
-
-            // WHY: Update current player SP and history (Issue #50 - track SP spent)
-            const updatedPlayer = deductSupplyPoints(currentPlayer, DEMOLISH_COST)
-            updated[currentPlayerIndex] = {
-              ...updatedPlayer,
-              history: addHistoryEntry(currentPlayer, currentRound, PHASES[currentPhase] || 'Unknown', -DEMOLISH_COST, 0, `Demolished ${target.name}'s camp`)
-            }
-
-            return updated
-          })
-
-          addEvent(`${player.name} demolished ${target.name}'s camp at ${playerHexId}!`, 'action')
-        }
-
-        // WHY: Solo mode Trophy Hall demolish threat (Issue #54)
-        // Demolishing Trophy Hall (TL24) adds D3 threat automatically
-        if (soloMode) {
-          const currentHex = hexes[playerHexId]
-          if (currentHex && isTrophyHall(currentHex)) {
-            const threatCheck = executeTrophyHallThreat()
-            increaseThreat(threatCheck.increase, threatCheck.description)
-            addEvent(threatCheck.description, 'warning')
-          }
-        }
-
-        break
-      }
-
-      case 'DIMENSIONAL_MANOEUVRE': {
-        // WHY: Dimensional Manoeuvre - teleport to any hex using Dimensional Key (Issue #59)
-        const { targetHex } = params
-
-        if (!player.hasDimensionalKey) {
-          addEvent(`${player.name} does not have the Dimensional Key`, 'error')
-          break
-        }
-
-        if (player.supplyPoints < 1) {
-          addEvent(`${player.name} needs 1 SP for Dimensional Manoeuvre`, 'error')
-          break
-        }
-
-        if (!targetHex || !hexes[targetHex]) {
-          addEvent('Invalid target hex for Dimensional Manoeuvre', 'error')
-          break
-        }
-
-        // WHY: Move player, deduct SP, return key (Issue #50 - track SP spent)
-        const updatedPlayer = deductSupplyPoints(player, 1)
-
-        setPlayers(prev => {
-          const updated = [...prev]
-          updated[currentPlayerIndex] = {
-            ...updatedPlayer,
-            position: hexes[targetHex]!.type === 'surface'
-              ? { row: hexes[targetHex]!.row, col: hexes[targetHex]!.col }
-              : { row: hexes[targetHex]!.row, col: hexes[targetHex]!.col },
-            hasDimensionalKey: false,  // WHY: Key is consumed after use
-            history: addHistoryEntry(
-              player,
-              currentRound,
-              PHASES[currentPhase] || 'Unknown',
-              -1,
-              0,
-              `Dimensional Manoeuvre to ${targetHex}`
-            )
-          }
-          return updated
-        })
-
-        addEvent(`${player.name} used Dimensional Manoeuvre to teleport to ${targetHex}`, 'action')
-        break
-      }
-
-      case 'TRANSFER_KEY': {
-        // WHY: Transfer Dimensional Key to another player in same hex (Issue #59)
-        const { targetPlayerId } = params
-
-        if (!player.hasDimensionalKey) {
-          addEvent(`${player.name} does not have the Dimensional Key`, 'error')
-          break
-        }
-
-        const targetIdx = players.findIndex(p => p.id === targetPlayerId)
-        if (targetIdx === -1) {
-          addEvent('Target player not found', 'error')
-          break
-        }
-
-        const targetPlayer = players[targetIdx]!
-        const playerHexId = hexId(player.position.row, player.position.col)
-        const targetPlayerHexId = hexId(targetPlayer.position.row, targetPlayer.position.col)
-
-        // WHY: Validate both players in same hex
-        if (playerHexId !== targetPlayerHexId) {
-          addEvent(`${targetPlayer.name} is not in the same hex`, 'error')
-          break
-        }
-
-        // WHY: Transfer key between players
-        setPlayers(prev => {
-          const updated = [...prev]
-          updated[currentPlayerIndex] = {
-            ...updated[currentPlayerIndex]!,
-            hasDimensionalKey: false
-          }
-          updated[targetIdx] = {
-            ...updated[targetIdx]!,
-            hasDimensionalKey: true
-          }
-          return updated
-        })
-
-        addEvent(`${player.name} transferred the Dimensional Key to ${targetPlayer.name}`, 'action')
-        break
-      }
-
-      case 'INTEL_SCOUT': {
-        // WHY: Intel Scout - free scout action using intel (Issue #59)
-        const { targetHex } = params
-
-        const validation = canUseIntelScout(player, targetHex, hexes)
-        if (!validation.canScout) {
-          addEvent(`${player.name} cannot use intel scout: ${validation.reason}`, 'error')
-          break
-        }
-
-        // WHY: Deduct 1 intel, explore hex for free
-        setPlayers(prev => {
-          const updated = [...prev]
-          updated[currentPlayerIndex] = {
-            ...updated[currentPlayerIndex]!,
-            intelCount: (updated[currentPlayerIndex]!.intelCount ?? 0) - 1
-          }
-          return updated
-        })
-
-        exploreHex(targetHex)
-        addEvent(`${player.name} used intel to scout ${targetHex}`, 'action')
-        break
-      }
-
-      case 'PORTAL_TRAVEL': {
-        // WHY: Portal Travel - use configured portal to move to linked hex (Issue #59)
-        const { targetHex } = params
-
-        const validation = canUsePortal(playerHexId, targetHex, hexes)
-        if (!validation.canTravel) {
-          addEvent(`${player.name}: ${validation.reason}`, 'error')
-          break
-        }
-
-        if (player.supplyPoints < 1) {
-          addEvent(`${player.name} needs 1 SP for portal travel`, 'error')
-          break
-        }
-
-        const targetHexObj = hexes[targetHex]
-        if (!targetHexObj) {
-          addEvent('Invalid target hex for portal travel', 'error')
-          break
-        }
-
-        // WHY: Move player to destination, deduct SP (Issue #50 - track SP spent)
-        const updatedPlayer = deductSupplyPoints(player, 1)
-
-        setPlayers(prev => {
-          const updated = [...prev]
-          updated[currentPlayerIndex] = {
-            ...updatedPlayer,
-            position: { row: targetHexObj.row, col: targetHexObj.col },
-            history: addHistoryEntry(
-              player,
-              'Portal Travel',
-              player.supplyPoints,
-              player.supplyPoints - 1,
-              player.campaignPoints,
-              player.campaignPoints
-            )
-          }
-          return updated
-        })
-        addEvent(`${player.name} used portal to travel to ${targetHex}`, 'action')
-        break
-      }
-
-      case 'SET_REGROUP_PATH': {
-        // WHY: Set or clear REGROUP path visualization (Issue #38)
-        const { path } = params
-        setRegroupPath(path ?? null)
-        break
-      }
-
-      default:
-        addEvent(`Unknown action: ${action}`, 'error')
-    }
-  }, [players, hexes, currentPlayerIndex, currentRound, currentPhase, exploreHex, addEvent])
-
-  /**
-   * Record battle result with extended details (Issue #34)
-   * WHY: Updated signature accepts full ExtendedBattleRecord minus auto-generated fields
-   */
-  const recordBattle = useCallback((
-    record: Omit<ExtendedBattleRecord, 'round' | 'timestamp'>
-  ) => {
-    setPlayers(prev => {
-      const updated = [...prev]
-      const player = updated[currentPlayerIndex]
-      if (!player) return prev
-
-      const newSP = clampSP(player.supplyPoints + record.spEarned)
-      const newCP = player.campaignPoints + record.cpEarned
-
-      // WHY: Create complete battle record with auto-generated fields
-      const battleRecord: ExtendedBattleRecord = {
-        ...record,
-        round: currentRoundRef.current,
-        timestamp: new Date().toISOString()
-      }
-
-      // WHY: Initialize battleHistory if undefined (migration from old save data)
-      const existingHistory = player.battleHistory || []
-
-      // WHY: Calculate win/loss stats from result
-      const isWin = record.result === 'WIN'
-      const isLoss = record.result === 'LOSS'
-
-      // WHY: Issue #50 - Process operative kill details for wound-based tracking
-      const newKillDetails = (record.operativeKills || []).map(kill =>
-        recordOperativeKill(
-          player,
-          currentRoundRef.current,
-          kill.operativeName,
-          kill.wounds,
-          record.opponent
-        )
-      )
-      const existingKillDetails = player.operativeKillDetails || []
-
-      updated[currentPlayerIndex] = {
-        ...player,
-        supplyPoints: newSP,
-        campaignPoints: newCP,
-        gamesPlayed: player.gamesPlayed + 1,
-        gamesWon: isWin ? player.gamesWon + 1 : player.gamesWon,
-        gamesLost: isLoss ? player.gamesLost + 1 : player.gamesLost,
-        operativesKilled: player.operativesKilled + record.operativesKilled,  // WHY: Legacy count for backward compatibility
-        operativeKillDetails: [...existingKillDetails, ...newKillDetails],  // WHY: Issue #50 - Detailed wound-based tracking
-        battleResult: record.result,  // WHY: Store for Action Phase turn ordering
-        battleHistory: [...existingHistory, battleRecord],
-        history: addHistoryEntry(
-          player,
-          currentRoundRef.current,
-          PHASES[currentPhase] || 'Unknown',
-          record.spEarned,
-          record.cpEarned,
-          `Battle result: ${record.result}`
-        )
-      }
-
-      return updated
-    })
-
-    const player = players[currentPlayerIndex]
-    if (player) {
-      addEvent(
-        `${player.name}: ${record.result} (+${record.cpEarned} CP, +${record.spEarned} SP)`,
-        'battle'
-      )
-    }
-
-    // Mark battle phase as completed
-    setBattleCompleted(true)
-
-    // WHY: Check for solo mode battle threat (Issue #54)
-    // WIN: D6, 3+ = +1 threat | LOSS/DRAW: D6, 5+ = +1 threat
-    if (soloMode) {
-      const threatCheck = checkBattleThreat(record.result)
-      setPendingThreatCheck(threatCheck)
-      setShowThreatCheckDialog(true)
-    }
-  }, [players, currentPlayerIndex, currentPhase, addEvent, soloMode])
-
-  /**
-   * Record missing player scenario (Issue #41)
-   *
-   * WHY: When an opponent doesn't show up, sporting rules apply:
-   * - Present player gets WIN (+1 CP)
-   * - Absent player gets LOSS (+1 SP)
-   *
-   * @param presentPlayerId - ID of player who showed up
-   * @param absentPlayerId - ID of player who didn't show
-   */
-  const recordMissingPlayer = useCallback((
-    presentPlayerId: number,
-    absentPlayerId: number
-  ) => {
-    const presentPlayer = players.find(p => p.id === presentPlayerId)
-    const absentPlayer = players.find(p => p.id === absentPlayerId)
-
-    if (!presentPlayer || !absentPlayer) {
-      console.error('recordMissingPlayer: Invalid player IDs')
-      return
-    }
-
-    // WHY: Create records for both players
-    const { winRecord, lossRecord } = createMissingPlayerRecords(
-      presentPlayer,
-      absentPlayer,
-      currentRoundRef.current
-    )
-
-    // WHY: Update both players' state with their respective records
-    setPlayers(prev => {
-      const updated = [...prev]
-
-      // Update present player with WIN
-      const presentIdx = updated.findIndex(p => p.id === presentPlayerId)
-      if (presentIdx !== -1) {
-        const present = updated[presentIdx]
-        updated[presentIdx] = {
-          ...present,
-          supplyPoints: present.supplyPoints, // WIN gives CP, not SP
-          campaignPoints: present.campaignPoints + winRecord.cpEarned,
-          gamesPlayed: present.gamesPlayed + 1,
-          gamesWon: present.gamesWon + 1,
-          battleResult: 'WIN',
-          battleHistory: [...(present.battleHistory || []), winRecord],
-          history: addHistoryEntry(
-            present,
-            currentRoundRef.current,
-            PHASES[currentPhase] || 'Battle',
-            winRecord.spEarned,
-            winRecord.cpEarned,
-            `Battle result: WIN (opponent absent)`
-          )
-        }
-      }
-
-      // Update absent player with LOSS
-      const absentIdx = updated.findIndex(p => p.id === absentPlayerId)
-      if (absentIdx !== -1) {
-        const absent = updated[absentIdx]
-        updated[absentIdx] = {
-          ...absent,
-          supplyPoints: clampSP(absent.supplyPoints + lossRecord.spEarned),
-          campaignPoints: absent.campaignPoints, // LOSS gives SP, not CP
-          gamesPlayed: absent.gamesPlayed + 1,
-          gamesLost: absent.gamesLost + 1,
-          battleResult: 'LOSS',
-          battleHistory: [...(absent.battleHistory || []), lossRecord],
-          history: addHistoryEntry(
-            absent,
-            currentRoundRef.current,
-            PHASES[currentPhase] || 'Battle',
-            lossRecord.spEarned,
-            lossRecord.cpEarned,
-            `Battle result: LOSS (absent)`
-          )
-        }
-      }
-
-      return updated
-    })
-
-    // WHY: Log events for both players
-    addEvent(
-      `${presentPlayer.name}: WIN (+1 CP) - ${absentPlayer.name} was absent`,
-      'battle'
-    )
-    addEvent(
-      `${absentPlayer.name}: LOSS (+1 SP) - marked as absent`,
-      'battle'
-    )
-
-    // WHY: Mark battle as completed for present player
-    setBattleCompleted(true)
-  }, [players, currentPhase, addEvent])
-
-  /**
-   * Calculate movement order based on player priority
-   * WHY: Official rules state players move in priority order (lowest CP → SP)
-   * @returns Array of player indices in movement order
-   */
-  const calculateMovementOrder = useCallback((): number[] => {
-    // WHY: Solo mode doesn't need priority calculation
-    if (soloMode) return [0]
-
-    // WHY: determinePriority sorts by CP then SP, assigns priority values
-    const playersWithPriority = determinePriority(players)
-    const order = playersWithPriority.map(p => p.id)
-
-    // WHY: Update player state with priority values for UI display
-    setPlayers(playersWithPriority)
-
-    // WHY: Warn if tied players detected (future: show roll-off modal)
-    if (needsRollOff(players)) {
-      addEvent('Priority tied - using player order', 'warning')
-    }
-
-    return order
-  }, [players, soloMode, addEvent])
-
   const nextPhase = useCallback(() => {
-    // WHY: Use ref to get current phase (avoids stale closure)
-    const phase = currentPhaseRef.current
+    const currentPhaseIndex = PHASES.indexOf(state.currentPhase)
 
-    // Validate Battle phase completion (phase index 1)
-    // WHY: Issue #55 - In solo mode, battles are optional (can't battle against yourself)
-    if (phase === 1 && !battleCompleted && !soloMode) {
-      addEvent('Cannot advance: You must record a battle result first', 'error')
+    // WHY: Validate phase-specific completion requirements
+    if (currentPhaseIndex === 0 && movement.movementIndex < state.players.length) {
+      state.addEvent('Complete all player movements before advancing', 'warning')
       return
     }
 
-    if (phase < PHASES.length - 1) {
-      const newPhase = phase + 1
-      currentPhaseRef.current = newPhase  // WHY: Update ref BEFORE setState
-      setCurrentPhase(newPhase)
-      addEvent(`Phase changed to ${PHASES[newPhase] || 'Unknown'}`, 'system')
+    if (currentPhaseIndex === 2 && action.actionIndex < state.players.length) {
+      state.addEvent('Complete all player actions before advancing', 'warning')
+      return
+    }
+
+    // WHY: Advance phase or start new round
+    if (currentPhaseIndex === 3) {
+      // End of round - advance to next round
+      const nextRound = state.currentRound + 1
+      state.setCurrentRound(nextRound)
+      state.setCurrentPhase(0) // Reset to Movement
+
+      // WHY: Calculate round statistics and detect milestones (Issue #31)
+      const roundStats = calculateRoundStatistics(
+        state.players,
+        state.hexes,
+        nextRound - 1, // Previous round stats
+        threatLevel
+      )
+      const milestones = detectMilestones(roundStats, state.players)
+
+      setPendingRoundSummary(roundStats)
+
+      if (milestones.length > 0) {
+        milestones.forEach(m => state.addEvent(m.message, m.type))
+      }
+
+      state.addEvent(`Round ${nextRound} - Movement Phase`, 'system')
+
+      // WHY: Check if campaign should end (Issue #53, #55)
+      if (victory.checkCampaignEnd()) {
+        const result = victory.handleCampaignEnd()
+        state.setGameEnded(result.gameEnded)
+      }
     } else {
-      // Move to next player or next round
-      // WHY: Use refs to get current values (avoids stale closure)
-      const playerIndex = currentPlayerIndexRef.current
-      const currentPlayers = playersRef.current
+      // Advance to next phase within round
+      state.setCurrentPhase(currentPhaseIndex + 1)
+      const nextPhaseName = PHASES[currentPhaseIndex + 1]
+      state.addEvent(`${nextPhaseName} Phase`, 'system')
 
-      if (playerIndex < currentPlayers.length - 1) {
-        const newIndex = playerIndex + 1
-        currentPlayerIndexRef.current = newIndex  // WHY: Update ref BEFORE setState
-        setCurrentPlayerIndex(newIndex)
-        currentPhaseRef.current = 0  // WHY: Update ref BEFORE setState
-        setCurrentPhase(0)
-        setBattleCompleted(false) // Reset for next player
-        setThreatRulesResolved(false) // WHY: Reset for next player's threat phase
-        const nextPlayer = currentPlayers[newIndex]
-        if (nextPlayer) {
-          addEvent(`${nextPlayer.name}'s turn`, 'system')
-        }
-      } else {
-        // End of round - increase threat
-        const currentRoundValue = currentRoundRef.current
-
-        // WHY: Trigger round summary modal before round increment (Issue #31 - Phase 2)
-        if (showRoundSummary && !pendingRoundSummary) {
-          const stats = calculateRoundStatistics(eventLog, currentPlayers, currentRoundValue)
-          setPendingRoundSummary(stats)
-          return  // Pause execution until modal dismissed
-        }
-
-        const newRound = currentRoundValue + 1
-        currentRoundRef.current = newRound  // WHY: Update ref BEFORE setState
-        currentPhaseRef.current = 0  // WHY: Update ref BEFORE setState
-        currentPlayerIndexRef.current = 0  // WHY: Update ref BEFORE setState
-
-        // WHY: Issue #54 - Solo mode uses dynamic threat only (no automatic increase)
-        // WHY: Issue #55 - Calculate new threat and update ref BEFORE setState (avoids stale closure)
-        const currentThreat = threatLevelRef.current
-        const newThreat = soloMode ? currentThreat : Math.min(currentThreat + 1, 10)
-
-        if (!soloMode) {
-          threatLevelRef.current = newThreat  // WHY: Update ref BEFORE setState
-          setThreatLevel(newThreat)
-          const warning = calculateThreatWarning(newThreat, targetThreatLevel)
-          setThreatWarning(warning)
-          addEvent('Threat increased by 1: End of round', 'warning')
-
-          if (warning === 'critical') {
-            addEvent(`⚠️ CRITICAL: Only ${targetThreatLevel - newThreat} level(s) from campaign end!`, 'warning')
-          } else if (warning === 'moderate') {
-            addEvent(`⚠️ WARNING: ${targetThreatLevel - newThreat} levels from campaign end`, 'warning')
-          }
-        } else {
-          addEvent('Threat phase complete (solo mode - dynamic threat only)', 'system')
-        }
-
-        setCurrentRound(newRound)
-        setCurrentPlayerIndex(0)
-        setCurrentPhase(0)
-        setBattleCompleted(false) // Reset for new round
-        setThreatRulesResolved(false) // WHY: Reset for next round's threat phase rules
-
-        // WHY: Recalculate priority for new round (CP/SP may have changed)
-        const newOrder = calculateMovementOrder()
-        setMovementOrder(newOrder)
-        setMovementIndex(0)
-
-        // WHY: Issue #55 - Solo mode victory determined by 10+ CP goal
-        if (newThreat >= targetThreatLevel && !extendedMode) {
-          setGameEnded(true)
-
-          if (soloMode) {
-            const soloPlayer = currentPlayers[0]
-            const victoryAchieved = soloPlayer && soloPlayer.campaignPoints >= 10
-            setSoloVictory(victoryAchieved)
-
-            if (victoryAchieved) {
-              addEvent(
-                `🎉 CAMPAIGN SUCCESS! You reached ${soloPlayer.campaignPoints} CP (10+ required)`,
-                'system'
-              )
-              addEvent(
-                `The expedition was successful despite threat level ${newThreat}`,
-                'system'
-              )
-            } else {
-              addEvent(
-                `❌ CAMPAIGN FAILED. Only ${soloPlayer?.campaignPoints || 0} CP reached (10 required)`,
-                'system'
-              )
-              addEvent(
-                `Threat level ${newThreat} forced withdrawal before goal achieved`,
-                'system'
-              )
-            }
-
-            // WHY: Issue #56 - Save solo performance record to localStorage
-            if (currentPlayers.length === 1) {
-              const campaignId = `campaign-${Date.now()}`
-
-              const performanceRecord = buildPerformanceRecord(
-                campaignId,
-                victoryAchieved,
-                newThreat,
-                currentRoundRef.current,
-                soloPlayer
-              )
-
-              savePerformanceRecord(performanceRecord)
-            }
-          } else {
-            // Competitive mode unchanged
-            addEvent(`🔴 CAMPAIGN ENDED! Target threat level ${targetThreatLevel} reached.`, 'system')
-            addEvent(`The Necrons have fully awakened at threat level ${newThreat}: ${THREAT_LEVELS[newThreat]}`, 'system')
-          }
-        } else {
-          addEvent(`Round ${currentRoundRef.current} begins. Threat level: ${newThreat}`, 'system')
-          // WHY: Log movement order for transparency
-          const orderNames = newOrder.map(i => currentPlayers[i]?.name || `Player ${i}`).join(' → ')
-          addEvent(`Movement order: ${orderNames}`, 'system')
-
-          // WHY: Detect and log milestones (Issue #31 - Phase 4)
-          const milestones = detectMilestones(newRound, newThreat, targetThreatLevel, currentRoundValue)
-          milestones.forEach(milestone => {
-            addEvent(milestone.message, 'milestone')
-          })
-        }
+      // WHY: Reset phase-specific state on phase transition
+      if (nextPhaseName === 'Battle') {
+        battle.setBattleCompleted(false)
+      }
+      if (nextPhaseName === 'Threat') {
+        threat.detectThreatRules()
       }
     }
-  }, [currentPhase, currentPlayerIndex, players, threatLevel, targetThreatLevel, currentRound, battleCompleted, extendedMode, addEvent, calculateMovementOrder, increaseThreat, showRoundSummary, pendingRoundSummary, eventLog])
+  }, [
+    state,
+    movement,
+    action,
+    battle,
+    threat,
+    victory,
+    threatLevel
+  ])
 
   /**
-   * WHY: Continue past round summary modal (Issue #31 - Phase 2)
-   * Clears pending summary and re-triggers nextPhase to increment round
+   * WHY: Continue past round summary modal (Issue #31)
+   * Hides modal and allows gameplay to continue
    */
   const continuePastRoundSummary = useCallback(() => {
-    setPendingRoundSummary(null)
-    // WHY: Re-trigger nextPhase which will now increment the round
-    // since pendingRoundSummary is null
-    nextPhase()
-  }, [nextPhase])
-
-  const updatePlayer = useCallback((playerIndex: number, updates: Partial<Player>) => {
-    setPlayers(prev => {
-      const updated = [...prev]
-      const player = updated[playerIndex]
-      if (!player) return prev
-
-      updated[playerIndex] = { ...player, ...updates }
-      return updated
-    })
+    setShowRoundSummary(false)
   }, [])
 
-  const calculateEncampCost = useCallback((playerIndex: number): number => {
-    const player = players[playerIndex]
-    if (!player) return 999
-
-    // Find nearest base or camp
-    let minDist = 999
-    const playerPos = player.position
-
-    player.bases.forEach(base => {
-      const dist = hexDistance(playerPos.row, playerPos.col, base.row, base.col)
-      if (dist < minDist) minDist = dist
-    })
-
-    player.camps.forEach(camp => {
-      const dist = hexDistance(playerPos.row, playerPos.col, camp.row, camp.col)
-      if (dist < minDist) minDist = dist
-    })
-
-    return minDist
-  }, [players])
-
-  const updatePriorities = useCallback(() => {
-    const playersWithPriority = determinePriority(players)
-    setPlayers(playersWithPriority)
-    addEvent('Player priorities updated', 'system')
-  }, [players, addEvent])
-
-  const checkRollOff = useCallback((): boolean => {
-    return needsRollOff(players)
-  }, [players])
-
-  // WHY: Advance to next player in Action Phase turn order
-  const advanceActionTurn = useCallback(() => {
-    setActionIndex(prev => {
-      if (!actionOrder) return 0
-      const nextIndex = prev + 1
-      return nextIndex >= actionOrder.length ? 0 : nextIndex
-    })
-  }, [actionOrder])
+  // ============================================================================
+  // BATTLE CONDITION HELPERS (Issue #40)
+  // ============================================================================
 
   /**
-   * Validate if player can perform Demolish action
-   * WHY: Demolish requires winning battle against camp owner this round OR challenged-refused/no-show
-   *
-   * @param playerIndex - Index of player attempting demolish
-   * @returns Validation result with valid targets or error reason
+   * WHY: Get active battle condition for current hex
+   * Returns condition object with recommendations
    */
-  const validateDemolish = useCallback((playerIndex: number): {
-    valid: boolean
-    reason?: string
-    targets?: Array<{ type: 'CAMP' | 'BEAST_LAIR' | 'RELEASED_PRISONER'; playerId?: number; playerName?: string; name: string }>
-    cost: number
-  } => {
-    const DEMOLISH_COST = 3
-    const player = players[playerIndex]
+  const getActiveBattleCondition = useCallback((): ActiveBattleCondition | null => {
+    if (!selectedOpponentId) return null
 
-    if (!player) {
-      return { valid: false, reason: 'Player not found', cost: DEMOLISH_COST }
-    }
+    const player = state.players.find(p => p.id === state.currentPlayerIndex)
+    const opponent = state.players.find(p => p.id === selectedOpponentId)
 
-    // WHY: Check if player has enough SP
-    if (player.supplyPoints < DEMOLISH_COST) {
-      return { valid: false, reason: 'Insufficient SP (requires 3 SP)', cost: DEMOLISH_COST }
-    }
+    if (!player || !opponent) return null
 
-    // WHY: Find demolishable targets at player's current position (Issue #59 - Phase 5)
-    const playerPos = player.position
-    const playerHexId = `${playerPos.row},${playerPos.col}`
-    const hex = hexes[playerHexId]
-    const allTargets: Array<{ type: 'CAMP' | 'BEAST_LAIR' | 'RELEASED_PRISONER'; playerId?: number; playerName?: string; name: string }> = []
+    const hex = state.hexes[player.position.row + ',' + player.position.col]
+    if (!hex || !hex.explored) return null
 
-    // WHY: Check for Beast Lair (TL23) at current position
-    if (hex?.location === 23 && hex.state?.beastLairActive !== false) {
-      allTargets.push({ type: 'BEAST_LAIR', name: 'Beast Lair' })
-    }
+    const condition = determineActiveCondition(hex, conditionEnabled)
+    if (!condition) return null
 
-    // WHY: Check for Released Prisoner at current position
-    const prisoner = releasedPrisoners?.find(p => p.currentHexId === playerHexId && p.active)
-    if (prisoner) {
-      allTargets.push({ type: 'RELEASED_PRISONER', name: 'Released Prisoner' })
-    }
-
-    // WHY: Find opponent camps at player's current position
-    players.forEach((opponent, idx) => {
-      if (idx === playerIndex) return // Skip self
-
-      opponent.camps.forEach(camp => {
-        if (camp.row === playerPos.row && camp.col === playerPos.col) {
-          // WHY: Avoid duplicates if same opponent has multiple camps at same position
-          if (!allTargets.find(t => t.playerId === opponent.id && t.type === 'CAMP')) {
-            allTargets.push({ type: 'CAMP', playerId: opponent.id, playerName: opponent.name, name: `${opponent.name}'s Camp` })
-          }
-        }
-      })
-    })
-
-    if (allTargets.length === 0) {
-      return { valid: false, reason: 'No demolishable targets at your position', cost: DEMOLISH_COST }
-    }
-
-    // WHY: Filter targets based on prerequisites (Issue #59 - Phase 5)
-    // Beast Lair and Released Prisoner can be demolished immediately
-    // Opponent camps require battle prerequisites (win or challenge this round)
-    const battleHistory = player.battleHistory || []
-
-    const validTargets = allTargets.filter(target => {
-      // WHY: Beast Lair and Released Prisoner don't require battle prerequisites
-      if (target.type === 'BEAST_LAIR' || target.type === 'RELEASED_PRISONER') {
-        return true
-      }
-
-      // WHY: Camps require battle prerequisites
-      if (target.type === 'CAMP' && target.playerId !== undefined) {
-        // WHY: Find battles against this camp owner in current round
-        const battleThisRound = battleHistory.find(battle =>
-          battle.round === currentRound &&
-          battle.opponent === target.playerId
-        )
-
-        if (!battleThisRound) return false
-
-        // WHY: Accept WIN or challenged-refused/no-show statuses
-        return (
-          battleThisRound.result === 'WIN' ||
-          battleThisRound.status === 'challenged-refused' ||
-          battleThisRound.status === 'challenged-no-show'
-        )
-      }
-
-      return false
-    })
-
-    if (validTargets.length === 0) {
-      return {
-        valid: false,
-        reason: 'Demolish prerequisite not met (camps require battle win or challenge against owner this round)',
-        cost: DEMOLISH_COST
-      }
-    }
-
-    return {
-      valid: true,
-      targets: validTargets,
-      cost: DEMOLISH_COST
-    }
-  }, [players, hexes, releasedPrisoners, currentRound])
-
-  /**
-   * Get the active battle condition for the current battle (Issue #40)
-   * WHY: Called during Battle Phase to determine which condition applies
-   *
-   * @param opponentId - The selected opponent's player ID (null for BYE/external)
-   * @returns ActiveBattleCondition with condition info and reason, plus killzone recommendation
-   */
-  const getActiveBattleCondition = useCallback((
-    opponentId: number | null
-  ): { condition: ActiveBattleCondition; killzone: KillzoneRecommendation | null } | null => {
-    // Only return condition during Battle Phase
-    if (currentPhase !== 1) return null
-
-    const currentPlayer = players[currentPlayerIndex]
-    if (!currentPlayer) return null
-
-    // If condition rules disabled, return disabled state
-    if (!conditionEnabled) {
-      return {
-        condition: {
-          condition: null,
-          sourceHex: null,
-          reason: 'disabled',
-          conditionProviderPlayerId: null,
-          conditionProviderName: null
-        },
-        killzone: null
-      }
-    }
-
-    // Get opponent player (null for BYE or external)
-    const opponent = opponentId !== null
-      ? players.find(p => p.id === opponentId) ?? null
-      : null
-
-    // Get players with priority for initiative determination
-    const playersWithPriority = determinePriority(players)
-
-    // Determine active condition
-    const activeCondition = determineActiveCondition(
-      currentPlayer,
+    const recommendation = getKillzoneRecommendation(
+      condition,
+      player,
       opponent,
-      hexes,
-      playersWithPriority
+      state.hexes
     )
 
-    // Get killzone recommendation based on hex type
-    const killzone = activeCondition.sourceHex
-      ? getKillzoneRecommendation(activeCondition.sourceHex.type)
-      : null
+    return {
+      condition,
+      recommendation: recommendation as KillzoneRecommendation
+    }
+  }, [selectedOpponentId, state.players, state.currentPlayerIndex, state.hexes, conditionEnabled])
 
-    return { condition: activeCondition, killzone }
-  }, [currentPhase, currentPlayerIndex, players, hexes, conditionEnabled])
+  // ============================================================================
+  // PORTAL AND HEX BLOCKING (Issue #59 - Phase 4)
+  // ============================================================================
 
   /**
-   * Handle portal configuration confirmation (Issue #59 - Phase 4)
-   * WHY: User selects tomb and surface destinations, updates hex state
+   * WHY: Handle portal network configuration
+   * Links specified hexes via portal network
+   * NOTE: Maintains backward-compatible signature (tombDest, surfaceDest)
    */
   const handlePortalConfig = useCallback((tombDest: string, surfaceDest: string) => {
     if (!portalHexId) return
 
-    // WHY: Capture before snapshot for audit trail (Issue #23 - Phase 3)
-    const beforeSnapshot = createHexSnapshot(hexes[portalHexId])
-
-    const updatedHexes = configurePortalNetwork(portalHexId, tombDest, surfaceDest, hexes)
-    setHexes(updatedHexes)
-
-    // WHY: Record audit entry for portal configuration (Issue #23 - Phase 3)
-    const afterSnapshot = createHexSnapshot(updatedHexes[portalHexId])
-    addAudit(portalHexId, 'PORTAL_CONFIG', beforeSnapshot, afterSnapshot, `Portal network configured: tomb→${tombDest}, surface→${surfaceDest}`)
-
+    const targetHexIds = [tombDest, surfaceDest]
+    const updatedHexes = configurePortalNetwork(state.hexes, portalHexId, targetHexIds)
+    state.setHexes(updatedHexes)
+    state.addEvent('Portal network configured', 'system')
     setShowPortalConfigModal(false)
     setPortalHexId(null)
-    addEvent(`Portal network configured at ${portalHexId}: tomb→${tombDest}, surface→${surfaceDest}`, 'action')
-  }, [portalHexId, hexes, addEvent, addAudit])
+  }, [portalHexId, state])
 
   /**
-   * Handle hex blocking confirmation (Issue #59 - Phase 4)
-   * WHY: User selects tomb hex to block, updates hex state
-   */
-  const handleHexBlock = useCallback((targetHexId: string) => {
-    if (!fulcrumHexId) return
-
-    // WHY: Capture before snapshot for audit trail (Issue #23 - Phase 3)
-    const beforeSnapshot = createHexSnapshot(hexes[fulcrumHexId])
-
-    const updatedHexes = toggleHexBlocking(fulcrumHexId, targetHexId, hexes)
-    setHexes(updatedHexes)
-
-    // WHY: Record audit entry for hex blocking (Issue #23 - Phase 3)
-    const afterSnapshot = createHexSnapshot(updatedHexes[fulcrumHexId])
-    addAudit(fulcrumHexId, 'HEX_BLOCK', beforeSnapshot, afterSnapshot, `Transtechnic Fulcrum now blocking ${targetHexId}`)
-
-    setShowHexBlockSelector(false)
-    setFulcrumHexId(null)
-    addEvent(`Transtechnic Fulcrum at ${fulcrumHexId} now blocking ${targetHexId}`, 'action')
-  }, [fulcrumHexId, hexes, addEvent, addAudit])
-
-  /**
-   * Cancel modal handlers (Issue #59 - Phase 4)
+   * WHY: Cancel portal configuration
    */
   const handleCancelPortalConfig = useCallback(() => {
     setShowPortalConfigModal(false)
     setPortalHexId(null)
   }, [])
 
+  /**
+   * WHY: Handle hex blocking configuration
+   * Blocks specified hex using Fulcrum Hex power
+   */
+  const handleHexBlock = useCallback((targetHexId: string) => {
+    if (!fulcrumHexId) return
+
+    const updatedHexes = toggleHexBlocking(state.hexes, targetHexId, true)
+    state.setHexes(updatedHexes)
+    state.addEvent(`Hex ${targetHexId} blocked by Fulcrum Hex`, 'system')
+    setShowHexBlockSelector(false)
+    setFulcrumHexId(null)
+  }, [fulcrumHexId, state])
+
+  /**
+   * WHY: Cancel hex blocking
+   */
   const handleCancelHexBlock = useCallback(() => {
     setShowHexBlockSelector(false)
     setFulcrumHexId(null)
   }, [])
 
-  /**
-   * Load campaign from imported data (Issue #23 - Phase 2)
-   * WHY: Apply validated and migrated campaign export to current state
-   * Component handles file reading, validation, and migration
-   */
-  const loadCampaign = useCallback((data: CampaignExport) => {
-    try {
-      // WHY: Apply all state from imported campaign
-      setPlayers(data.players)
-      setHexes(data.campaign.hexMap)
-      setThreatLevel(data.campaign.threatLevel)
-      setTargetThreatLevel(data.campaign.targetThreatLevel)
-      setCurrentRound(data.campaign.currentRound)
-      setCurrentPhase(PHASES.indexOf(data.campaign.currentPhase))
-      setEventLog(data.events)
-
-      // WHY: Apply victory data if present
-      if (data.victoryData) {
-        // Victory categories and champion are managed elsewhere
-        // This data will be available when needed
-      }
-
-      addEvent('Campaign loaded successfully', 'system')
-      setImportModalOpen(false)
-    } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : 'Unknown error'
-      addEvent(`Failed to load campaign: ${errorMsg}`, 'error')
-    }
-  }, [addEvent])
+  // ============================================================================
+  // RETURN COMBINED INTERFACE (Backward compatible with original hook)
+  // ============================================================================
 
   return {
-    // State
-    gameStarted,
-    playerCount,
-    players,
-    hexes,
-    currentRound,
-    currentPhase: PHASES[currentPhase] || 'Movement',
-    currentPlayerIndex,
+    // Core state from useCampaignState
+    gameStarted: state.gameStarted,
+    playerCount: state.playerCount,
+    players: state.players,
+    hexes: state.hexes,
+    currentRound: state.currentRound,
+    currentPhase: state.currentPhase,
+    currentPlayerIndex: state.currentPlayerIndex,
+    targetThreatLevel: state.targetThreatLevel,
+    mapConfig: state.mapConfig,
+    selectedHex: state.selectedHex,
+    gameEnded: state.gameEnded,
+    extendedMode: state.extendedMode,
+    eventLog: state.eventLog,
+
+    // Additional state
     threatLevel,
-    targetThreatLevel,
     threatWarning,
-    eventLog,
     soloMode,
-    mapConfig,
-    selectedHex,
-    gameEnded,
-    battleCompleted,
-    extendedMode,
-    explorationResult,
-    showThreatCheckDialog,  // WHY: Issue #54 - Solo mode threat check dialog
-    pendingThreatCheck,  // WHY: Issue #54 - Threat check result to display
-    showThreatPreventionDialog,  // WHY: Issue #54 - Solo mode threat prevention dialog
-    showResupplyReductionDialog,  // WHY: Issue #54 - Solo mode resupply reduction dialog
-    pendingResupplyReduction,  // WHY: Issue #54 - Resupply reduction result to display
-    soloVictory,  // WHY: Issue #55 - Solo mode victory/failure state (true = success, false = failure)
-    movementOrder,
-    movementIndex,
-    actionOrder,
-    actionIndex,
     conditionEnabled,
     selectedOpponentId,
-    activeThreatRules,
-    threatRulesResolved,
-    regroupPath, // WHY: Path for REGROUP visualization (Issue #38)
 
-    // Setters
-    setPlayerCount,
-    setTargetThreatLevel,
-    setSelectedHex,
+    // Movement phase state
+    movementOrder: movement.movementOrder,
+    movementIndex: movement.movementIndex,
+    regroupPath: movement.regroupPath,
+
+    // Battle phase state
+    battleCompleted: battle.battleCompleted,
+
+    // Action phase state
+    actionOrder: action.actionOrder,
+    actionIndex: action.actionIndex,
+
+    // Exploration state
+    explorationResult: exploration.explorationResult,
+
+    // Threat phase state
+    activeThreatRules: threat.activeThreatRules,
+    threatRulesResolved: threat.threatRulesResolved,
+    showThreatCheckDialog: threat.showThreatCheckDialog,
+    pendingThreatCheck: threat.pendingThreatCheck,
+    showThreatPreventionDialog: threat.showThreatPreventionDialog,
+    showResupplyReductionDialog: threat.showResupplyReductionDialog,
+    pendingResupplyReduction: threat.pendingResupplyReduction,
+
+    // Victory state (computed)
+    soloVictory: undefined, // WHY: Computed by victory.handleCampaignEnd()
+
+    // UI modal state
+    showPortalConfigModal,
+    portalHexId,
+    showHexBlockSelector,
+    fulcrumHexId,
+    showRoundSummary,
+    pendingRoundSummary,
+    importModalOpen,
+
+    // Audit log
+    auditLog: audit.auditLog,
+
+    // ========================================================================
+    // SETTERS
+    // ========================================================================
+
+    setPlayerCount: state.setPlayerCount,
+    setTargetThreatLevel: state.setTargetThreatLevel,
+    setSelectedHex: state.setSelectedHex,
     setThreatLevel,
     setConditionEnabled,
     setSelectedOpponentId,
 
-    // Actions
-    startGame,
-    movePlayer,
-    regroupPlayer,
-    holdPosition,
-    exploreHex,
-    performAction,
-    recordBattle,
-    recordMissingPlayer,
-    nextPhase,
-    updatePlayer,
-    calculateEncampCost,
-    validateDemolish,
-    addEvent,
-    updatePriorities,
-    checkRollOff,
-    enableExtendedMode,
-    clearExplorationResult,
-    increaseThreat,  // WHY: Issue #55 - Exported for testing solo victory warnings
-    handleThreatCheckConfirm,  // WHY: Issue #54 - Handle threat check dialog confirmation
-    handleThreatPrevention,  // WHY: Issue #54 - Handle threat prevention (spend SP)
-    handleThreatAcceptance,  // WHY: Issue #54 - Handle threat acceptance (save SP)
-    handleResupplyReductionAccept,  // WHY: Issue #54 - Handle resupply reduction accept
-    handleResupplyReductionDecline,  // WHY: Issue #54 - Handle resupply reduction decline
-    calculateMovementOrder,
-    advanceActionTurn,
-    getActiveBattleCondition,
-    detectThreatRules,
-    resolveThreatPhaseLocationRules,
-    checkForThreatRules,
+    // ========================================================================
+    // ACTIONS - Core
+    // ========================================================================
 
-    // Portal and Hex Blocking modals (Issue #59 - Phase 4)
-    showPortalConfigModal,
-    portalHexId,
+    startGame: state.startGame,
+    updatePlayer: state.updatePlayer,
+    updatePriorities: state.updatePriorities,
+    checkRollOff: state.checkRollOff,
+    addEvent: state.addEvent,
+
+    // ========================================================================
+    // ACTIONS - Movement Phase
+    // ========================================================================
+
+    calculateMovementOrder: movement.calculateMovementOrder,
+    movePlayer: movement.movePlayer,
+    regroupPlayer: movement.regroupPlayer,
+    holdPosition: movement.holdPosition,
+
+    // ========================================================================
+    // ACTIONS - Exploration
+    // ========================================================================
+
+    exploreHex: exploration.exploreHex,
+    clearExplorationResult: exploration.clearExplorationResult,
+
+    // ========================================================================
+    // ACTIONS - Battle Phase
+    // ========================================================================
+
+    recordBattle: battle.recordBattle,
+    recordMissingPlayer: battle.recordMissingPlayer,
+    getActiveBattleCondition,
+
+    // ========================================================================
+    // ACTIONS - Action Phase
+    // ========================================================================
+
+    performAction: action.performAction,
+    calculateEncampCost: action.calculateEncampCost,
+    validateDemolish: action.validateDemolish,
+    advanceActionTurn: action.advanceActionTurn,
+
+    // ========================================================================
+    // ACTIONS - Threat Phase
+    // ========================================================================
+
+    increaseThreat,
+    detectThreatRules: threat.detectThreatRules,
+    checkForThreatRules: threat.checkForThreatRules,
+    resolveThreatPhaseLocationRules: threat.resolveThreatPhaseLocationRules,
+    handleThreatCheckConfirm: threat.handleThreatCheckConfirm,
+    handleThreatPrevention: threat.handleThreatPrevention,
+    handleThreatAcceptance: threat.handleThreatAcceptance,
+    handleResupplyReductionAccept: threat.handleResupplyReductionAccept,
+    handleResupplyReductionDecline: threat.handleResupplyReductionDecline,
+
+    // ========================================================================
+    // ACTIONS - Victory
+    // ========================================================================
+
+    enableExtendedMode: victory.enableExtendedMode,
+
+    // ========================================================================
+    // ACTIONS - Import/Export (Issue #23)
+    // ========================================================================
+
+    loadCampaign: importExport.loadCampaign,
+    setImportModalOpen: (open: boolean) => {
+      const newState = importExport.setImportModalOpen(open)
+      setImportModalOpen(newState.importModalOpen)
+    },
+
+    // ========================================================================
+    // ACTIONS - Audit Trail (Issue #23 - Phase 3)
+    // ========================================================================
+
+    getHexHistory: audit.getHexHistory,
+    getPlayerActions: audit.getPlayerActions,
+    exportAuditLog: audit.exportAuditLog,
+
+    // ========================================================================
+    // ACTIONS - Portal & Hex Blocking (Issue #59)
+    // ========================================================================
+
     handlePortalConfig,
     handleCancelPortalConfig,
-    showHexBlockSelector,
-    fulcrumHexId,
     handleHexBlock,
     handleCancelHexBlock,
 
-    // Map state validation (Issue #23 - Phase 1)
-    validateMapState: () => validateMapStateUtil(hexes, players),
+    // ========================================================================
+    // ACTIONS - Phase Transition & Round Summary
+    // ========================================================================
 
-    // Campaign import (Issue #23 - Phase 2)
-    loadCampaign,
-    importModalOpen,
-    setImportModalOpen,
-
-    // Audit trail (Issue #23 - Phase 3)
-    auditLog,
-    getHexHistory: (hexId: string) => getHexHistory(auditLog, hexId),
-    getPlayerActions: (playerId: number) => getPlayerActions(auditLog, playerId),
-    exportAuditLog: (campaignName: string) => exportAuditLog(auditLog, campaignName),
-
-    // Round summary modal (Issue #31 - Phase 2)
-    showRoundSummary,
-    setShowRoundSummary,
-    pendingRoundSummary,
+    nextPhase,
     continuePastRoundSummary,
+    setShowRoundSummary,
+
+    // ========================================================================
+    // UTILITY FUNCTIONS
+    // ========================================================================
+
+    validateMapState: () => {
+      const { validateMapState } = require('@/lib/utils/mapValidation')
+      return validateMapState(state.hexes, state.players)
+    },
   }
 }

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useCallback } from 'react'
-import type { Player, Hex, ActiveThreatPhaseRule, ThreatPhaseRuleResolution } from '@/types/campaign'
+import type { Player, Hex, ActiveThreatPhaseRule, ThreatPhaseRuleResolution, ThreatCheckResultResult, ResupplyReductionResult, ReleasedPrisonerEntity } from '@/types/campaign'
 import { hexId } from '@/lib/utils/hexUtils'
 import { detectActiveThreatPhaseRules, sortByPriority, hasActiveRules } from '@/lib/utils/threatPhaseRules'
 import { findPlayersInBeastRange, resolveBeastAttack } from '@/lib/utils/threatPhaseAttacks'
@@ -24,13 +24,6 @@ interface UseThreatPhaseProps {
   addEvent: (message: string, type?: string) => void
   updatePlayer: (index: number, updates: Partial<Player>) => void
   setThreatLevel: (levelOrFn: number | ((prev: number) => number)) => void
-}
-
-interface ThreatCheck {
-  success: boolean
-  increase: number
-  description: string
-  roll: number
 }
 
 /**
@@ -85,8 +78,8 @@ export function useThreatPhase(props: UseThreatPhaseProps) {
 
   const [threatRulesResolved, setThreatRulesResolved] = useState(false)
   const [activeThreatRules, setActiveThreatRules] = useState<ActiveThreatPhaseRule[]>([])
-  const [showThreatCheckDialog, setShowThreatCheckDialog] = useState(false)
-  const [pendingThreatCheck, setPendingThreatCheck] = useState<ThreatCheck | null>(null)
+  const [showThreatCheckResultDialog, setShowThreatCheckResultDialog] = useState(false)
+  const [pendingThreatCheckResult, setPendingThreatCheckResult] = useState<ThreatCheckResult | null>(null)
 
   /**
    * WHY: Detect which players have active Threat Phase location rules
@@ -265,13 +258,13 @@ export function useThreatPhase(props: UseThreatPhaseProps) {
    * WHY: Handle threat check confirmation (Issue #54)
    * Process dice roll result and increase threat if successful
    */
-  const handleThreatCheckConfirm = useCallback(() => {
-    if (pendingThreatCheck?.success) {
-      increaseThreat(pendingThreatCheck.increase, pendingThreatCheck.description)
+  const handleThreatCheckResultConfirm = useCallback(() => {
+    if (pendingThreatCheckResult?.success) {
+      increaseThreat(pendingThreatCheckResult.increase, pendingThreatCheckResult.description)
     }
-    setShowThreatCheckDialog(false)
-    setPendingThreatCheck(null)
-  }, [pendingThreatCheck, increaseThreat])
+    setShowThreatCheckResultDialog(false)
+    setPendingThreatCheckResult(null)
+  }, [pendingThreatCheckResult, increaseThreat])
 
   /**
    * WHY: Handle threat prevention - spend SP to prevent threat increase (Issue #54)
@@ -299,8 +292,8 @@ export function useThreatPhase(props: UseThreatPhaseProps) {
     })
 
     addEvent(`${currentPlayer.name} prevented threat increase (spent ${spCost} SP)`, 'action')
-    setShowThreatCheckDialog(false)
-    setPendingThreatCheck(null)
+    setShowThreatCheckResultDialog(false)
+    setPendingThreatCheckResult(null)
   }, [players, currentPlayerIndex, currentRound, currentPhase, addEvent, updatePlayer])
 
   /**
@@ -315,22 +308,22 @@ export function useThreatPhase(props: UseThreatPhaseProps) {
     // State
     threatRulesResolved,
     activeThreatRules,
-    showThreatCheckDialog,
-    pendingThreatCheck,
+    showThreatCheckResultDialog,
+    pendingThreatCheckResult,
 
     // Actions
     detectThreatRules,
     resolveThreatPhaseLocationRules,
     resolveThreatPhaseAttacks,
     increaseThreat,
-    handleThreatCheckConfirm,
+    handleThreatCheckResultConfirm,
     handleThreatPrevention,
     checkForThreatRules,
 
     // State setters (for tests and UI)
     setThreatRulesResolved,
     setActiveThreatRules,
-    setShowThreatCheckDialog,
-    setPendingThreatCheck,
+    setShowThreatCheckResultDialog,
+    setPendingThreatCheckResult,
   }
 }
