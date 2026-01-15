@@ -1,10 +1,10 @@
 'use client'
 
 import { useState, useCallback } from 'react'
-import type { Player, Hex, HexPosition, MapConfig, ExplorationResult } from '@/types/campaign'
+import type { Player, Hex, MapConfig, ExplorationResult, Event, AuditActionType, HexSnapshot } from '@/types/campaign'
 import { SURFACE_LOCATIONS, TOMB_LOCATIONS, SURFACE_CONDITIONS, TOMB_CONDITIONS } from '@/lib/data/campaignData'
 import { rollD36, parseValue, rollD6 } from '@/lib/utils/dice'
-import { hexId, canExploreHex } from '@/lib/utils/hexUtils'
+import { canExploreHex } from '@/lib/utils/hexUtils'
 import {
   getExploredLocationIds,
   getExploredConditionIds,
@@ -27,10 +27,10 @@ interface UseExplorationProps {
   currentPhase: string
   mapConfig: MapConfig | null
   isSolo?: boolean
-  addEvent: (message: string, type?: string) => void
+  addEvent: (message: string, type?: Event['type']) => void
   updatePlayer: (index: number, updates: Partial<Player>) => void
   setHexes: (hexesOrFn: Record<string, Hex> | ((prev: Record<string, Hex>) => Record<string, Hex>)) => void
-  addAudit: (hexId: string, action: string, before: any, after: any, description: string) => void
+  addAudit: (hexId: string, action: AuditActionType, before: HexSnapshot, after: HexSnapshot, playerId: number, playerName: string, round: number, phase: string, reason: string) => void
   onThreatCheck?: (threatCheck: any) => void
 }
 
@@ -72,7 +72,7 @@ const addHistoryEntry = (
 export function useExploration(props: UseExplorationProps) {
   const {
     players,
-    hexes,
+    hexes: _hexes,
     currentPlayerIndex,
     currentRound,
     currentPhase,
@@ -125,14 +125,14 @@ export function useExploration(props: UseExplorationProps) {
 
       // WHY: Initialize hex state for special locations (Issue #58, #59)
       const initialState: Record<string, any> = {}
-      if (location.initialState?.supplyCount !== undefined) {
+      if (location?.initialState?.supplyCount !== undefined) {
         initialState.supplyCount = rollD6() // Roll D6 for Abandoned Camp supplies
       }
-      if (location.initialState?.intelGained !== undefined) {
+      if (location?.initialState?.intelGained !== undefined) {
         initialState.intelGained = 0 // 0 = not claimed, 1 = claimed
       }
       // WHY: Initialize Intel Cache with D6 intel (Issue #59)
-      if (location.specialRules?.includes('INTEL_CACHE')) {
+      if (location?.specialRules?.includes('INTEL_CACHE')) {
         initialState.intelRemaining = rollD6()
       }
 
@@ -207,14 +207,25 @@ export function useExploration(props: UseExplorationProps) {
         location: locationRoll,
         condition: conditionRoll,
         exploredBy: [...hex.exploredBy, currentPlayerIndex],
-        exploredLocation: location.id,
-        exploredCondition: condition.id,
+        exploredLocation: location?.id,
+        exploredCondition: condition?.id,
         state: Object.keys(initialState).length > 0 ? initialState : undefined
       }
 
       // WHY: Record audit entry for exploration (Issue #23)
       const afterSnapshot = createHexSnapshot(updatedHex)
-      addAudit(hexKey, 'EXPLORE', beforeSnapshot, afterSnapshot, `Explored ${location?.name || 'Unknown'}`)
+      const exploringPlayer = players[currentPlayerIndex]
+      addAudit(
+        hexKey,
+        'EXPLORE',
+        beforeSnapshot,
+        afterSnapshot,
+        currentPlayerIndex,
+        exploringPlayer?.name || 'Unknown',
+        currentRound,
+        currentPhase,
+        `Explored ${location?.name || 'Unknown'}`
+      )
 
       return {
         ...prev,

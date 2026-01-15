@@ -14,6 +14,9 @@ import {
 import { rollD36 } from '@/lib/utils/dice'
 import { hexId } from '@/lib/utils/hexUtils'
 import { narrateExploration, narrateBattle } from '@/lib/utils/narrativeTemplates'
+import type { LegacyCampaignSettings } from '@/types/legacyCampaign'
+import { getLegacyCampaignById } from '@/lib/utils/legacyCampaignStorage'
+import { restoreLegacyHexGrid, convertBaseToAbandonedCamp } from '@/lib/utils/restoreLegacyMap'
 
 /**
  * Campaign store state interface
@@ -51,7 +54,7 @@ interface CampaignStore {
   error: string | null
 
   // Game Actions
-  startGame: (numPlayers: number, isSolo: boolean, names: string[], killTeamNames?: string[], backstories?: string[], factions?: string[]) => void
+  startGame: (numPlayers: number, isSolo: boolean, names: string[], killTeamNames?: string[], backstories?: string[], factions?: string[], legacySettings?: LegacyCampaignSettings) => void
   exploreHex: (hexKey: string) => void
   movePlayer: (playerIndex: number, targetHex: string, cost: number) => void
   performAction: (action: string, params?: any) => void
@@ -172,26 +175,60 @@ export const useCampaignStore = create<CampaignStore>()(
         lastSaved: null,
         error: null,
 
-        // Start Game
-        startGame: (numPlayers, isSolo, names, killTeamNames, backstories, factions) => {
+        // Start Game (WHY: Issue #57 - Support legacy campaign continuation)
+        startGame: (numPlayers, isSolo, names, killTeamNames, backstories, factions, legacySettings) => {
           const config = MAP_CONFIGS[numPlayers as keyof typeof MAP_CONFIGS]
           if (!config) {
             console.error('Invalid player count:', numPlayers)
             return
           }
 
-          const hexes = createInitialHexGrid(config)
+          let hexes: Record<string, Hex>
+
+          // WHY: Issue #57 - Restore legacy map if continuing previous campaign
+          if (legacySettings?.useLegacyMap && legacySettings.legacyCampaignId) {
+            const legacyCampaign = getLegacyCampaignById(legacySettings.legacyCampaignId)
+            if (legacyCampaign) {
+              // Restore hex grid from snapshot
+              hexes = restoreLegacyHexGrid(
+                legacyCampaign,
+                legacySettings.newBaseHex,
+                legacySettings.abandonedCampCondition
+              )
+
+              // Convert old base to Abandoned Camp (SL25)
+              const oldBaseHex = legacyCampaign.exploredHexes.find(hex => !hex.camped)
+              if (oldBaseHex) {
+                convertBaseToAbandonedCamp(
+                  hexes,
+                  { row: oldBaseHex.row, col: oldBaseHex.col },
+                  legacySettings.abandonedCampCondition
+                )
+              }
+            } else {
+              console.error('Legacy campaign not found:', legacySettings.legacyCampaignId)
+              hexes = createInitialHexGrid(config)
+            }
+          } else {
+            hexes = createInitialHexGrid(config)
+          }
 
           // WHY: Create players with starting positions and narrative fields (Issue #22)
           const players = Array.from({ length: numPlayers }, (_, i) => {
-            const row = i < numPlayers / 2 ? 0 : config.rows - 1
-            const col = Math.floor((i % (numPlayers / 2)) * (config.cols / (numPlayers / 2)))
+            // WHY: Issue #57 - Use new base hex if legacy campaign
+            const startPos = legacySettings?.useLegacyMap
+              ? legacySettings.newBaseHex
+              : {
+                  row: i < numPlayers / 2 ? 0 : config.rows - 1,
+                  col: Math.floor((i % (numPlayers / 2)) * (config.cols / (numPlayers / 2)))
+                }
+
             const playerName = names[i] || `Player ${i + 1}`
             const color = PLAYER_COLORS[i] || '#ffffff'
             const killTeamName = killTeamNames?.[i]
             const backstory = backstories?.[i]
             const faction = factions?.[i]
-            return createPlayer(i, playerName, color, { row, col }, killTeamName, backstory, faction)
+            return createPlayer(i, playerName, color, startPos, killTeamName, backstory, faction)
           })
 
           set({
@@ -205,7 +242,13 @@ export const useCampaignStore = create<CampaignStore>()(
             threatLevel: 1
           })
 
-          get().addEvent('Campaign started!', 'system')
+          // WHY: Issue #57 - Log legacy campaign continuation
+          if (legacySettings?.useLegacyMap) {
+            get().addEvent('Campaign continued from previous expedition!', 'system')
+            get().addEvent(`Old base converted to Abandoned Camp (SL25)`, 'exploration')
+          } else {
+            get().addEvent('Campaign started!', 'system')
+          }
         },
 
         // Explore Hex

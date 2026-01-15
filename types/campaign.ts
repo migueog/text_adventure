@@ -533,3 +533,17 @@ export interface Milestone {
   message: string
   icon: string
 }
+
+/**
+ * WHY: Exploration result data structure (Issue #58)
+ * Contains discovered location and condition from D36 hex exploration
+ */
+export interface ExplorationResult {
+  hexId: string
+  hexNumber: number
+  location: { name: string; description: string; effect: string }
+  condition: { name: string; description: string; effect: string }
+  locationRoll: number
+  conditionRoll: number
+  playerName: string
+}

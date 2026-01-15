@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback } from 'react'
-import type { Player } from '@/types/campaign'
+import type { Player, Event } from '@/types/campaign'
 import type { SoloPerformanceRecord } from '@/types/soloPerformance'
 import { buildPerformanceRecord } from '@/lib/utils/performanceCalculations'
 
@@ -19,7 +19,7 @@ interface UseSoloModeProps {
   players: Player[]
   threatLevel: number
   targetThreatLevel: number
-  addEvent: (message: string, type?: string) => void
+  addEvent: (message: string, type?: Event['type']) => void
 }
 
 export function useSoloMode(props: UseSoloModeProps) {
@@ -27,8 +27,8 @@ export function useSoloMode(props: UseSoloModeProps) {
     soloMode,
     soloSettings,
     players,
-    threatLevel,
-    targetThreatLevel,
+    threatLevel: _threatLevel,
+    targetThreatLevel: _targetThreatLevel,
     addEvent,
   } = props
 

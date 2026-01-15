@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useMemo, useEffect, useCallback } from 'react'
-import type { Player, Hex, SearchRule, HexPosition, ThreatWarningLevel, ActiveThreatPhaseRule, RegroupDestinationResult } from '@/types/campaign'
+import type { Player, Hex, SearchRule, HexPosition, ThreatWarningLevel, ActiveThreatPhaseRule } from '@/types/campaign'
 import { PHASES, SURFACE_LOCATIONS, TOMB_LOCATIONS, SURFACE_CONDITIONS, TOMB_CONDITIONS } from '@/lib/data/campaignData'
 import { hexDistance, hexId, isPlayerInBlockedHex, findNearestBaseOrCamp } from '@/lib/utils/hexUtils'
 import { estimateTotalRounds, calculateProgress } from '@/lib/utils/roundProgress'
@@ -40,9 +40,9 @@ interface PhaseTrackerProps {
   onMove: (playerIndex: number, targetHex: string, cost: number) => void
   onAction: (action: string, params?: any) => void
   onBattle: (record: Omit<ExtendedBattleRecord, 'round' | 'timestamp'>) => void
-  calculateEncampCost: (playerIndex: number) => number
+  calculateEncampCost?: (playerIndex: number) => number
   regroupPlayer: (playerIndex: number) => void
-  validateDemolish: (playerIndex: number) => {
+  validateDemolish?: (playerIndex: number) => {
     valid: boolean
     reason?: string
     targets?: Array<{ type: 'CAMP' | 'BEAST_LAIR' | 'RELEASED_PRISONER'; playerId?: number; playerName?: string; name: string }>
@@ -218,7 +218,6 @@ export default function PhaseTracker({
   activeThreatRules,
   threatRulesResolved,
   onResolveThreatRules,
-  checkForThreatRules,
   hasActiveThreatAttacks,
   onResolveThreatAttacks,
   showPortalConfigModal,
@@ -301,7 +300,7 @@ export default function PhaseTracker({
     return options
   }
 
-  const encampCost = calculateEncampCost(currentPlayer.id)
+  const encampCost = calculateEncampCost?.(currentPlayer.id) ?? 0
 
   // WHY: Get current player's hex and search status
   const playerPosId = hexId(currentPlayer.position.row, currentPlayer.position.col)
@@ -428,17 +427,12 @@ export default function PhaseTracker({
   const movementOptions = getMovementOptions()
   const scoutOptions = getScoutOptions()
 
-  // Check if any player has a camp at current position (not the current player's)
-  const hasEnemyCamp = players.some(p =>
-    p.id !== currentPlayer.id &&
-    p.camps.some(c => c.row === currentPlayer.position.row && c.col === currentPlayer.position.col)
-  )
 
   // WHY: Calculate demolish validation (Issue #47, Phase 4)
   const demolishValidation = useMemo(() => {
     const playerIndex = players.findIndex(p => p.id === currentPlayer.id)
     if (playerIndex === -1) return { valid: false, reason: 'Player not found', cost: 3 }
-    return validateDemolish(playerIndex)
+    return validateDemolish?.(playerIndex) ?? { valid: false, reason: 'Demolish not yet implemented', cost: 3 }
   }, [players, currentPlayer.id, validateDemolish])
 
   // WHY: Calculate if REGROUP is available (Issue #38)
@@ -983,8 +977,10 @@ export default function PhaseTracker({
                           className="action-btn danger"
                           style={{ marginRight: '0.5rem', marginTop: '0.5rem' }}
                           onClick={() => {
-                            setDemolishTarget(target)
-                            setShowDemolishModal(true)
+                            if (target.playerId && target.playerName) {
+                              setDemolishTarget({ playerId: target.playerId, playerName: target.playerName })
+                              setShowDemolishModal(true)
+                            }
                           }}
                         >
                           Demolish {target.playerName}&apos;s Camp ({demolishValidation.cost} SP)
@@ -1144,7 +1140,7 @@ export default function PhaseTracker({
                 <h5>Location Rules Resolving</h5>
                 <p>The following location effects trigger in priority order:</p>
                 <ol className="location-rule-list">
-                  {activeThreatRules.map((rule, index) => (
+                  {activeThreatRules.map((rule) => (
                     <li key={`${rule.player.id}-${rule.hexId}`} className="location-rule-item">
                       <span
                         className="player-indicator"

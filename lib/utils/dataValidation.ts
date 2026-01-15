@@ -62,6 +62,9 @@ function parseNumberCoverage(number: number | string | undefined): number[] {
   // WHY: Range like "11-16"
   if (typeof number === 'string' && number.includes('-')) {
     const [start, end] = number.split('-').map(Number)
+    if (start === undefined || end === undefined || isNaN(start) || isNaN(end)) {
+      return []
+    }
     const range: number[] = []
     for (let i = start; i <= end; i++) {
       range.push(i)

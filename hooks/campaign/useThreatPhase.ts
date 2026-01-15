@@ -1,8 +1,7 @@
 'use client'
 
 import { useState, useCallback } from 'react'
-import type { Player, Hex, ActiveThreatPhaseRule, ThreatPhaseRuleResolution, ThreatCheckResultResult, ResupplyReductionResult, ReleasedPrisonerEntity } from '@/types/campaign'
-import { hexId } from '@/lib/utils/hexUtils'
+import type { Player, Hex, ActiveThreatPhaseRule, ThreatPhaseRuleResolution, ThreatCheckResult, Event } from '@/types/campaign'
 import { detectActiveThreatPhaseRules, sortByPriority, hasActiveRules } from '@/lib/utils/threatPhaseRules'
 import { findPlayersInBeastRange, resolveBeastAttack } from '@/lib/utils/threatPhaseAttacks'
 import { calculateThreatWarning } from '@/lib/utils/threatWarning'
@@ -21,7 +20,7 @@ interface UseThreatPhaseProps {
   currentPhase: string
   currentPlayerIndex?: number
   isSolo?: boolean
-  addEvent: (message: string, type?: string) => void
+  addEvent: (message: string, type?: Event['type']) => void
   updatePlayer: (index: number, updates: Partial<Player>) => void
   setThreatLevel: (levelOrFn: number | ((prev: number) => number)) => void
 }
@@ -65,12 +64,12 @@ export function useThreatPhase(props: UseThreatPhaseProps) {
   const {
     players,
     hexes,
-    threatLevel,
+    threatLevel: _threatLevel,
     targetThreatLevel,
     currentRound,
     currentPhase,
     currentPlayerIndex = 0,
-    isSolo = false,
+    isSolo: _isSolo = false,
     addEvent,
     updatePlayer,
     setThreatLevel,

@@ -5,8 +5,7 @@ import type { BattleConditionDisplayProps } from '@/types/battleCondition'
 import {
   formatConditionExport,
   generatePrintableCondition,
-  copyConditionToClipboard,
-  getKillzoneRecommendation
+  copyConditionToClipboard
 } from '@/lib/utils/battleCondition'
 
 /**

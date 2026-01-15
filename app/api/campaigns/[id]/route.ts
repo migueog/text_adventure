@@ -13,9 +13,10 @@ import { eq } from 'drizzle-orm'
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
-  const campaignId = parseInt(params.id)
+  const { id } = await params
+  const campaignId = parseInt(id)
 
   // WHY: Check user has access (owner or player)
   const access = await requireCampaignAccess(request, campaignId)
@@ -32,9 +33,10 @@ export async function GET(
  */
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
-  const campaignId = parseInt(params.id)
+  const { id } = await params
+  const campaignId = parseInt(id)
 
   // WHY: Only owner can update campaign settings
   const access = await requireCampaignOwner(request, campaignId)
@@ -91,9 +93,10 @@ export async function PATCH(
  */
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
-  const campaignId = parseInt(params.id)
+  const { id } = await params
+  const campaignId = parseInt(id)
 
   // WHY: Only owner can delete campaign
   const access = await requireCampaignOwner(request, campaignId)

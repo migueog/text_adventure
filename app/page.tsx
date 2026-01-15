@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import dynamic from 'next/dynamic'
 import { useCampaign } from '@/hooks/useCampaign'
 import { useCampaignStore } from '@/store/campaign'
+import { MAP_CONFIGS } from '@/lib/data/campaignData'
 import { generateExportData, exportCampaignJSON } from '@/lib/utils/campaignExport'
 import GameSetup from '@/components/GameSetup'
 import PlayerPanel from '@/components/PlayerPanel'
@@ -19,7 +20,7 @@ import ThreatMeter from '@/components/ThreatMeter'
 import CategoryStandings from '@/components/CategoryStandings'
 import ThreatCheckDialog from '@/components/ThreatCheckDialog'
 import ThreatPreventionDialog from '@/components/ThreatPreventionDialog'
-import ResupplyReductionDialog from '@/components/ResupplyReductionDialog'
+// import ResupplyReductionDialog from '@/components/ResupplyReductionDialog' // Commented out until useThreatPhase implements resupply reduction
 
 // Dynamically import Phaser component with no SSR
 const PhaserHexMap = dynamic(() => import('@/components/PhaserHexMap'), {
@@ -36,10 +37,18 @@ export default function Home() {
   // WHY: GameSetup uses Zustand for campaign creation
   const gameStarted = useCampaignStore((state) => state.gameStarted)
 
+  // WHY: Get Zustand data for PhaserHexMap (needed during migration)
+  const zustandPlayerCount = useCampaignStore((state) => state.playerCount)
+  const zustandPlayers = useCampaignStore((state) => state.players)
+  const zustandHexes = useCampaignStore((state) => state.hexes)
+
   // WHY: Solo mode banner data (Issue #53)
   const soloMode = useCampaignStore((state) => state.soloMode)
   const soloBannerPlayers = useCampaignStore((state) => state.players)
   const soloBannerThreat = useCampaignStore((state) => state.threatLevel)
+
+  // WHY: Calculate mapConfig from Zustand playerCount (temporary fix during migration)
+  const zustandMapConfig = MAP_CONFIGS[zustandPlayerCount as keyof typeof MAP_CONFIGS] || null
 
   // WHY: Campaign end modal and victory screen state management
   const [showEndModal, setShowEndModal] = useState(false)
@@ -200,9 +209,9 @@ export default function Home() {
 
         <section className="center-content">
           <PhaserHexMap
-            hexes={campaign.hexes}
-            players={campaign.players}
-            mapConfig={campaign.mapConfig}
+            hexes={zustandHexes}
+            players={zustandPlayers}
+            mapConfig={zustandMapConfig}
             selectedHex={campaign.selectedHex}
             onHexClick={handleHexClick}
             currentPlayerIndex={campaign.currentPlayerIndex}
@@ -229,9 +238,7 @@ export default function Home() {
             onMove={campaign.movePlayer}
             onAction={campaign.performAction}
             onBattle={campaign.recordBattle}
-            calculateEncampCost={campaign.calculateEncampCost}
             regroupPlayer={campaign.regroupPlayer}
-            validateDemolish={campaign.validateDemolish}
             conditionEnabled={campaign.conditionEnabled}
             selectedOpponentId={campaign.selectedOpponentId}
             onConditionEnabledChange={campaign.setConditionEnabled}
@@ -287,28 +294,28 @@ export default function Home() {
       )}
 
       {/* Threat Check Dialog (Issue #54) */}
-      {campaign.showThreatCheckDialog && campaign.pendingThreatCheck && (
+      {campaign.showThreatCheckResultDialog && campaign.pendingThreatCheckResult && (
         <ThreatCheckDialog
-          isOpen={campaign.showThreatCheckDialog}
-          result={campaign.pendingThreatCheck}
+          isOpen={campaign.showThreatCheckResultDialog}
+          result={campaign.pendingThreatCheckResult}
           currentThreat={campaign.threatLevel}
-          onConfirm={campaign.handleThreatCheckConfirm}
+          onConfirm={campaign.handleThreatCheckResultConfirm}
         />
       )}
 
       {/* Threat Prevention Dialog (Issue #54) */}
-      {campaign.showThreatPreventionDialog && campaign.pendingThreatCheck && (
+      {campaign.showThreatCheckResultDialog && campaign.pendingThreatCheckResult && (
         <ThreatPreventionDialog
-          isOpen={campaign.showThreatPreventionDialog}
-          result={campaign.pendingThreatCheck}
+          isOpen={campaign.showThreatCheckResultDialog}
+          result={campaign.pendingThreatCheckResult}
           currentThreat={campaign.threatLevel}
           playerSP={campaign.players[campaign.currentPlayerIndex]?.supplyPoints || 0}
           onPrevent={campaign.handleThreatPrevention}
-          onAccept={campaign.handleThreatAcceptance}
+          onAccept={campaign.handleThreatCheckResultConfirm}
         />
       )}
 
-      {/* Resupply Reduction Dialog (Issue #54) */}
+      {/* Resupply Reduction Dialog (Issue #54) - COMMENTED OUT: Properties not yet implemented in useThreatPhase
       {campaign.showResupplyReductionDialog && campaign.pendingResupplyReduction && (
         <ResupplyReductionDialog
           isOpen={campaign.showResupplyReductionDialog}
@@ -318,6 +325,7 @@ export default function Home() {
           onDecline={campaign.handleResupplyReductionDecline}
         />
       )}
+      */}
     </div>
   )
 }

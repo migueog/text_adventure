@@ -1,8 +1,14 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { MAP_CONFIGS, PLAYER_COLORS } from '@/lib/data/campaignData'
 import { useCampaignStore } from '@/store/campaign'
+import { loadLegacyCampaignHistory } from '@/lib/utils/legacyCampaignStorage'
+import type { LegacyCampaignHistory } from '@/types/legacyCampaign'
+import type { HexPosition } from '@/types/campaign'
+import LegacyCampaignPreview from './LegacyCampaignPreview'
+import LegacyCampaignSetup from './LegacyCampaignSetup'
+import { rollD36 } from '@/lib/utils/dice'
 
 /**
  * WHY: No props needed - component manages campaign creation via Zustand
@@ -30,11 +36,35 @@ export default function GameSetup() {
   const [jointOpsMode, setJointOpsMode] = useState(false)
   const [ignoreConditions, setIgnoreConditions] = useState(false)
 
+  // WHY: Legacy campaign selection (Issue #57)
+  const [useLegacyMap, setUseLegacyMap] = useState(false)
+  const [selectedLegacyCampaign, setSelectedLegacyCampaign] = useState<string | null>(null)
+  const [legacyHistory, setLegacyHistory] = useState<LegacyCampaignHistory | null>(null)
+  const [showLegacySetup, setShowLegacySetup] = useState(false)
+
   // WHY: Access Zustand store for campaign creation
   const createCampaign = useCampaignStore((state) => state.createCampaign)
   const startGame = useCampaignStore((state) => state.startGame)
   const isLoading = useCampaignStore((state) => state.isLoading)
   const error = useCampaignStore((state) => state.error)
+
+  // WHY: Load legacy campaign history when solo mode is enabled (Issue #57)
+  useEffect(() => {
+    if (soloMode) {
+      const history = loadLegacyCampaignHistory()
+      setLegacyHistory(history)
+
+      // Auto-select most recent campaign if available
+      if (history.snapshots.length > 0) {
+        setSelectedLegacyCampaign(history.snapshots[0]!.campaignId)
+      }
+    } else {
+      // Reset legacy campaign state when switching to competitive
+      setUseLegacyMap(false)
+      setSelectedLegacyCampaign(null)
+      setLegacyHistory(null)
+    }
+  }, [soloMode])
 
   const config = MAP_CONFIGS[playerCount]
   if (!config) return null
@@ -64,8 +94,58 @@ export default function GameSetup() {
    * Handle campaign creation and game start
    * WHY: Create campaign in database, then start game with initial state
    */
+  /**
+   * WHY: Handle legacy campaign confirmation (Issue #57)
+   * Called when user selects new base hex in legacy campaign setup
+   */
+  const handleLegacyConfirm = async (newBaseHex: HexPosition) => {
+    if (!selectedLegacyCampaign) return
+
+    // WHY: Roll D36 for abandoned camp condition
+    const abandonedCampCondition = rollD36()
+
+    try {
+      // WHY: Create campaign in database first
+      await createCampaign(campaignName, {
+        playerCount: 1,  // Legacy campaigns are always solo (1 player)
+        targetThreatLevel: targetThreat,
+        soloMode: true,
+        soloSettings: {
+          jointOpsMode,
+          ignoreConditions,
+          resupplyReductionsUsed: 0
+        }
+      })
+
+      // WHY: Start game with legacy campaign settings
+      startGame(
+        1,  // Solo mode = 1 player
+        true,
+        playerNames.slice(0, 1),
+        killTeamNames.slice(0, 1),
+        backstories.slice(0, 1),
+        factions.slice(0, 1),
+        {
+          useLegacyMap: true,
+          legacyCampaignId: selectedLegacyCampaign,
+          newBaseHex,
+          abandonedCampHexId: '', // Not used directly
+          abandonedCampCondition
+        }
+      )
+    } catch (err) {
+      console.error('Failed to start legacy campaign:', err)
+    }
+  }
+
   const handleStart = async () => {
     if (!validateCampaignName()) return
+
+    // WHY: If using legacy map, navigate to legacy campaign setup (Issue #57)
+    if (soloMode && useLegacyMap && selectedLegacyCampaign) {
+      setShowLegacySetup(true)
+      return
+    }
 
     try {
       // WHY: Create campaign in database first (Issue #53 - includes solo settings)
@@ -178,6 +258,61 @@ export default function GameSetup() {
               </p>
             )}
           </div>
+
+          {/* WHY: Legacy campaign selection (Issue #57) */}
+          {soloMode && (
+            <div className="setting-group">
+              <label>Map Selection:</label>
+              <div className="button-group">
+                <button
+                  className={`setting-btn ${!useLegacyMap ? 'active' : ''}`}
+                  onClick={() => setUseLegacyMap(false)}
+                >
+                  Generate New Map
+                </button>
+                <button
+                  className={`setting-btn ${useLegacyMap ? 'active' : ''}`}
+                  onClick={() => setUseLegacyMap(true)}
+                  disabled={!legacyHistory || legacyHistory.snapshots.length === 0}
+                >
+                  Continue Previous Expedition
+                  {legacyHistory && legacyHistory.snapshots.length > 0 && (
+                    <span className="badge">{legacyHistory.snapshots.length}</span>
+                  )}
+                </button>
+              </div>
+              {!useLegacyMap && (
+                <p className="setting-hint">
+                  Fresh start on unexplored Ctesiphus
+                </p>
+              )}
+              {useLegacyMap && legacyHistory && legacyHistory.snapshots.length > 0 && (
+                <div className="legacy-campaign-selector">
+                  <label htmlFor="legacy-campaign-select">Select Campaign to Continue:</label>
+                  <select
+                    id="legacy-campaign-select"
+                    value={selectedLegacyCampaign || ''}
+                    onChange={(e) => setSelectedLegacyCampaign(e.target.value)}
+                    className="legacy-campaign-dropdown"
+                  >
+                    {legacyHistory.snapshots.map(snapshot => (
+                      <option key={snapshot.campaignId} value={snapshot.campaignId}>
+                        {snapshot.campaignName} - {snapshot.killTeamName}
+                        ({snapshot.finalCP} CP, {snapshot.exploredHexes.length} hexes explored)
+                      </option>
+                    ))}
+                  </select>
+
+                  {selectedLegacyCampaign && (
+                    <LegacyCampaignPreview
+                      campaignId={selectedLegacyCampaign}
+                      history={legacyHistory}
+                    />
+                  )}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* WHY: Solo mode options (Issue #53) */}
           {soloMode && (
@@ -333,6 +468,15 @@ export default function GameSetup() {
           </div>
         </div>
       </div>
+
+      {/* WHY: Issue #57 - Legacy campaign setup modal */}
+      {showLegacySetup && selectedLegacyCampaign && legacyHistory && (
+        <LegacyCampaignSetup
+          snapshot={legacyHistory.snapshots.find(s => s.campaignId === selectedLegacyCampaign)!}
+          onConfirm={handleLegacyConfirm}
+          onCancel={() => setShowLegacySetup(false)}
+        />
+      )}
     </div>
   )
 }

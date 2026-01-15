@@ -16,17 +16,6 @@ import { determinePriority, needsRollOff } from '@/lib/utils/priority'
  * Foundation hook for all other campaign hooks
  */
 
-// Constants for SP management
-const SP_MIN = 0
-const SP_MAX = 10
-
-/**
- * WHY: Clamp SP within valid range (0-10)
- */
-const clampSP = (value: number): number => {
-  return Math.max(SP_MIN, Math.min(SP_MAX, value))
-}
-
 /**
  * WHY: Create initial hex grid based on map configuration
  * Generates hex objects for entire map
@@ -199,7 +188,7 @@ export function useCampaignState() {
    */
   const startGame = useCallback((
     numPlayers: number,
-    isSolo = false
+    _isSolo = false
   ) => {
     const config = MAP_CONFIGS[numPlayers] || MAP_CONFIGS[4]
     if (!config) return

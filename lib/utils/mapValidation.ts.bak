@@ -185,7 +185,7 @@ function validateBeastLairs(hexes: Record<string, Hex>): MapValidationError[] {
           }
         : null
     })
-    .filter(e => e !== null) as MapValidationError[]
+    .filter((e): e is MapValidationError => e !== null)
 }
 
 /**
@@ -207,5 +207,5 @@ function validateIntelCaches(hexes: Record<string, Hex>): MapValidationError[] {
           }
         : null
     })
-    .filter(e => e !== null) as MapValidationError[]
+    .filter((e): e is MapValidationError => e !== null)
 }

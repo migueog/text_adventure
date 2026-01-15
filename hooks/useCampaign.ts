@@ -3,11 +3,13 @@
 import { useState, useCallback } from 'react'
 import type {
   ThreatWarningLevel,
-  ActiveBattleCondition,
-  KillzoneRecommendation,
   ReleasedPrisonerEntity,
   RoundStatistics
 } from '@/types/campaign'
+import type {
+  ActiveBattleCondition,
+  KillzoneRecommendation
+} from '@/types/battleCondition'
 import { PHASES } from '@/lib/data/campaignData'
 import { calculateThreatWarning } from '@/lib/utils/threatWarning'
 import { determineActiveCondition, getKillzoneRecommendation } from '@/lib/utils/battleCondition'
@@ -48,7 +50,7 @@ export function useCampaign() {
 
   // Solo mode state (initialized by GameSetup component)
   const [soloMode, setSoloMode] = useState(false)
-  const [soloSettings, setSoloSettings] = useState<{
+  const [soloSettings, _setSoloSettings] = useState<{
     jointOpsMode: boolean
     ignoreConditions: boolean
     resupplyReductionsUsed: number
@@ -63,7 +65,7 @@ export function useCampaign() {
   const [selectedOpponentId, setSelectedOpponentId] = useState<number | null>(null)
 
   // Released Prisoner entities (Issue #59)
-  const [releasedPrisoners, setReleasedPrisoners] = useState<ReleasedPrisonerEntity[]>([])
+  const [_releasedPrisoners, _setReleasedPrisoners] = useState<ReleasedPrisonerEntity[]>([])
 
   // Portal and Hex Blocking modal state (Issue #59 - Phase 4)
   const [showPortalConfigModal, setShowPortalConfigModal] = useState(false)
@@ -103,24 +105,19 @@ export function useCampaign() {
   // ============================================================================
 
   // Audit trail hook (Issue #23 - Phase 3)
-  const audit = useAudit({
-    players: state.players,
-    currentPlayerIndex: state.currentPlayerIndex,
-    currentRound: state.currentRound,
-    currentPhase: state.currentPhase,
-    hexes: state.hexes,
-    addEvent: state.addEvent
-  })
+  const audit = useAudit()
 
   // Exploration hook (D36 rolls, location/condition assignment)
   const exploration = useExploration({
     players: state.players,
     hexes: state.hexes,
+    currentPlayerIndex: state.currentPlayerIndex,
     currentRound: state.currentRound,
     currentPhase: state.currentPhase,
-    soloMode,
+    mapConfig: state.mapConfig,
+    isSolo: soloMode,
+    updatePlayer: state.updatePlayer,
     setHexes: state.setHexes,
-    setPlayers: state.setPlayers,
     addEvent: state.addEvent,
     addAudit: audit.addAudit
   })
@@ -129,37 +126,36 @@ export function useCampaign() {
   const movement = useMovementPhase({
     players: state.players,
     hexes: state.hexes,
+    currentRound: state.currentRound,
     currentPhase: state.currentPhase,
-    setPlayers: state.setPlayers,
-    setHexes: state.setHexes,
+    isSolo: soloMode,
     addEvent: state.addEvent,
-    addAudit: audit.addAudit
+    updatePlayer: state.updatePlayer,
+    exploreHex: exploration.exploreHex
   })
 
   // Battle phase hook
   const battle = useBattlePhase({
     players: state.players,
-    hexes: state.hexes,
+    currentPlayerIndex: state.currentPlayerIndex,
     currentRound: state.currentRound,
     currentPhase: state.currentPhase,
-    conditionEnabled,
-    setPlayers: state.setPlayers,
-    setConditionEnabled,
-    addEvent: state.addEvent
+    isSolo: soloMode,
+    addEvent: state.addEvent,
+    updatePlayer: state.updatePlayer
   })
 
   // Action phase hook
   const action = useActionPhase({
     players: state.players,
     hexes: state.hexes,
+    currentPlayerIndex: state.currentPlayerIndex,
     currentRound: state.currentRound,
     currentPhase: state.currentPhase,
-    soloMode,
-    setPlayers: state.setPlayers,
-    setHexes: state.setHexes,
-    increaseThreat,
+    isSolo: soloMode,
     addEvent: state.addEvent,
-    addAudit: audit.addAudit
+    updatePlayer: state.updatePlayer,
+    exploreHex: exploration.exploreHex
   })
 
   // Threat phase hook (Issue #48, #54)
@@ -170,20 +166,15 @@ export function useCampaign() {
     targetThreatLevel: state.targetThreatLevel,
     currentRound: state.currentRound,
     currentPhase: state.currentPhase,
-    soloMode,
-    soloSettings,
-    releasedPrisoners,
-    setPlayers: state.setPlayers,
-    setHexes: state.setHexes,
-    setSoloSettings,
-    setReleasedPrisoners,
-    increaseThreat,
+    currentPlayerIndex: state.currentPlayerIndex,
+    isSolo: soloMode,
     addEvent: state.addEvent,
-    addAudit: audit.addAudit
+    updatePlayer: state.updatePlayer,
+    setThreatLevel
   })
 
   // Solo mode hook (Issue #54, #55, #56)
-  const solo = useSoloMode({
+  void useSoloMode({
     soloMode,
     soloSettings,
     players: state.players,
@@ -256,17 +247,21 @@ export function useCampaign() {
 
       // WHY: Calculate round statistics and detect milestones (Issue #31)
       const roundStats = calculateRoundStatistics(
+        state.eventLog,
         state.players,
-        state.hexes,
-        nextRound - 1, // Previous round stats
-        threatLevel
+        nextRound - 1 // Previous round stats
       )
-      const milestones = detectMilestones(roundStats, state.players)
+      const milestones = detectMilestones(
+        nextRound,
+        threatLevel,
+        state.targetThreatLevel,
+        nextRound - 1
+      )
 
       setPendingRoundSummary(roundStats)
 
       if (milestones.length > 0) {
-        milestones.forEach(m => state.addEvent(m.message, m.type))
+        milestones.forEach(m => state.addEvent(m.message, 'milestone'))
       }
 
       state.addEvent(`Round ${nextRound} - Movement Phase`, 'system')
@@ -284,7 +279,7 @@ export function useCampaign() {
 
       // WHY: Reset phase-specific state on phase transition
       if (nextPhaseName === 'Battle') {
-        battle.setBattleCompleted(false)
+        battle.resetBattleResults()
       }
       if (nextPhaseName === 'Threat') {
         threat.detectThreatRules()
@@ -316,7 +311,7 @@ export function useCampaign() {
    * WHY: Get active battle condition for current hex
    * Returns condition object with recommendations
    */
-  const getActiveBattleCondition = useCallback((): ActiveBattleCondition | null => {
+  const getActiveBattleCondition = useCallback((): { condition: ActiveBattleCondition; killzone: KillzoneRecommendation | null } | null => {
     if (!selectedOpponentId) return null
 
     const player = state.players.find(p => p.id === state.currentPlayerIndex)
@@ -325,21 +320,16 @@ export function useCampaign() {
     if (!player || !opponent) return null
 
     const hex = state.hexes[player.position.row + ',' + player.position.col]
-    if (!hex || !hex.explored) return null
+    if (!hex || !hex.explored || hex.type === 'blocked') return null
 
-    const condition = determineActiveCondition(hex, conditionEnabled)
-    if (!condition) return null
+    const condition = determineActiveCondition(player, opponent, state.hexes)
+    if (!condition.condition) return null
 
-    const recommendation = getKillzoneRecommendation(
-      condition,
-      player,
-      opponent,
-      state.hexes
-    )
+    const killzone = getKillzoneRecommendation(hex.type)
 
     return {
       condition,
-      recommendation: recommendation as KillzoneRecommendation
+      killzone: killzone as KillzoneRecommendation | null
     }
   }, [selectedOpponentId, state.players, state.currentPlayerIndex, state.hexes, conditionEnabled])
 
@@ -355,8 +345,7 @@ export function useCampaign() {
   const handlePortalConfig = useCallback((tombDest: string, surfaceDest: string) => {
     if (!portalHexId) return
 
-    const targetHexIds = [tombDest, surfaceDest]
-    const updatedHexes = configurePortalNetwork(state.hexes, portalHexId, targetHexIds)
+    const updatedHexes = configurePortalNetwork(portalHexId, tombDest, surfaceDest, state.hexes)
     state.setHexes(updatedHexes)
     state.addEvent('Portal network configured', 'system')
     setShowPortalConfigModal(false)
@@ -378,7 +367,7 @@ export function useCampaign() {
   const handleHexBlock = useCallback((targetHexId: string) => {
     if (!fulcrumHexId) return
 
-    const updatedHexes = toggleHexBlocking(state.hexes, targetHexId, true)
+    const updatedHexes = toggleHexBlocking(fulcrumHexId, targetHexId, state.hexes)
     state.setHexes(updatedHexes)
     state.addEvent(`Hex ${targetHexId} blocked by Fulcrum Hex`, 'system')
     setShowHexBlockSelector(false)
@@ -438,11 +427,8 @@ export function useCampaign() {
     // Threat phase state
     activeThreatRules: threat.activeThreatRules,
     threatRulesResolved: threat.threatRulesResolved,
-    showThreatCheckDialog: threat.showThreatCheckDialog,
-    pendingThreatCheck: threat.pendingThreatCheck,
-    showThreatPreventionDialog: threat.showThreatPreventionDialog,
-    showResupplyReductionDialog: threat.showResupplyReductionDialog,
-    pendingResupplyReduction: threat.pendingResupplyReduction,
+    showThreatCheckResultDialog: threat.showThreatCheckResultDialog,
+    pendingThreatCheckResult: threat.pendingThreatCheckResult,
 
     // Victory state (computed)
     soloVictory: undefined, // WHY: Computed by victory.handleCampaignEnd()
@@ -509,8 +495,6 @@ export function useCampaign() {
     // ========================================================================
 
     performAction: action.performAction,
-    calculateEncampCost: action.calculateEncampCost,
-    validateDemolish: action.validateDemolish,
     advanceActionTurn: action.advanceActionTurn,
 
     // ========================================================================
@@ -521,11 +505,8 @@ export function useCampaign() {
     detectThreatRules: threat.detectThreatRules,
     checkForThreatRules: threat.checkForThreatRules,
     resolveThreatPhaseLocationRules: threat.resolveThreatPhaseLocationRules,
-    handleThreatCheckConfirm: threat.handleThreatCheckConfirm,
+    handleThreatCheckResultConfirm: threat.handleThreatCheckResultConfirm,
     handleThreatPrevention: threat.handleThreatPrevention,
-    handleThreatAcceptance: threat.handleThreatAcceptance,
-    handleResupplyReductionAccept: threat.handleResupplyReductionAccept,
-    handleResupplyReductionDecline: threat.handleResupplyReductionDecline,
 
     // ========================================================================
     // ACTIONS - Victory

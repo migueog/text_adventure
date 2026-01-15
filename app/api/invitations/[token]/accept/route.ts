@@ -13,14 +13,14 @@ import { eq } from 'drizzle-orm'
  */
 export async function POST(
   _request: NextRequest,
-  { params }: { params: { token: string } }
+  { params }: { params: Promise<{ token: string }> }
 ) {
   // WHY: User must be authenticated to accept invitation
   const authResult = await requireAuth()
   if (authResult) return authResult
 
   try {
-    const { token } = params
+    const { token } = await params
 
     // WHY: Find invitation by token
     const [invitation] = await db

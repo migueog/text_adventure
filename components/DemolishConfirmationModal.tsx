@@ -20,7 +20,6 @@ interface DemolishConfirmationModalProps {
 export default function DemolishConfirmationModal({
   targetPlayerName,
   campPosition,
-  hexInfo,
   cost,
   onConfirm,
   onCancel

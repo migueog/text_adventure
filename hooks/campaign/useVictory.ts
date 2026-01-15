@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback } from 'react'
-import type { Player } from '@/types/campaign'
+import type { Player, Event } from '@/types/campaign'
 
 /**
  * WHY: Victory hook for managing campaign end conditions (Issue #53, #55)
@@ -15,7 +15,7 @@ interface UseVictoryProps {
   threatLevel: number
   targetThreatLevel: number
   players: Player[]
-  addEvent: (message: string, type?: string) => void
+  addEvent: (message: string, type?: Event['type']) => void
 }
 
 interface VictoryResult {

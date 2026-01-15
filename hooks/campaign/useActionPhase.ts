@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useCallback } from 'react'
-import type { Player, Hex, HexPosition } from '@/types/campaign'
+import type { Player, Hex, HexPosition, Event } from '@/types/campaign'
 import { hexId } from '@/lib/utils/hexUtils'
 import { calculateActionPhaseOrder } from '@/lib/utils/actionPhaseUtils'
 import { determinePriority } from '@/lib/utils/priority'
@@ -21,7 +21,7 @@ interface UseActionPhaseProps {
   currentRound: number
   currentPhase: string
   isSolo?: boolean
-  addEvent: (message: string, type?: string) => void
+  addEvent: (message: string, type?: Event['type']) => void
   updatePlayer: (index: number, updates: Partial<Player>) => void
   exploreHex: (hexId: string) => void
 }
@@ -257,8 +257,8 @@ const validateDemolish = (
 
     return battleVsOwner && (
       battleVsOwner.result === 'WIN' ||
-      battleVsOwner.result === 'CHALLENGE_REFUSED' ||
-      battleVsOwner.result === 'NO_SHOW'
+      battleVsOwner.status === 'challenged-refused' ||
+      battleVsOwner.status === 'challenged-no-show'
     )
   })
 
@@ -431,7 +431,7 @@ export function useActionPhase(props: UseActionPhaseProps) {
 
     const spCost = 1
     const updatedPlayer = deductSupplyPoints(player, spCost)
-    const finalSP = clampSP(updatedPlayer.supplyPoints + result.spGained)
+    const finalSP = clampSP((updatedPlayer.supplyPoints ?? player.supplyPoints) + result.spGained)
     const finalCP = player.campaignPoints + result.cpGained
 
     updatePlayer(currentPlayerIndex, {

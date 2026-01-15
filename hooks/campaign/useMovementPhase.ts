@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useCallback } from 'react'
-import type { Player, Hex, HexPosition } from '@/types/campaign'
+import type { Player, Hex, HexPosition, Event } from '@/types/campaign'
 import { hexId, findNearestBaseOrCamp } from '@/lib/utils/hexUtils'
 import { determinePriority } from '@/lib/utils/priority'
 
@@ -16,7 +16,7 @@ interface UseMovementPhaseProps {
   currentRound: number
   currentPhase: string
   isSolo?: boolean
-  addEvent: (message: string, type?: string) => void
+  addEvent: (message: string, type?: Event['type']) => void
   updatePlayer: (index: number, updates: Partial<Player>) => void
   exploreHex: (hexId: string) => void
 }

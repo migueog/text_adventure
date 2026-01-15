@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import type { Player, Hex } from '@/types/campaign'
 import { VICTORY_CATEGORIES } from '@/lib/data/campaignData'
 import { calculateTotalHexesExplored, calculateTotalBattles, generateNarrativeSummary } from '@/lib/utils/campaignStatistics'
@@ -10,6 +11,9 @@ import { buildPerformanceRecord } from '@/lib/utils/performanceCalculations'  //
 import { loadPerformanceHistory } from '@/lib/utils/performanceStorage'  // WHY: Issue #56 - Load history from localStorage
 import type { SoloPerformanceHistory, SoloPerformanceRecord } from '@/types/soloPerformance'  // WHY: Issue #56 - Performance types
 import PerformanceHistory from './PerformanceHistory'  // WHY: Issue #56 - Performance history viewer modal
+import { buildCampaignSnapshot } from '@/lib/utils/createCampaignSnapshot'  // WHY: Issue #57 - Create campaign snapshot
+import { saveCampaignSnapshot } from '@/lib/utils/legacyCampaignStorage'  // WHY: Issue #57 - Save to localStorage
+import type { CampaignState } from '@/types/campaign'  // WHY: Issue #57 - Campaign state type
 
 interface VictoryScreenProps {
   players: Player[]
@@ -21,6 +25,9 @@ interface VictoryScreenProps {
   onExport?: () => void
   soloMode?: boolean           // WHY: Determine display mode (Issue #53)
   soloVictory?: boolean        // WHY: Solo success/failure state (Issue #53)
+  campaignName?: string        // WHY: Issue #57 - Campaign name for snapshot
+  mapRows?: number             // WHY: Issue #57 - Map dimensions for snapshot
+  mapCols?: number             // WHY: Issue #57 - Map dimensions for snapshot
 }
 
 interface CategoryResult {
@@ -57,8 +64,12 @@ export default function VictoryScreen({
   onRestart,
   onExport,
   soloMode,
-  soloVictory
+  soloVictory,
+  campaignName,
+  mapRows,
+  mapCols
 }: VictoryScreenProps) {
+  const router = useRouter()
   // WHY: Issue #56 - Solo performance tracking state
   const [performanceHistory, setPerformanceHistory] = useState<SoloPerformanceHistory | null>(null)
   const [currentRecord, setCurrentRecord] = useState<SoloPerformanceRecord | null>(null)
@@ -82,6 +93,38 @@ export default function VictoryScreen({
     }
   }, [soloMode, players, soloVictory, threatLevel, currentRound])
 
+  // WHY: Issue #57 - Save campaign snapshot for legacy continuation
+  useEffect(() => {
+    if (soloMode && players.length === 1 && players[0] && hexMap && mapRows && mapCols) {
+      // WHY: Build minimal campaign state for snapshot creation
+      const campaignState: CampaignState = {
+        gameStarted: true,
+        gameEnded: true,
+        soloMode: true,
+        currentRound: currentRound ?? 0,
+        currentPhase: 'Movement',
+        currentPlayerIndex: 0,
+        threatLevel: threatLevel ?? 0,
+        targetThreatLevel: targetThreatLevel ?? 7,
+        selectedHex: null,
+        players,
+        hexes: hexMap,
+        mapConfig: {
+          name: campaignName || 'Solo Campaign',
+          rows: mapRows,
+          cols: mapCols,
+          surfaceRows: Math.floor(mapRows / 2),
+          tombRows: Math.ceil(mapRows / 2)
+        },
+        eventLog: [],
+        soloVictory
+      }
+
+      const snapshot = buildCampaignSnapshot(campaignState, players[0])
+      saveCampaignSnapshot(snapshot)
+    }
+  }, [soloMode, players, hexMap, campaignName, mapRows, mapCols, currentRound, threatLevel, targetThreatLevel, soloVictory])
+
   // WHY: Issue #51 - Calculate winners for each category with tie-breaking
   const results: CategoryResult[] = VICTORY_CATEGORIES.map(category => {
     // WHY: Sort players by category stat (descending)
@@ -101,12 +144,12 @@ export default function VictoryScreen({
     if (topPlayers.length > 1) {
       // WHY: Multiple players tied - apply tie-breaking algorithm
       const result = resolveTie(topPlayers, p => getStatValue(p, category.stat))
-      winner = result.winners[0]
+      winner = result.winners[0]!
       tieBreaker = result.tieBreaker
       sharedWin = result.winners.length > 1
     } else {
       // WHY: No tie - single winner
-      winner = sorted[0]
+      winner = sorted[0]!
     }
 
     return {
@@ -368,6 +411,13 @@ export default function VictoryScreen({
           {performanceHistory && performanceHistory.campaigns.length > 0 && (
             <button className="history-btn" onClick={() => setShowHistoryModal(true)}>
               View Performance History ({performanceHistory.campaigns.length} campaigns)
+            </button>
+          )}
+
+          {/* WHY: Issue #57 - Continue expedition button for successful solo campaigns */}
+          {soloVictory && (
+            <button className="continue-btn" onClick={() => router.push('/')}>
+              Continue This Expedition →
             </button>
           )}
 

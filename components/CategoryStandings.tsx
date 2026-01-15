@@ -41,7 +41,7 @@ function getCategoryIcon(categoryId: string): string {
   return icons[categoryId] || '📊'
 }
 
-export default function CategoryStandings({ players, compact = false }: CategoryStandingsProps) {
+export default function CategoryStandings({ players }: CategoryStandingsProps) {
   const [isExpanded, setIsExpanded] = useState(true)
 
   // WHY: Calculate current leader for each category (Issue #21)

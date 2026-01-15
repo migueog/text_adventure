@@ -28,7 +28,7 @@ interface UseImportExportProps {
   setCurrentPhase: (phaseIndex: number) => void
   setEventLog: (events: Event[]) => void
   setSoloMode: (isSolo: boolean) => void
-  addEvent: (message: string, type?: string) => void
+  addEvent: (message: string, type?: Event['type']) => void
 }
 
 interface ImportModalState {

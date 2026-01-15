@@ -13,9 +13,10 @@ import { eq } from 'drizzle-orm'
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
-  const campaignId = parseInt(params.id)
+  const { id } = await params
+  const campaignId = parseInt(id)
 
   // WHY: Both owners and players can view game state
   const access = await requireCampaignAccess(request, campaignId)
@@ -35,9 +36,10 @@ export async function GET(
  */
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
-  const campaignId = parseInt(params.id)
+  const { id } = await params
+  const campaignId = parseInt(id)
 
   // WHY: Both owners and players can update state (for game actions)
   const access = await requireCampaignAccess(request, campaignId)

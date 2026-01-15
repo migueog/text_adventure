@@ -40,7 +40,7 @@ export function calculateOperativeWoundValue(wounds: number): number {
  * @returns OperativeKill record with calculated wound value
  */
 export function recordOperativeKill(
-  player: Player,
+  _player: Player,
   round: number,
   operativeName: string,
   wounds: number,

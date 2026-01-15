@@ -101,7 +101,6 @@ export function determineActiveCondition(
   const p1HexId = hexId(player1.position.row, player1.position.col)
   const p2HexId = hexId(player2.position.row, player2.position.col)
   const p1Hex = hexes[p1HexId]
-  const p2Hex = hexes[p2HexId]
 
   // Same hex case - use that hex's condition
   if (p1HexId === p2HexId && p1Hex) {

@@ -22,9 +22,10 @@ const inviteSchema = z.object({
  */
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
-  const campaignId = parseInt(params.id)
+  const { id } = await params
+  const campaignId = parseInt(id)
 
   // WHY: Only owner can invite players
   const access = await requireCampaignOwner(request, campaignId)
@@ -92,9 +93,10 @@ export async function POST(
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
-  const campaignId = parseInt(params.id)
+  const { id } = await params
+  const campaignId = parseInt(id)
 
   // WHY: Only owner can view invitations
   const access = await requireCampaignOwner(request, campaignId)

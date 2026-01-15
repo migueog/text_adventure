@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useCallback } from 'react'
-import type { Player } from '@/types/campaign'
+import type { Player, Event } from '@/types/campaign'
 import type { ExtendedBattleRecord } from '@/types/battle'
 import { recordOperativeKill } from '@/lib/utils/operativeKills'
 import { createMissingPlayerRecords } from '@/lib/utils/battleRewards'
@@ -17,7 +17,7 @@ interface UseBattlePhaseProps {
   currentRound: number
   currentPhase: string
   isSolo?: boolean
-  addEvent: (message: string, type?: string) => void
+  addEvent: (message: string, type?: Event['type']) => void
   updatePlayer: (index: number, updates: Partial<Player>) => void
 }
 
@@ -62,7 +62,7 @@ export function useBattlePhase(props: UseBattlePhaseProps) {
     currentPlayerIndex,
     currentRound,
     currentPhase,
-    isSolo = false,
+    isSolo: _isSolo = false,
     addEvent,
     updatePlayer,
   } = props
