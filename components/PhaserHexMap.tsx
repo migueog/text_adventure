@@ -39,30 +39,50 @@ export default function PhaserHexMap({
   useEffect(() => {
     if (!containerRef.current || !mapConfig) return
 
+    // WHY: Log device pixel ratio for debugging high-DPI rendering issues
+    console.log('[PhaserHexMap] Device pixel ratio:', window.devicePixelRatio)
+
     const width = mapConfig.cols * 60 + 100
     const height = mapConfig.rows * 70 + 100
 
     const config: Phaser.Types.Core.GameConfig = {
       type: Phaser.AUTO,
       parent: containerRef.current,
+      // WHY: Base canvas dimensions (will be scaled by ScaleManager, not CSS)
       width: Math.min(width, 800),
       height: Math.min(height, 600),
       backgroundColor: '#0a0a1a',
       scene: [HexMapScene],
       scale: {
-        mode: Phaser.Scale.FIT,
+        mode: Phaser.Scale.FIT, // WHY: Let Phaser handle scaling internally (not CSS)
         autoCenter: Phaser.Scale.CENTER_BOTH,
+      },
+      // WHY: REMOVED invalid 'resolution' property - doesn't exist in Phaser 3 GameConfig
+      // For high-DPI rendering, Phaser uses scale.zoom and canvas internal resolution automatically
+      render: {
+        pixelArt: false, // WHY: For image sprites, keep anti-aliasing for smooth scaling
+        antialias: true, // WHY: Enable smoothing for better sprite quality
+        roundPixels: true, // WHY: Force integer coordinates for crisp positioning (prevents sub-pixel blur)
+      },
+      // WHY: Disable audio to prevent AudioContext warning (game doesn't use sound)
+      audio: {
+        noAudio: true,
       },
     }
 
     gameRef.current = new Phaser.Game(config)
 
-    // Wait for scene to be ready, then initialize
+    // Wait for scene to be ready, then start it with initial data
+    // WHY: Scene auto-starts on game creation, triggering init() → preload() → create()
+    // The scene's create() will use the data passed to init() from this restart call
     gameRef.current.events.once('ready', () => {
       const scene = gameRef.current?.scene.getScene('HexMapScene') as HexMapScene
       if (scene) {
         sceneRef.current = scene
         scene.onHexClick = handleHexClick
+
+        // WHY: Scene already went through first lifecycle, now restart with actual data
+        // This ensures preload() loads textures first, then create() renders with data
         scene.scene.restart({
           hexes,
           players,

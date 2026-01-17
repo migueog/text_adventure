@@ -42,6 +42,8 @@ export default class HexMapScene extends Phaser.Scene {
   hexGraphics: Record<string, HexGraphicsObject>
   playerTokens: Record<number, Phaser.GameObjects.Graphics>
   selectedHex: string | null
+  hoveredHex: string | null // WHY: Track currently hovered hex for visual feedback
+  hoverHighlight: Phaser.GameObjects.Graphics | null // WHY: Separate graphics for hover overlay
   onHexClick: ((hexId: string) => void) | null
   hexData: Record<string, Hex>
   players: Player[]
@@ -49,12 +51,15 @@ export default class HexMapScene extends Phaser.Scene {
   mapConfig: MapConfig
   regroupPath: HexPosition[] | null // WHY: Path for REGROUP visualization (Issue #38)
   regroupPathGraphics: Phaser.GameObjects.Graphics | null
+  texturesReady: boolean
 
   constructor() {
     super({ key: 'HexMapScene' })
     this.hexGraphics = {}
     this.playerTokens = {}
     this.selectedHex = null
+    this.hoveredHex = null
+    this.hoverHighlight = null
     this.onHexClick = null
     this.hexData = {}
     this.players = []
@@ -62,6 +67,37 @@ export default class HexMapScene extends Phaser.Scene {
     this.mapConfig = { name: '', rows: 7, cols: 7, surfaceRows: 3, tombRows: 4 }
     this.regroupPath = null
     this.regroupPathGraphics = null
+    this.texturesReady = false
+  }
+
+  // WHY: Load hex tile sprites before scene renders (Kenney.nl CC0 assets)
+  preload() {
+    // WHY: Only load textures when we have actual game data (second lifecycle after restart)
+    if (Object.keys(this.hexData).length === 0) {
+      console.log('[HexMapScene] Skipping preload - no data yet')
+      return
+    }
+
+    const texturesLoaded = this.game.registry.get('hexTexturesLoaded')
+
+    if (!texturesLoaded) {
+      console.log('[HexMapScene] Loading hex textures...')
+      this.game.registry.set('hexTexturesLoaded', true)
+
+      this.load.image('surface-unexplored', '/assets/hexes/surface-unexplored.png')
+      this.load.image('surface-explored', '/assets/hexes/surface-explored.png')
+      this.load.image('tomb-unexplored', '/assets/hexes/tomb-unexplored.png')
+      this.load.image('tomb-explored', '/assets/hexes/tomb-explored.png')
+
+      // WHY: Set flag when load completes so create() knows textures are ready
+      this.load.once('complete', () => {
+        console.log('[HexMapScene] Textures loaded successfully')
+        this.texturesReady = true
+      })
+    } else {
+      // WHY: Textures already in cache, mark as ready
+      this.texturesReady = true
+    }
   }
 
   init(data: SceneData) {
@@ -75,7 +111,37 @@ export default class HexMapScene extends Phaser.Scene {
   }
 
   create() {
-    // Enable camera drag
+    // WHY: Skip scene setup if we don't have game data yet (first lifecycle)
+    if (Object.keys(this.hexData).length === 0) {
+      console.log('[HexMapScene] Waiting for game data...')
+      return
+    }
+
+    console.log('[HexMapScene] Scene initialized')
+    console.log('[HexMapScene] Textures ready:', this.texturesReady)
+
+    // WHY: If textures are still loading, defer scene setup by one frame
+    // This ensures WebGL context has textures bound before creating sprites
+    if (!this.texturesReady) {
+      console.log('[HexMapScene] Deferring create() until textures ready...')
+      this.time.delayedCall(16, () => this.initializeScene()) // 16ms = one frame at 60fps
+      return
+    }
+
+    this.initializeScene()
+  }
+
+  // WHY: Extract scene initialization logic (keeps create() under 20 lines)
+  initializeScene() {
+    console.log('[HexMapScene] Initializing scene with textures ready')
+    this.setupCamera()
+    this.drawHexMap()
+    this.drawPlayerTokens()
+    this.centerCamera()
+  }
+
+  // WHY: Configure camera bounds and zoom for hex map interaction
+  setupCamera() {
     this.cameras.main.setBounds(0, 0,
       this.mapConfig.cols * HEX_WIDTH * 0.75 + HEX_SIZE * 2,
       this.mapConfig.rows * HEX_HEIGHT + HEX_HEIGHT
@@ -83,23 +149,20 @@ export default class HexMapScene extends Phaser.Scene {
 
     this.input.on('wheel', (_pointer: Phaser.Input.Pointer, _gameObjects: Phaser.GameObjects.GameObject[], _deltaX: number, deltaY: number) => {
       const zoom = this.cameras.main.zoom
-      const newZoom = Phaser.Math.Clamp(zoom - deltaY * 0.001, 0.5, 2)
+      const newZoom = Phaser.Math.Clamp(zoom - deltaY * 0.001, 1.0, 2.5)
       this.cameras.main.setZoom(newZoom)
     })
+  }
 
-    // Draw all hexes
-    this.drawHexMap()
-
-    // Draw player tokens
-    this.drawPlayerTokens()
-
-    // Center camera on map
+  // WHY: Center camera on middle of hex map
+  centerCamera() {
     const centerX = (this.mapConfig.cols * HEX_WIDTH * 0.75) / 2
     const centerY = (this.mapConfig.rows * HEX_HEIGHT) / 2
     this.cameras.main.centerOn(centerX, centerY)
   }
 
   getHexPosition(row: number, col: number): { x: number; y: number } {
+    // WHY: Account for device pixel ratio scaling - visual positions match internal coordinates
     const x = col * HEX_WIDTH * 0.75 + HEX_SIZE + 20
     const y = row * HEX_HEIGHT + (col % 2 === 1 ? HEX_HEIGHT / 2 : 0) + HEX_SIZE + 20
     return { x, y }
@@ -111,6 +174,22 @@ export default class HexMapScene extends Phaser.Scene {
       const angle = (Math.PI / 3) * i - Math.PI / 6
       points.push({
         x: centerX + HEX_SIZE * Math.cos(angle),
+        y: centerY + HEX_SIZE * Math.sin(angle)
+      })
+    }
+    return points
+  }
+
+  // WHY: Generate polygon points for hit area in zone's local coordinate system
+  // Zone bounding box has (0,0) at top-left, so hex center is at (HEX_WIDTH/2, HEX_HEIGHT/2)
+  getRelativeHexPoints(): Array<{ x: number; y: number }> {
+    const points = []
+    const centerX = HEX_WIDTH / 2  // WHY: Center of zone's bounding box
+    const centerY = HEX_HEIGHT / 2
+    for (let i = 0; i < 6; i++) {
+      const angle = (Math.PI / 3) * i - Math.PI / 6
+      points.push({
+        x: centerX + HEX_SIZE * Math.cos(angle),  // WHY: Relative to zone bounds, not origin
         y: centerY + HEX_SIZE * Math.sin(angle)
       })
     }
@@ -136,36 +215,29 @@ export default class HexMapScene extends Phaser.Scene {
     const location = explored && hex.location ? (type === 'surface' ? SURFACE_LOCATIONS[hex.location] : TOMB_LOCATIONS[hex.location]) : null
     const condition = explored && hex.condition ? (type === 'surface' ? SURFACE_CONDITIONS[hex.condition] : TOMB_CONDITIONS[hex.condition]) : null
 
-    // Determine fill color
-    let fillColor: number
+    // WHY: Determine which sprite to use based on type and explored state
+    let spriteKey: string
     if (type === 'surface') {
-      fillColor = explored ? COLORS.surfaceExplored : COLORS.surfaceUnexplored
+      spriteKey = explored ? 'surface-explored' : 'surface-unexplored'
     } else {
-      fillColor = explored ? COLORS.tombExplored : COLORS.tombUnexplored
+      spriteKey = explored ? 'tomb-explored' : 'tomb-unexplored'
     }
 
-    // Create hex graphics
+    // WHY: Use Image sprite for crisp rendering (replaces Graphics-based procedural drawing)
+    const hexSprite = this.add.image(x, y, spriteKey)
+      .setOrigin(0.5, 0.5) // WHY: Center sprite on hex position
+      .setDisplaySize(HEX_WIDTH, HEX_HEIGHT) // WHY: Scale sprite to match hex dimensions
+      .setDepth(1) // WHY: Base layer, overlays will be above
+
+    // WHY: Use Graphics to create overlay graphics object for borders and selected state
     const graphics = this.add.graphics()
+    graphics.setDepth(2) // WHY: Above hex sprite, below zones
+
     const points = this.getHexPoints(x, y)
 
-    // Draw filled hex
-    graphics.fillStyle(fillColor, 1)
-    graphics.beginPath()
-    if (points[0]) {
-      graphics.moveTo(points[0].x, points[0].y)
-      for (let i = 1; i < 6; i++) {
-        const point = points[i]
-        if (point) {
-          graphics.lineTo(point.x, point.y)
-        }
-      }
-    }
-    graphics.closePath()
-    graphics.fillPath()
-
-    // Draw border
-    let borderColor = 0x1a1a2e
-    let borderWidth = 2
+    // WHY: Draw colored border overlay for selected hex, bases, and camps
+    let borderColor: number | null = null
+    let borderWidth = 0
 
     if (this.selectedHex === currentHexId) {
       borderColor = COLORS.selected
@@ -178,27 +250,41 @@ export default class HexMapScene extends Phaser.Scene {
       borderWidth = 3
     }
 
-    graphics.lineStyle(borderWidth, borderColor, 1)
-    graphics.beginPath()
-    if (points[0]) {
-      graphics.moveTo(points[0].x, points[0].y)
-      for (let i = 1; i < 6; i++) {
-        const point = points[i]
-        if (point) {
-          graphics.lineTo(point.x, point.y)
+    // WHY: Only draw border overlay if needed (selected, base, or camp)
+    if (borderColor !== null) {
+      graphics.lineStyle(borderWidth, borderColor, 1)
+      graphics.beginPath()
+      if (points[0]) {
+        graphics.moveTo(points[0].x, points[0].y)
+        for (let i = 1; i < 6; i++) {
+          const point = points[i]
+          if (point) {
+            graphics.lineTo(point.x, point.y)
+          }
         }
       }
+      graphics.closePath()
+      graphics.strokePath()
     }
-    graphics.closePath()
-    graphics.strokePath()
 
     // Create hit area for interaction
-    const hitArea = new Phaser.Geom.Polygon(points)
+    // WHY: Use relative points so Phaser can correctly offset them by the zone's position
+    const hitArea = new Phaser.Geom.Polygon(this.getRelativeHexPoints())
     const zone = this.add.zone(x, y, HEX_WIDTH, HEX_HEIGHT)
-      .setInteractive({ hitArea, hitAreaCallback: Phaser.Geom.Polygon.Contains })
+      .setOrigin(0.5, 0.5)  // WHY: Explicitly center origin to match visual hex center
+      .setDepth(10)          // WHY: Ensure zones are above other graphics for pointer events
+      .setInteractive({
+        hitArea,
+        hitAreaCallback: Phaser.Geom.Polygon.Contains,
+        useHandCursor: true  // WHY: Show pointer cursor on hover for better UX
+      })
       .on('pointerover', () => this.onHexHover(currentHexId, true))
       .on('pointerout', () => this.onHexHover(currentHexId, false))
-      .on('pointerdown', () => this.onHexClicked(currentHexId))
+      .on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+        // WHY: Log pointer position for debugging click offset issues
+        console.log('[HexMapScene] Click at pointer:', pointer.x, pointer.y, 'Hex:', currentHexId, 'at', x, y)
+        this.onHexClicked(currentHexId)
+      })
 
     // Add coordinate text
     this.add.text(x, y - HEX_SIZE * 0.55, currentHexId, {
@@ -264,6 +350,9 @@ export default class HexMapScene extends Phaser.Scene {
   }
 
   drawPlayerToken(player: Player, playerIndex: number) {
+    // WHY: Skip players who haven't been placed on the map yet
+    if (!player.position) return
+
     const currentHexId = hexId(player.position.row, player.position.col)
     const hex = this.hexData[currentHexId]
     if (!hex) return
@@ -272,6 +361,7 @@ export default class HexMapScene extends Phaser.Scene {
 
     // Offset for multiple players on same hex
     const playersOnHex = this.players.filter(p => {
+      if (!p.position) return false
       const pHexId = hexId(p.position.row, p.position.col)
       return pHexId === currentHexId
     })
@@ -307,16 +397,66 @@ export default class HexMapScene extends Phaser.Scene {
     this.playerTokens[player.id] = graphics
   }
 
-  onHexHover(_hexId: string, isOver: boolean) {
-    // Simple hover effect
+  onHexHover(hexId: string, isOver: boolean) {
+    // WHY: Update cursor and draw visual hover highlight overlay
     if (isOver) {
       this.input.setDefaultCursor('pointer')
+
+      // WHY: Only update if hovering over a new hex
+      if (this.hoveredHex !== hexId) {
+        this.hoveredHex = hexId
+
+        // Clear old hover highlight
+        if (this.hoverHighlight) {
+          this.hoverHighlight.destroy()
+          this.hoverHighlight = null
+        }
+
+        // Draw new hover highlight overlay
+        const hex = this.hexData[hexId]
+        if (hex) {
+          const { x, y } = this.getHexPosition(hex.row, hex.col)
+          const points = this.getHexPoints(x, y)
+
+          this.hoverHighlight = this.add.graphics()
+          this.hoverHighlight.lineStyle(3, COLORS.hover, 0.8) // WHY: Semi-transparent white border
+          this.hoverHighlight.setDepth(15) // WHY: Above hexes but below UI
+
+          this.hoverHighlight.beginPath()
+          if (points[0]) {
+            this.hoverHighlight.moveTo(points[0].x, points[0].y)
+            for (let i = 1; i < 6; i++) {
+              const point = points[i]
+              if (point) {
+                this.hoverHighlight.lineTo(point.x, point.y)
+              }
+            }
+          }
+          this.hoverHighlight.closePath()
+          this.hoverHighlight.strokePath()
+
+          console.log('[HexMapScene] Hovering over:', hexId)
+        }
+      }
     } else {
       this.input.setDefaultCursor('default')
+
+      // WHY: Remove highlight when mouse leaves
+      if (this.hoveredHex === hexId) {
+        this.hoveredHex = null
+
+        if (this.hoverHighlight) {
+          this.hoverHighlight.destroy()
+          this.hoverHighlight = null
+        }
+
+        console.log('[HexMapScene] Hover out:', hexId)
+      }
     }
   }
 
   onHexClicked(hexId: string) {
+    console.log('[HexMapScene] Hex clicked:', hexId)
     if (this.onHexClick) {
       this.onHexClick(hexId)
     }
