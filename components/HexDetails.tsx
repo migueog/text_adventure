@@ -22,6 +22,8 @@ export default function HexDetails({ hex, players, getHexHistory }: HexDetailsPr
 
   const hexIdStr = hexId(hex.row, hex.col)
   const playersHere = players.filter(p => {
+    // WHY: Skip players who haven't been placed on map yet
+    if (!p.position) return false
     const pIdStr = hexId(p.position.row, p.position.col)
     return pIdStr === hexIdStr
   })

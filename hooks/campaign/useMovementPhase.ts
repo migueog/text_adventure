@@ -78,6 +78,8 @@ const countPlayersInHex = (
   excludePlayerId: number
 ): number => {
   return players.filter(p => {
+    // WHY: Skip players who haven't been placed on map yet
+    if (!p.position) return false
     const pHexId = hexId(p.position.row, p.position.col)
     return pHexId === targetHex && p.id !== excludePlayerId
   }).length
@@ -174,10 +176,11 @@ export function useMovementPhase(props: UseMovementPhaseProps) {
     // WHY: Deduct SP and track spending
     const spUpdate = deductSupplyPoints(player, cost)
     const targetPos = targetHex.split(',').map(Number)
+    const newPosition = { row: targetPos[0] ?? 0, col: targetPos[1] ?? 0 }
 
     updatePlayer(playerIndex, {
       ...spUpdate,
-      position: { row: targetPos[0] ?? 0, col: targetPos[1] ?? 0 },
+      position: newPosition,
       history: addHistoryEntry(
         player,
         currentRound,
@@ -249,7 +252,8 @@ export function useMovementPhase(props: UseMovementPhaseProps) {
    */
   const holdPosition = useCallback((playerIndex: number) => {
     const player = players[playerIndex]
-    if (!player) return
+    // WHY: Validate player exists and has been placed on map
+    if (!player || !player.position) return
 
     updatePlayer(playerIndex, {
       history: addHistoryEntry(

@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Ctesiphus Expedition Campaign Manager** - A digital campaign manager for the Kill Team Ctesiphus Expedition narrative campaign (Games Workshop tabletop game). This Next.js web application helps 2-6 players track campaigns, manage resources, explore procedurally generated hex maps, and record battle results.
 
-**Current Status:** Mid-migration from Vite to Next.js 16.1.0. Infrastructure is complete (~40%), component migration is in progress (~60% remaining).
+**Current Status:** Next.js 16.1.0 migration ~95% complete. Application is fully functional with working game loop, Phaser 3 hex map rendering, and PostgreSQL database integration. Minor UI rendering issues remain (see KNOWN_ISSUES.md).
 
 ## Tech Stack
 
@@ -61,10 +61,12 @@ bunx tsc --noEmit        # Check TypeScript without building
 - **Exploration:** D36 (3d6) system with 72 locations and 72 conditions
 
 ### State Management
-All game state is managed client-side via the `useCampaign` hook (no server-side state).
-- Main hook: `hooks/useCampaign.ts` (~630 lines, currently a stub - needs full migration)
-- State includes: players, hex map, threat level, phase tracking, event log
-- Uses React hooks: `useState`, `useCallback`, `useEffect`
+All game state is managed client-side via Zustand stores and custom hooks (no server-side state).
+- **Main Hook:** `hooks/useCampaign.ts` - Composed hook orchestrating 10+ specialized hooks
+- **Specialized Hooks:** Movement phase, action phase, battle phase, threat phase, exploration, etc.
+- **Zustand Store:** `lib/stores/campaign.ts` - Centralized state management
+- **State includes:** players, hex map, threat level, phase tracking, event log, bases/camps
+- **Persistence:** Campaign state syncs with PostgreSQL database via API routes
 
 ### Component Architecture
 - **Client Components:** All components use `'use client'` directive (game runs in browser)
@@ -98,7 +100,11 @@ text_adventure/
 │   └── VictoryScreen.tsx          # End-game results
 │
 ├── hooks/
-│   └── useCampaign.ts      # Main campaign state (CRITICAL - needs migration)
+│   ├── useCampaign.ts           # Main composed campaign hook
+│   └── campaign/                # Specialized phase hooks
+│       ├── useMovementPhase.ts  # Movement logic
+│       ├── useActionPhase.ts    # Action phase logic
+│       └── ...                  # Other phase hooks
 │
 ├── lib/
 │   ├── data/
@@ -118,28 +124,30 @@ text_adventure/
     └── issues/                         # 40+ detailed feature specs
 ```
 
-## Migration Context
+## Migration Status
 
-**✅ Completed:**
-- Next.js 16.1.0 infrastructure
-- TypeScript migration (strict mode, zero errors)
-- Utility and data file migration
-- Test infrastructure (Vitest + React Testing Library)
-- Stub components (for compilation)
+**✅ Completed (~95%):**
+- ✅ Next.js 16.1.0 App Router infrastructure with Turbopack
+- ✅ TypeScript migration (strict mode enabled, production build passing)
+- ✅ All utilities and data files migrated to TypeScript
+- ✅ Test infrastructure (Vitest + React Testing Library + Playwright)
+- ✅ All React components migrated and functional
+- ✅ useCampaign hook refactored into 10+ specialized hooks
+- ✅ Zustand store integration for state management
+- ✅ PostgreSQL database with Drizzle ORM
+- ✅ API routes for campaign persistence
+- ✅ Authentication system (NextAuth.js)
+- ✅ Phaser 3 hex map rendering with sprite-based tiles
+- ✅ Click interaction and hex selection working
+- ✅ Full game loop functional (Movement → Battle → Action → Threat)
 
-**🚧 In Progress (~60% remaining, est. 13-15 hours):**
-1. **useCampaign Hook Migration** (CRITICAL PATH - blocks all components)
-   - Source: `src/hooks/useCampaign.js` (630 lines)
-   - Target: `hooks/useCampaign.ts` (currently stub)
+**🚧 Known Issues:**
+- Phaser texture rendering on initial page load (green wireframes, fixed on click)
+- See `KNOWN_ISSUES.md` for details and workarounds
 
-2. **Component Migration** (can be parallelized after hook is done)
-   - Simple: DiceRoller, EventLog, HexDetails, ThreatMeter
-   - Forms: GameSetup, VictoryScreen, PlayerPanel, PhaseTracker
-   - Phaser: PhaserHexMap components (require 'use client', no SSR)
-
-3. **Testing Updates** (update tests for TypeScript)
-
-See `MIGRATION_STATUS.md` for detailed migration roadmap.
+**📖 Documentation:**
+- Migration history archived in `docs/archive/`
+- See `MIGRATION_STATUS.md` for detailed technical notes
 
 ## MANDATORY Development Standards
 
@@ -252,10 +260,12 @@ export default function Component({ name, onAction }: ComponentProps) {
 
 ### Documentation
 - `README.md` - Feature overview, getting started
-- `MIGRATION_STATUS.md` - Detailed migration roadmap
-- `NEXT_JS_MIGRATION_COMPLETE.md` - Migration progress summary
-- `TESTING.md` - Test standards
-- `DATABASE_SCHEMA.md` - Database design
+- `MIGRATION_STATUS.md` - Technical migration notes and roadmap
+- `KNOWN_ISSUES.md` - Active known issues and workarounds
+- `TESTING.md` - Test standards and practices
+- `DATABASE_SCHEMA.md` - Database design and schema
+- `TEAM_ONBOARDING.md` - Quick start guide for contributors
+- `docs/archive/` - Historical completion reports and summaries
 
 ### Configuration
 - `tsconfig.json` - TypeScript strict mode config
@@ -318,12 +328,33 @@ npm run dev
 # No database connection needed for basic gameplay
 ```
 
-### Migration Work
-1. Start with `useCampaign.ts` (critical path)
-2. Reference source: `src/hooks/useCampaign.js`
-3. Use types from `types/campaign.ts`
-4. Test as you go with dev server
-5. See `MIGRATION_STATUS.md` for detailed instructions
+### Debugging Runtime Errors
+**CRITICAL:** Before asking the user to manually test changes in the browser, ALWAYS check the dev server output for runtime errors.
+
+**How to check:**
+1. The dev server runs in background task ID (look for system reminders about "Background bash [ID] has new output")
+2. Read the output file: `/tmp/claude/-Users-miguelog-Documents-code-text-adventure/tasks/[TASK_ID].output`
+3. Look for:
+   - `⚠ Fast Refresh had to perform a full reload due to a runtime error` - indicates runtime error occurred
+   - `✓ Compiled` - successful compilation
+   - Error messages and stack traces
+
+**Common runtime errors to proactively fix:**
+- Null reference errors (`Cannot read properties of null`)
+- Type errors (`is not a function`, `is not assignable`)
+- Missing null checks on optional properties (e.g., `player.position` when player hasn't been placed)
+
+**Best practice:**
+- After making changes, read the dev server output before requesting user testing
+- Systematically search for and fix related errors (e.g., if one null check is missing, search for all similar patterns)
+- Use `grep` to find all instances of potentially problematic patterns across the codebase
+
+### Working with the Codebase
+1. **State Management:** Use Zustand store via `useCampaign` hook
+2. **Types:** All interfaces defined in `types/campaign.ts` and `types/battle.ts`
+3. **Database:** Use Drizzle ORM via API routes, never direct DB access from client
+4. **Testing:** Run `bun test` after changes
+5. **Known Issues:** Check `KNOWN_ISSUES.md` before reporting bugs
 
 ## Pull Request Standards
 

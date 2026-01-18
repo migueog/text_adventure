@@ -10,26 +10,19 @@ import LegacyCampaignPreview from './LegacyCampaignPreview'
 import LegacyCampaignSetup from './LegacyCampaignSetup'
 import { rollD36 } from '@/lib/utils/dice'
 
+interface GameSetupProps {
+  onCancel?: () => void
+}
+
 /**
- * WHY: No props needed - component manages campaign creation via Zustand
+ * WHY: Component manages campaign creation via Zustand
+ * Optional onCancel callback to return to campaign dashboard
  */
-export default function GameSetup() {
+export default function GameSetup({ onCancel }: GameSetupProps = {}) {
   const [campaignName, setCampaignName] = useState('')
-  const [playerCount, setPlayerCount] = useState(4)
+  const [maxPlayers, setMaxPlayers] = useState(4)
   const [targetThreat, setTargetThreat] = useState(7)
   const [soloMode, setSoloMode] = useState(false)
-  const [playerNames, setPlayerNames] = useState(
-    Array(6).fill('').map((_, i) => `Player ${i + 1}`)
-  )
-  const [killTeamNames, setKillTeamNames] = useState<string[]>(
-    Array(6).fill('')
-  )
-  const [factions, setFactions] = useState<string[]>(
-    Array(6).fill('')
-  )
-  const [backstories, setBackstories] = useState<string[]>(
-    Array(6).fill('')
-  )
   const [validationError, setValidationError] = useState('')
 
   // WHY: Solo mode options (Issue #53)
@@ -66,7 +59,7 @@ export default function GameSetup() {
     }
   }, [soloMode])
 
-  const config = MAP_CONFIGS[playerCount]
+  const config = MAP_CONFIGS[maxPlayers]
   if (!config) return null
 
   /**
@@ -118,13 +111,14 @@ export default function GameSetup() {
       })
 
       // WHY: Start game with legacy campaign settings
+      // Player data will come from user profile
       startGame(
         1,  // Solo mode = 1 player
         true,
-        playerNames.slice(0, 1),
-        killTeamNames.slice(0, 1),
-        backstories.slice(0, 1),
-        factions.slice(0, 1),
+        [],  // Player names from profile
+        [],  // Kill team names from profile
+        [],  // Backstories from profile
+        [],  // Factions from profile
         {
           useLegacyMap: true,
           legacyCampaignId: selectedLegacyCampaign,
@@ -138,7 +132,7 @@ export default function GameSetup() {
     }
   }
 
-  const handleStart = async () => {
+  const handleCreate = async () => {
     if (!validateCampaignName()) return
 
     // WHY: If using legacy map, navigate to legacy campaign setup (Issue #57)
@@ -148,9 +142,9 @@ export default function GameSetup() {
     }
 
     try {
-      // WHY: Create campaign in database first (Issue #53 - includes solo settings)
+      // WHY: Create campaign in database
       await createCampaign(campaignName, {
-        playerCount,
+        playerCount: soloMode ? 1 : maxPlayers,
         targetThreatLevel: targetThreat,
         soloMode,
         soloSettings: soloMode ? {
@@ -160,17 +154,19 @@ export default function GameSetup() {
         } : undefined
       })
 
-      // WHY: Then start the game with player setup including narrative fields (Issue #22)
-      startGame(
-        playerCount,
-        soloMode,
-        playerNames.slice(0, playerCount),
-        killTeamNames.slice(0, playerCount),
-        backstories.slice(0, playerCount),
-        factions.slice(0, playerCount)
-      )
+      if (soloMode) {
+        // WHY: Solo mode - start game immediately with owner as only player
+        // Player data will come from user profile
+        startGame(1, true, [], [], [], [])
+      } else {
+        // WHY: Competitive mode - return to dashboard
+        // Campaign is now 'setup' status and open for players to join
+        if (onCancel) {
+          onCancel()
+        }
+      }
     } catch (err) {
-      console.error('Failed to start campaign:', err)
+      console.error('Failed to create campaign:', err)
     }
   }
 
@@ -204,18 +200,23 @@ export default function GameSetup() {
           </div>
 
           <div className="setting-group">
-            <label>Number of Players:</label>
-            <div className="button-group">
-              {[2, 3, 4, 5, 6].map(num => (
-                <button
-                  key={num}
-                  className={`setting-btn ${playerCount === num ? 'active' : ''}`}
-                  onClick={() => setPlayerCount(num)}
-                >
-                  {num}
-                </button>
+            <label htmlFor="maxPlayers">Maximum Players (2-20):</label>
+            <select
+              id="maxPlayers"
+              value={maxPlayers}
+              onChange={(e) => setMaxPlayers(parseInt(e.target.value))}
+              disabled={soloMode}
+              className="player-count-select"
+            >
+              {Array.from({ length: 19 }, (_, i) => i + 2).map(num => (
+                <option key={num} value={num}>
+                  {num} Players - {MAP_CONFIGS[num]?.name || `${num} Players`}
+                </option>
               ))}
-            </div>
+            </select>
+            <p className="setting-hint">
+              {soloMode ? 'Solo mode is always 1 player' : 'Players can join until campaign reaches this limit'}
+            </p>
           </div>
 
           <div className="setting-group">
@@ -353,79 +354,6 @@ export default function GameSetup() {
         </div>
 
         <div className="setup-section">
-          <h3>Player Setup</h3>
-          <p className="section-hint">Configure your kill teams (all narrative fields are optional)</p>
-          <div className="player-inputs">
-            {Array(playerCount).fill(null).map((_, idx) => (
-              <div key={idx} className="player-setup-group">
-                <div className="player-header">
-                  <div
-                    className="player-color-preview"
-                    style={{ backgroundColor: PLAYER_COLORS[idx] }}
-                  />
-                  <h4>Player {idx + 1}</h4>
-                </div>
-
-                <div className="player-fields">
-                  <input
-                    type="text"
-                    value={playerNames[idx]}
-                    onChange={(e) => {
-                      const newNames = [...playerNames]
-                      newNames[idx] = e.target.value
-                      setPlayerNames(newNames)
-                    }}
-                    placeholder={`Player ${idx + 1} Name`}
-                    className="player-name-input"
-                  />
-
-                  <input
-                    type="text"
-                    value={killTeamNames[idx]}
-                    onChange={(e) => {
-                      const newTeamNames = [...killTeamNames]
-                      newTeamNames[idx] = e.target.value
-                      setKillTeamNames(newTeamNames)
-                    }}
-                    placeholder={`Kill Team ${idx + 1} (optional)`}
-                    className="kill-team-input"
-                  />
-
-                  <input
-                    type="text"
-                    value={factions[idx]}
-                    onChange={(e) => {
-                      const newFactions = [...factions]
-                      newFactions[idx] = e.target.value
-                      setFactions(newFactions)
-                    }}
-                    placeholder="Faction (optional)"
-                    className="faction-input"
-                    maxLength={50}
-                  />
-
-                  <textarea
-                    value={backstories[idx]}
-                    onChange={(e) => {
-                      const newBackstories = [...backstories]
-                      newBackstories[idx] = e.target.value
-                      setBackstories(newBackstories)
-                    }}
-                    placeholder="Kill team backstory (optional, max 500 chars)"
-                    className="backstory-input"
-                    maxLength={500}
-                    rows={3}
-                  />
-                  {backstories[idx] && (
-                    <small className="char-count">{backstories[idx].length}/500 characters</small>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="setup-section">
           <h3>Map Preview</h3>
           <div className="map-preview-info">
             <p><strong>{config.name}</strong></p>
@@ -442,13 +370,25 @@ export default function GameSetup() {
           </div>
         )}
 
-        <button
-          className="start-btn"
-          onClick={handleStart}
-          disabled={isLoading}
-        >
-          {isLoading ? 'Creating Campaign...' : 'Start Campaign'}
-        </button>
+        <div className="button-row">
+          {onCancel && (
+            <button
+              type="button"
+              className="cancel-btn"
+              onClick={onCancel}
+              disabled={isLoading}
+            >
+              Cancel
+            </button>
+          )}
+          <button
+            className="start-btn"
+            onClick={handleCreate}
+            disabled={isLoading}
+          >
+            {isLoading ? 'Creating Campaign...' : 'Create Campaign'}
+          </button>
+        </div>
       </div>
 
       <div className="setup-footer">

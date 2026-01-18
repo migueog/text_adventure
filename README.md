@@ -1,6 +1,6 @@
 # Ctesiphus Expedition Campaign Manager
 
-A digital campaign manager for the Kill Team Ctesiphus Expedition narrative campaign. This React-based web application helps players track their campaigns, manage resources, explore hex maps, and record battle results.
+A digital campaign manager for the Kill Team Ctesiphus Expedition narrative campaign. This Next.js 16 web application helps 2-6 players track campaigns, manage resources, explore procedurally generated hex maps, and record battle results with full database persistence.
 
 ## Features
 
@@ -81,20 +81,23 @@ A digital campaign manager for the Kill Team Ctesiphus Expedition narrative camp
 
 ## Technology Stack
 
-- **React 18**: Modern React with hooks
-- **Next.js 16**: React framework with SSR/SSG
-- **Vite**: Fast build tool and dev server (legacy)
-- **Phaser 3**: WebGL-powered hex map rendering
-- **CSS3**: Custom styling with CSS variables
-- **Vitest**: Testing framework with React Testing Library
-- **TypeScript**: Type safety configuration (strict mode enabled)
-- **PostgreSQL**: Database with Drizzle ORM
+- **Next.js 16.1.0**: React framework with App Router and Turbopack
+- **React 19**: Modern React with hooks and concurrent features
+- **TypeScript**: Strict mode enabled for full type safety
+- **Phaser 3**: WebGL-powered hex map rendering with sprite-based tiles
+- **Zustand**: Lightweight state management
+- **PostgreSQL**: Database with connection pooling
 - **Drizzle ORM**: Type-safe database toolkit
+- **NextAuth.js**: Authentication and session management
+- **Vitest**: Fast unit testing framework
+- **React Testing Library**: Component testing
+- **Playwright**: End-to-end testing
+- **Bun**: Fast JavaScript runtime and package manager
 
 ## Getting Started
 
 ### Prerequisites
-- Node.js 16+ and npm
+- **Bun 1.0+** (recommended) or Node.js 18+
 - PostgreSQL database (local or hosted - see [Database Setup](#database-setup))
 
 ### Installation
@@ -105,29 +108,30 @@ git clone https://github.com/migueog/text_adventure.git
 cd text_adventure
 
 # Install dependencies
-npm install
+bun install
 
 # Set up database (see Database Setup section below)
 cp .env.example .env
-# Edit .env and add your DATABASE_URL
-npm run db:test      # Test connection
-npm run db:migrate   # Apply schema
+# Edit .env and add your DATABASE_URL and NEXTAUTH_SECRET
+bun run db:test      # Test connection
+bun run db:push      # Apply schema
 
 # Start development server
-npm run dev
+bun run dev          # Runs on http://localhost:3000
 
 # Run tests
-npm test
-
-# Run tests with coverage
-npm run test:coverage
+bun test             # Watch mode
+bun run test:run     # Run once
+bun run test:coverage # With coverage report
 
 # Build for production
-npm run build
+bun run build
 
-# Preview production build
-npm run preview
+# Start production server
+bun start
 ```
+
+**Note:** While the app works with npm/pnpm, **bun is strongly recommended** for faster install times and better performance.
 
 ### Database Setup
 
@@ -154,14 +158,16 @@ This application requires a PostgreSQL database. Choose one of these options:
 **Quick Setup:**
 ```bash
 # 1. Choose a provider and create a database
-# 2. Copy connection string to .env
-echo "DATABASE_URL=postgresql://user:pass@host:5432/dbname" > .env
+# 2. Copy connection string to .env.local
+echo "DATABASE_URL=postgresql://user:pass@host:5432/dbname" > .env.local
+echo "NEXTAUTH_SECRET=$(openssl rand -base64 32)" >> .env.local
+echo "NEXTAUTH_URL=http://localhost:3000" >> .env.local
 
-# 3. Verify setup
-npm run db:verify
+# 3. Test connection
+bun run db:test
 
 # 4. Apply schema
-npm run db:migrate
+bun run db:push
 ```
 
 📖 **Full documentation**: See [DATABASE_SETUP.md](./DATABASE_SETUP.md) for detailed setup instructions, team onboarding, and troubleshooting.
@@ -170,11 +176,10 @@ npm run db:migrate
 
 | Command | Description |
 |---------|-------------|
-| `npm run db:test` | Test database connection |
-| `npm run db:verify` | Verify complete setup |
-| `npm run db:migrate` | Apply schema migrations |
-| `npm run db:generate` | Generate new migration |
-| `npm run db:studio` | Open visual database browser |
+| `bun run db:test` | Test database connection |
+| `bun run db:push` | Push schema to database |
+| `bun run db:generate` | Generate new migration |
+| `bun run db:studio` | Open Drizzle Studio (visual browser) |
 
 ### Usage
 
@@ -189,50 +194,78 @@ npm run db:migrate
 
 ```
 text_adventure/
-├── app/                       # Next.js app directory
-│   ├── page.tsx              # Main page component
-│   ├── layout.tsx            # Root layout
-│   └── ...                   # Other routes and layouts
-├── components/                # React components
-│   ├── ThreatMeter.jsx       # Threat level visual display
-│   ├── PlayerPanel.jsx       # Player cards with history
-│   ├── PhaseTracker.jsx      # Phase management UI
-│   ├── PhaserHexMap/         # Phaser hex map renderer
-│   ├── GameSetup.jsx         # Campaign setup screen
-│   ├── VictoryScreen.jsx     # End game results
-│   ├── DiceRoller.jsx        # D36 dice roller
-│   ├── EventLog.jsx          # Action history log
-│   └── HexDetails.jsx        # Hex information panel
-├── lib/                       # Shared libraries
-│   ├── db/                   # Database module (PostgreSQL + Drizzle ORM)
-│   │   ├── schema.ts         # Database schema definitions
-│   │   ├── client.ts         # Database client with connection pooling
-│   │   ├── migrate.ts        # Migration runner script
-│   │   ├── test-connection.ts # Connection test utility
-│   │   ├── verify-setup.ts   # Setup verification script
-│   │   ├── migrations/       # SQL migration files
-│   │   └── README.md         # Database module documentation
-│   ├── utils/                # Utility functions
-│   │   ├── dice.ts           # Dice rolling utilities
-│   │   └── hexUtils.ts       # Hex grid calculations
-│   └── data/
-│       └── campaignData.ts   # Game data (locations, conditions)
+├── app/                       # Next.js App Router
+│   ├── page.tsx              # Main game page (client-side)
+│   ├── layout.tsx            # Root layout with providers
+│   ├── auth/                 # Authentication pages
+│   ├── api/                  # API routes
+│   │   ├── campaigns/        # Campaign CRUD operations
+│   │   ├── auth/             # NextAuth.js endpoints
+│   │   └── user/             # User profile endpoints
+│   └── globals.css           # Global styles
+│
+├── components/                # React components (all TypeScript)
+│   ├── AuthProvider.tsx      # Auth context provider
+│   ├── ThreatMeter.tsx       # Animated threat level meter
+│   ├── PlayerPanel.tsx       # Player cards with history
+│   ├── PhaseTracker.tsx      # Phase management UI
+│   ├── PhaserHexMap/         # Phaser 3 hex map renderer
+│   │   ├── index.tsx         # React wrapper component
+│   │   └── HexMapScene.ts    # Phaser scene with sprite rendering
+│   ├── GameSetup.tsx         # Campaign setup form
+│   ├── VictoryScreen.tsx     # End game results
+│   ├── DiceRoller.tsx        # D36 dice roller
+│   ├── EventLog.tsx          # Action history log
+│   ├── HexDetails.tsx        # Hex information panel
+│   ├── CampaignList.tsx      # Campaign selection
+│   └── UserMenu.tsx          # User navigation menu
+│
 ├── hooks/                     # Custom React hooks
-│   └── useCampaign.js        # Main campaign state management
+│   ├── useCampaign.ts        # Main composed campaign hook
+│   ├── useCampaignRole.ts    # User role checking
+│   └── campaign/             # Specialized phase hooks
+│       ├── useMovementPhase.ts
+│       ├── useActionPhase.ts
+│       ├── useBattlePhase.ts
+│       ├── useThreatPhase.ts
+│       └── ...               # 10+ hooks total
+│
+├── lib/                       # Shared libraries
+│   ├── stores/               # Zustand state management
+│   │   ├── campaign.ts       # Main campaign store
+│   │   └── auth.ts           # Auth store
+│   ├── db/                   # Database module (Drizzle ORM)
+│   │   ├── schema.ts         # Database schema
+│   │   ├── client.ts         # Connection pool
+│   │   └── README.md         # DB documentation
+│   ├── utils/                # Utility functions (all tested)
+│   │   ├── dice.ts           # D36 dice rolling
+│   │   ├── hexUtils.ts       # Hex grid calculations
+│   │   ├── threatPhaseRules.ts
+│   │   └── ...
+│   └── data/
+│       └── campaignData.ts   # Game data (72 locations, 72 conditions)
+│
 ├── types/                     # TypeScript type definitions
+│   ├── campaign.ts           # Core game types
+│   └── battle.ts             # Battle and operative types
+│
+├── public/                    # Static assets
+│   └── assets/hexes/         # Hex tile sprites (Kenney.nl CC0)
+│
 ├── .github/
-│   ├── copilot-instructions.md      # Development standards
-│   ├── instructions/                # Code-specific guidelines
-│   └── issues/                      # Detailed issue specifications
-├── DATABASE_SETUP.md          # Complete database setup guide
-├── DATABASE_SCHEMA.md         # Database schema reference
-├── DATABASE_COMMANDS.md       # Database commands quick reference
-├── TEAM_ONBOARDING.md         # Quick start for new contributors
-├── tsconfig.json              # TypeScript configuration
+│   ├── copilot-instructions.md # Development standards
+│   ├── instructions/         # Code-specific guidelines
+│   └── issues/               # 40+ detailed feature specs
+│
+├── docs/archive/              # Historical documentation
+├── CLAUDE.md                  # AI development guidelines
+├── KNOWN_ISSUES.md            # Active known issues
+├── DATABASE_SETUP.md          # Database setup guide
+├── TESTING.md                 # Testing standards
+├── tsconfig.json              # TypeScript strict mode config
 ├── vitest.config.js           # Test configuration
-├── next.config.mjs            # Next.js configuration
-├── drizzle.config.ts          # Drizzle ORM configuration
-└── package.json               # Project dependencies and scripts
+└── next.config.mjs            # Next.js configuration
 ```
 
 ## Documentation
@@ -240,21 +273,25 @@ text_adventure/
 This project has comprehensive documentation to help you get started:
 
 ### For New Team Members
-- **[TEAM_ONBOARDING.md](./TEAM_ONBOARDING.md)** - Quick start guide for new contributors (5-10 minutes)
-- **[DATABASE_COMMANDS.md](./DATABASE_COMMANDS.md)** - Quick reference for all database commands
+- **[TEAM_ONBOARDING.md](./TEAM_ONBOARDING.md)** - Quick start guide for new contributors
+- **[DATABASE_COMMANDS.md](./DATABASE_COMMANDS.md)** - Quick reference for database commands
+- **[CLAUDE.md](./CLAUDE.md)** - AI development guidelines and project overview
 
 ### Database Setup & Management
-- **[DATABASE_SETUP.md](./DATABASE_SETUP.md)** - Complete guide for setting up database hosting
-- **[DATABASE_SCHEMA.md](./DATABASE_SCHEMA.md)** - Database schema reference and documentation
+- **[DATABASE_SETUP.md](./DATABASE_SETUP.md)** - Complete database setup guide
+- **[DATABASE_SCHEMA.md](./DATABASE_SCHEMA.md)** - Database schema reference
 - **[lib/db/README.md](./lib/db/README.md)** - Database module documentation
 
-### Development
-- **[.github/copilot-instructions.md](.github/copilot-instructions.md)** - Development standards and guidelines
-- **[TESTING.md](./TESTING.md)** - Testing guidelines and best practices
+### Development & Troubleshooting
+- **[TESTING.md](./TESTING.md)** - Testing standards and best practices
+- **[KNOWN_ISSUES.md](./KNOWN_ISSUES.md)** - Active known issues and workarounds
+- **[MIGRATION_STATUS.md](./MIGRATION_STATUS.md)** - Technical migration notes
+- **[.github/copilot-instructions.md](.github/copilot-instructions.md)** - Development standards
 
-### Project Planning
+### Project Planning & History
 - **[FUTURE_FEATURES.md](./FUTURE_FEATURES.md)** - Planned features and roadmap
 - **[.github/issues/](.github/issues/)** - Detailed issue specifications
+- **[docs/archive/](./docs/archive/)** - Historical completion reports and summaries
 
 ## Development Standards
 
@@ -264,21 +301,27 @@ This project follows strict development standards for code quality and maintaina
 - **ALL new features require tests before implementation**
 - Coverage target: 85-90% for business logic
 - Use Vitest with React Testing Library
-- Run tests: `npm test` or `npm run test:coverage`
+- Run tests: `bun test` (watch mode) or `bun run test:coverage`
 
 ### TypeScript
-- TypeScript configuration with strict mode enabled
-- New files should use TypeScript (.ts/.tsx)
+- **Strict mode enabled** - zero TypeScript errors before completion
+- All files use TypeScript (.ts/.tsx)
 - No `any` types - use proper types or `unknown`
-- Define interfaces for all data structures
+- Define interfaces for all data structures in `types/`
 
 ### Code Quality
 - **Function size limit**: 10-20 lines per function
-- Add JSDoc comments to exported functions
+- Add JSDoc comments with "WHY" explanations
 - Comment "WHY", not "WHAT"
 - Each function should do ONE thing
+- Extract complex logic into tested utility functions
 
-See [.github/copilot-instructions.md](.github/copilot-instructions.md) for complete development standards.
+### Package Manager
+- **Use bun** for all commands (not npm/pnpm)
+- Faster installs and better performance
+- Compatible with npm scripts
+
+See [CLAUDE.md](./CLAUDE.md) or [.github/copilot-instructions.md](.github/copilot-instructions.md) for complete development standards.
 
 ## Roadmap
 

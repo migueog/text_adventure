@@ -92,7 +92,7 @@ async function runConnectionTest() {
   if (result.success) {
     console.log('✅ Connection successful!\n')
     console.log('Database Information:')
-    console.log(`  Timestamp: ${result.timestamp.toISOString()}`)
+    console.log(`  Timestamp: ${result.timestamp instanceof Date ? result.timestamp.toISOString() : result.timestamp}`)
     console.log(`  Latency: ${result.latency}ms`)
     console.log(`  PostgreSQL Version: ${result.version?.split(' ')[0]}\n`)
     

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import type { Player, Hex } from '@/types/campaign'
 import type { ExtendedBattleRecord } from '@/types/battle'
 import { hexId } from '@/lib/utils/hexUtils'
@@ -32,7 +32,7 @@ function PlayerCard({ player, allPlayers, isActive, currentPhase, hexes, onUpdat
   }
 
   const recentHistory = (player.history || []).slice(-5).reverse()
-  const positionStr = hexId(player.position.row, player.position.col)
+  const positionStr = player.position ? hexId(player.position.row, player.position.col) : 'Not placed'
 
   return (
     <div
@@ -291,6 +291,14 @@ export default function PlayerPanel({
   onUpdatePlayer,
   soloMode
 }: PlayerPanelProps) {
+  // WHY: Diagnostic logging to investigate player panel data flow
+  useEffect(() => {
+    console.log('[PlayerPanel] Players received:', players)
+    console.log('[PlayerPanel] Players count:', players?.length)
+    console.log('[PlayerPanel] First player:', players?.[0])
+    console.log('[PlayerPanel] Current player index:', currentPlayerIndex)
+  }, [players, currentPlayerIndex])
+
   return (
     <div className="player-panel">
       <h3>Players</h3>

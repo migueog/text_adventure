@@ -442,6 +442,9 @@ export const useCampaignStore = create<CampaignStore>()(
             i === playerIndex ? { ...p, ...updates } : p
           )
           set({ players })
+
+          // WHY: Save to database after player update
+          get().saveCampaign()
         },
 
         // Add Event
@@ -575,6 +578,8 @@ export const useCampaignStore = create<CampaignStore>()(
 
           set({ isSaving: true })
           try {
+            // WHY: Include all campaign state fields to ensure complete persistence
+            // soloSettings and soloVictory were previously missing, causing incomplete state restoration
             const gameState = {
               gameStarted: state.gameStarted,
               gameEnded: state.gameEnded,
@@ -586,7 +591,9 @@ export const useCampaignStore = create<CampaignStore>()(
               currentPlayerIndex: state.currentPlayerIndex,
               threatLevel: state.threatLevel,
               targetThreatLevel: state.targetThreatLevel,
-              eventLog: state.eventLog
+              eventLog: state.eventLog,
+              soloSettings: state.soloSettings,
+              soloVictory: state.soloVictory
             }
 
             await fetch(`/api/campaigns/${state.campaignId}/state`, {

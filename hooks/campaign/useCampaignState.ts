@@ -8,6 +8,8 @@ import {
   PHASES
 } from '@/lib/data/campaignData'
 import { hexId } from '@/lib/utils/hexUtils'
+import { useCampaignStore } from '@/store/campaign'
+import { calculateStartPositions, markStartingHexes } from '@/lib/utils/playerPlacement'
 import { determinePriority, needsRollOff } from '@/lib/utils/priority'
 
 /**
@@ -15,6 +17,17 @@ import { determinePriority, needsRollOff } from '@/lib/utils/priority'
  * Manages game initialization, player state, and event logging
  * Foundation hook for all other campaign hooks
  */
+
+/**
+ * WHY: Hex selection state type for dual-click workflow
+ * Tracks source hex, target hex, selected player, and menu position
+ */
+interface HexSelectionState {
+  sourceHex: string | null
+  targetHex: string | null
+  selectedPlayerId: number | null
+  menuPosition: { x: number; y: number } | null
+}
 
 /**
  * WHY: Create initial hex grid based on map configuration
@@ -74,45 +87,6 @@ const createPlayer = (
 })
 
 /**
- * WHY: Calculate starting positions for players
- * Spreads players across top row
- */
-const calculateStartPositions = (
-  config: MapConfig,
-  numPlayers: number
-): HexPosition[] => {
-  const positions: HexPosition[] = []
-  const spacing = Math.floor(config.cols / numPlayers)
-  for (let i = 0; i < numPlayers; i++) {
-    const col = Math.min(
-      Math.floor(spacing * i + spacing / 2),
-      config.cols - 1
-    )
-    positions.push({ row: 0, col })
-  }
-  return positions
-}
-
-/**
- * WHY: Mark starting hexes as explored bases
- * Sets location and condition for each start position
- */
-const markStartingHexes = (
-  hexes: Record<string, Hex>,
-  positions: HexPosition[]
-): void => {
-  positions.forEach((pos, idx) => {
-    const posId = hexId(pos.row, pos.col)
-    if (hexes[posId]) {
-      hexes[posId].explored = true
-      hexes[posId].exploredBy = [idx]
-      hexes[posId].location = 11 // Base location
-      hexes[posId].condition = 11 // Clear condition
-    }
-  })
-}
-
-/**
  * WHY: Create player objects for all players
  * Uses starting positions and default values
  */
@@ -135,6 +109,9 @@ const createPlayers = (
 }
 
 export function useCampaignState() {
+  // WHY: Access Zustand store for persistence
+  const zustandUpdatePlayer = useCampaignStore((state) => state.updatePlayer)
+
   // Core game state
   const [gameStarted, setGameStarted] = useState(false)
   const [playerCount, setPlayerCount] = useState(4)
@@ -149,6 +126,14 @@ export function useCampaignState() {
   const [gameEnded, setGameEnded] = useState(false)
   const [extendedMode, setExtendedMode] = useState(false)
   const [eventLog, setEventLog] = useState<Event[]>([])
+
+  // WHY: Hex-based action menu state for dual-selection workflow
+  const [hexSelection, setHexSelection] = useState<HexSelectionState>({
+    sourceHex: null,
+    targetHex: null,
+    selectedPlayerId: null,
+    menuPosition: null,
+  })
 
   // WHY: Refs to avoid stale closure issues in callbacks
   const currentRoundRef = useRef(currentRound)
@@ -196,7 +181,7 @@ export function useCampaignState() {
     setMapConfig(config)
 
     const initialHexes = createInitialHexGrid(config)
-    const startPositions = calculateStartPositions(config, numPlayers)
+    const startPositions = calculateStartPositions(numPlayers, config)
     markStartingHexes(initialHexes, startPositions)
     const newPlayers = createPlayers(numPlayers, startPositions)
 
@@ -223,6 +208,7 @@ export function useCampaignState() {
     playerIndex: number,
     updates: Partial<Player>
   ) => {
+    // WHY: Update local React state for immediate UI reactivity
     setPlayers(prev => {
       const updated = [...prev]
       const player = updated[playerIndex]
@@ -234,7 +220,10 @@ export function useCampaignState() {
       }
       return updated
     })
-  }, [])
+
+    // WHY: Also update Zustand store for persistence to database
+    zustandUpdatePlayer(playerIndex, updates)
+  }, [zustandUpdatePlayer])
 
   /**
    * WHY: Recalculate player priorities
@@ -264,6 +253,59 @@ export function useCampaignState() {
     addEvent('Campaign extended beyond target threat level', 'system')
   }, [addEvent])
 
+  /**
+   * WHY: Set source hex for action selection
+   * Marks player's position as action origin
+   */
+  const setSourceHex = useCallback((
+    hexId: string,
+    playerId: number,
+    position: { x: number; y: number }
+  ) => {
+    setHexSelection({
+      sourceHex: hexId,
+      targetHex: null,
+      selectedPlayerId: playerId,
+      menuPosition: position,
+    })
+  }, [])
+
+  /**
+   * WHY: Set target hex for action selection
+   * Shows contextual menu at target position
+   */
+  const setTargetHex = useCallback((
+    hexId: string,
+    position: { x: number; y: number }
+  ) => {
+    setHexSelection(prev => ({
+      ...prev,
+      targetHex: hexId,
+      menuPosition: position,
+    }))
+  }, [])
+
+  /**
+   * WHY: Reset hex selection state
+   * Clears source, target, and menu
+   */
+  const resetHexSelection = useCallback(() => {
+    setHexSelection({
+      sourceHex: null,
+      targetHex: null,
+      selectedPlayerId: null,
+      menuPosition: null,
+    })
+  }, [])
+
+  /**
+   * WHY: Auto-reset selection on phase change
+   * Prevents stale selection across phases
+   */
+  useEffect(() => {
+    resetHexSelection()
+  }, [currentPhase, resetHexSelection])
+
   return {
     // State
     gameStarted,
@@ -276,6 +318,7 @@ export function useCampaignState() {
     targetThreatLevel,
     mapConfig,
     selectedHex,
+    hexSelection,
     gameEnded,
     extendedMode,
     eventLog,
@@ -292,6 +335,11 @@ export function useCampaignState() {
     checkRollOff,
     enableExtendedMode,
     addEvent,
+
+    // Hex selection actions
+    setSourceHex,
+    setTargetHex,
+    resetHexSelection,
 
     // Internal state (for other hooks)
     setPlayers,

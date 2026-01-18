@@ -233,9 +233,22 @@ export function useCampaign() {
       return
     }
 
-    if (currentPhaseIndex === 2 && action.actionIndex < state.players.length) {
-      state.addEvent('Complete all player actions before advancing', 'warning')
-      return
+    if (currentPhaseIndex === 2) {
+      // WHY: Validate Action Phase completion before advancing
+      if (!action.actionOrder) {
+        state.addEvent('Action order not calculated', 'error')
+        return
+      }
+      // WHY: Check if current round through action queue is complete
+      // actionIndex wraps to 0 after last player, so checking > 0 && < length means not all acted
+      if (action.actionIndex > 0 && action.actionIndex < action.actionOrder.length) {
+        const remainingPlayers = action.actionOrder.length - action.actionIndex
+        state.addEvent(
+          `${remainingPlayers} player(s) still need to take actions`,
+          'warning'
+        )
+        return
+      }
     }
 
     // WHY: Advance phase or start new round
@@ -281,6 +294,10 @@ export function useCampaign() {
       if (nextPhaseName === 'Battle') {
         battle.resetBattleResults()
       }
+      if (nextPhaseName === 'Action') {
+        // WHY: Calculate action order when entering Action Phase
+        action.calculateActionOrder()
+      }
       if (nextPhaseName === 'Threat') {
         threat.detectThreatRules()
       }
@@ -317,7 +334,8 @@ export function useCampaign() {
     const player = state.players.find(p => p.id === state.currentPlayerIndex)
     const opponent = state.players.find(p => p.id === selectedOpponentId)
 
-    if (!player || !opponent) return null
+    // WHY: Check for position null before accessing row/col properties
+    if (!player || !opponent || !player.position || !opponent.position) return null
 
     const hex = state.hexes[player.position.row + ',' + player.position.col]
     if (!hex || !hex.explored || hex.type === 'blocked') return null
@@ -398,6 +416,7 @@ export function useCampaign() {
     targetThreatLevel: state.targetThreatLevel,
     mapConfig: state.mapConfig,
     selectedHex: state.selectedHex,
+    hexSelection: state.hexSelection, // WHY: Dual-selection state for hex-based controls (Phase 6-7)
     gameEnded: state.gameEnded,
     extendedMode: state.extendedMode,
     eventLog: state.eventLog,
@@ -450,8 +469,13 @@ export function useCampaign() {
     // ========================================================================
 
     setPlayerCount: state.setPlayerCount,
+    setPlayers: state.setPlayers, // WHY: Expose for Zustand sync in app/page.tsx
+    setHexes: state.setHexes, // WHY: Expose for Zustand sync in app/page.tsx
     setTargetThreatLevel: state.setTargetThreatLevel,
     setSelectedHex: state.setSelectedHex,
+    setSourceHex: state.setSourceHex, // WHY: Set source hex for dual-selection (Phase 6)
+    setTargetHex: state.setTargetHex, // WHY: Set target hex for dual-selection (Phase 6)
+    resetHexSelection: state.resetHexSelection, // WHY: Reset dual-selection state (Phase 6)
     setThreatLevel,
     setConditionEnabled,
     setSelectedOpponentId,
@@ -496,6 +520,10 @@ export function useCampaign() {
 
     performAction: action.performAction,
     advanceActionTurn: action.advanceActionTurn,
+
+    // Action Phase - Calculations (for UI feedback)
+    calculateEncampCost: action.calculateEncampCost,
+    validateDemolish: action.validateDemolish,
 
     // ========================================================================
     // ACTIONS - Threat Phase

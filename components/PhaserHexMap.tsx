@@ -10,9 +10,15 @@ interface PhaserHexMapProps {
   players: Player[]
   mapConfig: MapConfig | null
   selectedHex: string | null
-  onHexClick: (hex: Hex) => void
+  onHexClick: (hexId: string) => void // WHY: Type fixed - accepts hexId string (Phase 6)
   currentPlayerIndex: number
   regroupPath?: HexPosition[] | null // WHY: Path for REGROUP visualization (Issue #38)
+  hexSelection?: {
+    sourceHex: string | null
+    targetHex: string | null
+    selectedPlayerId: number | null
+    menuPosition: { x: number; y: number } | null
+  } | null // WHY: Dual-selection state for hex-based controls (Phase 6-7)
 }
 
 export default function PhaserHexMap({
@@ -22,18 +28,19 @@ export default function PhaserHexMap({
   selectedHex,
   onHexClick,
   currentPlayerIndex,
-  regroupPath
+  regroupPath,
+  hexSelection
 }: PhaserHexMapProps) {
   const gameRef = useRef<Phaser.Game | null>(null)
   const containerRef = useRef<HTMLDivElement | null>(null)
   const sceneRef = useRef<HexMapScene | null>(null)
 
-  // Memoize the hex click handler
+  // WHY: Memoize the hex click handler - passes hexId string to parent (Phase 6)
   const handleHexClick = useCallback((hexId: string) => {
-    if (onHexClick && hexes[hexId]) {
-      onHexClick(hexes[hexId])
+    if (onHexClick) {
+      onHexClick(hexId)
     }
-  }, [onHexClick, hexes])
+  }, [onHexClick])
 
   // Initialize Phaser game
   useEffect(() => {
@@ -114,9 +121,10 @@ export default function PhaserHexMap({
         currentPlayerIndex,
         selectedHex,
         regroupPath,
+        hexSelection, // WHY: Pass dual-selection state to scene (Phase 6-7)
       })
     }
-  }, [hexes, players, currentPlayerIndex, selectedHex, regroupPath, handleHexClick])
+  }, [hexes, players, currentPlayerIndex, selectedHex, regroupPath, hexSelection, handleHexClick])
 
   if (!mapConfig) return null
 
@@ -148,9 +156,6 @@ export default function PhaserHexMap({
           <span style={{ color: '#3498db' }}>⛺</span>
           <span>Camp</span>
         </div>
-      </div>
-      <div className="map-controls">
-        <small>Scroll to zoom | Click hexes to select</small>
       </div>
     </div>
   )

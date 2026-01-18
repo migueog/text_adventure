@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from 'react'
 import type { Player, Hex, HexPosition, Event } from '@/types/campaign'
-import { hexId } from '@/lib/utils/hexUtils'
+import { hexId, hexDistance } from '@/lib/utils/hexUtils'
 import { calculateActionPhaseOrder } from '@/lib/utils/actionPhaseUtils'
 import { determinePriority } from '@/lib/utils/priority'
 import { calculateResupply } from '@/lib/utils/resupply'
@@ -332,14 +332,21 @@ export function useActionPhase(props: UseActionPhaseProps) {
   /**
    * WHY: Execute RESUPPLY action
    * Gain SP based on location (base +3, camp +D3)
+   * Returns true if successful, false otherwise
    */
-  const handleResupply = useCallback((player: Player) => {
+  const handleResupply = useCallback((player: Player): boolean => {
+    // WHY: Validate player has been placed on map
+    if (!player.position) {
+      addEvent(`${player.name} cannot resupply - not placed on map`, 'warning')
+      return false
+    }
+
     const playerPosId = hexId(player.position.row, player.position.col)
     const hex = hexes[playerPosId]
 
     if (!hex) {
       addEvent(`${player.name} cannot resupply - invalid hex`, 'warning')
-      return
+      return false
     }
 
     const resupplyResult = calculateResupply(player, hex)
@@ -347,7 +354,7 @@ export function useActionPhase(props: UseActionPhaseProps) {
 
     if (actualGain === 0) {
       addEvent(`${player.name} is already at max SP (10)`, 'system')
-      return
+      return false
     }
 
     const newSP = clampSP(player.supplyPoints + actualGain)
@@ -370,22 +377,24 @@ export function useActionPhase(props: UseActionPhaseProps) {
       ? `camp (D3=${resupplyResult.roll}, base +${resupplyResult.amount})`
       : resupplyResult.type
     addEvent(`${player.name} resupplied at ${locationMsg}: +${actualGain} SP`, 'action')
+    return true
   }, [players, hexes, currentPlayerIndex, currentRound, currentPhase, addEvent, updatePlayer])
 
   /**
    * WHY: Execute SCOUT action
    * Explore distant hex for SP cost equal to distance
+   * Returns true if successful, false otherwise
    */
   const handleScout = useCallback((
     player: Player,
     targetHex?: string,
     distance?: number
-  ) => {
+  ): boolean => {
     const validationError = validateScout(targetHex, distance, hexes, player.supplyPoints)
     if (validationError) {
       const errorType = validationError.includes('already explored') ? 'warning' : 'error'
       addEvent(`${player.name}: ${validationError}`, errorType)
-      return
+      return false
     }
 
     const cost = distance!
@@ -398,25 +407,30 @@ export function useActionPhase(props: UseActionPhaseProps) {
 
     exploreHex(targetHex!)
     addEvent(`${player.name} scouted ${targetHex} (cost: ${cost} SP)`, 'action')
+    return true
   }, [hexes, currentPlayerIndex, currentRound, currentPhase, addEvent, updatePlayer, exploreHex])
 
   /**
    * WHY: Execute SEARCH action
    * Search current hex for SP/CP rewards (1 SP cost, one-time per hex)
+   * Returns true if successful, false otherwise
    */
-  const handleSearch = useCallback((player: Player) => {
+  const handleSearch = useCallback((player: Player): boolean => {
+    // WHY: Validate player has been placed on map
+    if (!player.position) return false
+
     const hexKey = hexId(player.position.row, player.position.col)
     const hex = hexes[hexKey]
 
     if (!hex) {
       addEvent(`${player.name} cannot search - invalid hex`, 'warning')
-      return
+      return false
     }
 
     const validation = canPerformSearch(player, hex, hexKey)
     if (!validation.canSearch) {
       addEvent(`${player.name} cannot search: ${validation.reason}`, 'warning')
-      return
+      return false
     }
 
     const location = hex.type === 'surface'
@@ -426,7 +440,7 @@ export function useActionPhase(props: UseActionPhaseProps) {
     const result = resolveSearchRule(location?.searchRule)
     if (!result) {
       addEvent(`${player.name} searched but found nothing`, 'action')
-      return
+      return false
     }
 
     const spCost = 1
@@ -450,17 +464,25 @@ export function useActionPhase(props: UseActionPhaseProps) {
     })
 
     addEvent(`${player.name} searched ${location?.name}: ${result.description}`, 'action')
+    return true
   }, [hexes, currentPlayerIndex, currentRound, currentPhase, addEvent, updatePlayer])
 
   /**
    * WHY: Execute ENCAMP action
    * Build camp at current position (variable cost, relocate option)
+   * Returns true if successful, false otherwise
    */
   const handleEncamp = useCallback((
     player: Player,
     cost: number,
     campToRemove: HexPosition | null
-  ) => {
+  ): boolean => {
+    // WHY: Validate player has been placed on map
+    if (!player.position) {
+      addEvent(`${player.name} cannot encamp - not placed on map`, 'error')
+      return false
+    }
+
     const playerPosId = hexId(player.position.row, player.position.col)
 
     const validationError = validateEncamp(
@@ -473,7 +495,7 @@ export function useActionPhase(props: UseActionPhaseProps) {
 
     if (validationError) {
       addEvent(`${player.name}: ${validationError}`, 'error')
-      return
+      return false
     }
 
     if (player.supplyPoints < cost) {
@@ -481,7 +503,7 @@ export function useActionPhase(props: UseActionPhaseProps) {
         `${player.name}: Not enough SP to build camp (need ${cost}, have ${player.supplyPoints})`,
         'error'
       )
-      return
+      return false
     }
 
     let newCamps = [...player.camps]
@@ -517,26 +539,34 @@ export function useActionPhase(props: UseActionPhaseProps) {
       `${player.name} built camp at ${playerPosId} (cost: ${cost} SP)`,
       'action'
     )
+    return true
   }, [hexes, players, currentPlayerIndex, currentRound, currentPhase, addEvent, updatePlayer])
 
   /**
    * WHY: Execute DEMOLISH action
    * Destroy camps, Beast Lair, or Released Prisoner (3 SP cost, prerequisites required)
+   * Returns true if successful, false otherwise
    */
   const handleDemolish = useCallback((
     player: Player,
     targetType?: string,
     targetPlayerId?: number
-  ) => {
+  ): boolean => {
     if (!targetType) {
       addEvent('No target type selected for demolish', 'error')
-      return
+      return false
+    }
+
+    // WHY: Validate player has been placed on map
+    if (!player.position) {
+      addEvent(`${player.name} cannot demolish - not placed on map`, 'error')
+      return false
     }
 
     const validation = validateDemolish(currentPlayerIndex, players, hexes, currentRound)
     if (!validation.valid) {
       addEvent(`Cannot demolish: ${validation.reason}`, 'error')
-      return
+      return false
     }
 
     const validTarget = validation.targets?.find(t => {
@@ -548,7 +578,7 @@ export function useActionPhase(props: UseActionPhaseProps) {
 
     if (!validTarget) {
       addEvent('Cannot demolish: target not available or prerequisite not met', 'error')
-      return
+      return false
     }
 
     const DEMOLISH_COST = 3
@@ -563,22 +593,23 @@ export function useActionPhase(props: UseActionPhaseProps) {
         history: addHistoryEntry(player, currentRound, currentPhase, -DEMOLISH_COST, 0, 'Demolished Beast Lair')
       })
       addEvent(`${player.name} destroyed the Beast Lair at ${playerHexId}!`, 'action')
+      return true
     } else if (targetType === 'CAMP') {
       if (!targetPlayerId) {
         addEvent('No target player selected for camp demolish', 'error')
-        return
+        return false
       }
 
       const targetIdx = players.findIndex(p => p.id === targetPlayerId)
       if (targetIdx === -1) {
         addEvent('Target player not found', 'error')
-        return
+        return false
       }
 
       const target = players[targetIdx]
       if (!target) {
         addEvent('Target player not found', 'error')
-        return
+        return false
       }
 
       // WHY: Remove camp from target player
@@ -596,7 +627,10 @@ export function useActionPhase(props: UseActionPhaseProps) {
       })
 
       addEvent(`${player.name} demolished ${target.name}'s camp at ${playerHexId}!`, 'action')
+      return true
     }
+
+    return false
   }, [players, hexes, currentPlayerIndex, currentRound, currentPhase, addEvent, updatePlayer])
 
   /**
@@ -607,22 +641,24 @@ export function useActionPhase(props: UseActionPhaseProps) {
     const player = players[currentPlayerIndex]
     if (!player) return
 
+    let actionSuccessful = false
+
     switch (action) {
       case 'RESUPPLY':
-        handleResupply(player)
+        actionSuccessful = handleResupply(player)
         break
 
       case 'SCOUT':
-        handleScout(player, params.targetHex, params.distance)
+        actionSuccessful = handleScout(player, params.targetHex, params.distance)
         break
 
       case 'SEARCH':
-        handleSearch(player)
+        actionSuccessful = handleSearch(player)
         break
 
       case 'ENCAMP':
         if (!params.options) return
-        handleEncamp(player, params.options.cost ?? 3, params.options.campToRemove ?? null)
+        actionSuccessful = handleEncamp(player, params.options.cost ?? 3, params.options.campToRemove ?? null)
         break
 
       case 'DEMOLISH':
@@ -630,13 +666,57 @@ export function useActionPhase(props: UseActionPhaseProps) {
           addEvent('No demolish options provided', 'error')
           return
         }
-        handleDemolish(player, params.options.targetType, params.options.targetPlayerId)
+        actionSuccessful = handleDemolish(player, params.options.targetType, params.options.targetPlayerId)
+        break
+
+      case 'SKIP_ACTION':
+        addEvent(`${player.name} skipped action`, 'action')
+        actionSuccessful = true
         break
 
       default:
         addEvent(`Unknown action: ${action}`, 'error')
     }
-  }, [players, currentPlayerIndex, handleResupply, handleScout, handleSearch, handleEncamp, handleDemolish, addEvent])
+
+    // WHY: Advance to next player's turn after successful action
+    if (actionSuccessful && !isSolo) {
+      advanceActionTurn()
+    }
+  }, [players, currentPlayerIndex, handleResupply, handleScout, handleSearch, handleEncamp, handleDemolish, addEvent, advanceActionTurn, isSolo])
+
+  /**
+   * WHY: Calculate encamp cost for UI preview (Issue #59)
+   * Exposed so ActionPhase can show cost before execution
+   */
+  const calculateEncampCost = useCallback((playerIndex: number): number => {
+    const player = players[playerIndex]
+    if (!player || !player.position) return 999
+
+    let minDist = 999
+    const playerPos = player.position
+
+    // WHY: Check distance to all bases
+    player.bases.forEach(base => {
+      const dist = hexDistance(playerPos.row, playerPos.col, base.row, base.col)
+      if (dist < minDist) minDist = dist
+    })
+
+    // WHY: Check distance to all camps (closer than bases?)
+    player.camps.forEach(camp => {
+      const dist = hexDistance(playerPos.row, playerPos.col, camp.row, camp.col)
+      if (dist < minDist) minDist = dist
+    })
+
+    return minDist
+  }, [players])
+
+  /**
+   * WHY: Validate demolish for UI feedback (Issue #47, #59)
+   * Exposed so ActionPhase can show prerequisites before execution
+   */
+  const validateDemolishForPlayer = useCallback((playerIndex: number) => {
+    return validateDemolish(playerIndex, players, hexes, currentRound)
+  }, [players, hexes, currentRound])
 
   return {
     // State
@@ -647,5 +727,9 @@ export function useActionPhase(props: UseActionPhaseProps) {
     calculateActionOrder,
     performAction,
     advanceActionTurn,
+
+    // Action Phase - Calculations (for UI feedback)
+    calculateEncampCost,
+    validateDemolish: validateDemolishForPlayer,
   }
 }

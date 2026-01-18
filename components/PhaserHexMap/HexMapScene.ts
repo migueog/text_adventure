@@ -1,5 +1,5 @@
 import * as Phaser from 'phaser'
-import type { Hex, Player, MapConfig, HexPosition } from '@/types/campaign'
+import type { Hex, Player, MapConfig, HexPosition, HexSelection } from '@/types/campaign'
 import { hexId } from '@/lib/utils/hexUtils'
 import { SURFACE_LOCATIONS, TOMB_LOCATIONS, SURFACE_CONDITIONS, TOMB_CONDITIONS } from '@/lib/data/campaignData'
 
@@ -19,6 +19,9 @@ const COLORS = {
   baseBorder: 0x2ecc71,
   campBorder: 0x3498db,
   regroupPath: 0x2ecc71, // WHY: Green color for REGROUP path (Issue #38)
+  sourceHex: 0x3498db, // WHY: BLUE border for source hex (player position)
+  targetHex: 0xf1c40f, // WHY: YELLOW border for target hex
+  validTarget: 0x2ecc71, // WHY: GREEN overlay for valid action targets
   text: 0xffffff,
   textMuted: 0x808080,
 }
@@ -29,6 +32,7 @@ interface SceneData {
   currentPlayerIndex?: number
   mapConfig?: MapConfig
   selectedHex?: string | null
+  hexSelection?: HexSelection | null // WHY: Dual-selection state for hex-based controls
   onHexClick?: (hexId: string) => void
   regroupPath?: HexPosition[] | null // WHY: Path for REGROUP visualization (Issue #38)
 }
@@ -42,6 +46,7 @@ export default class HexMapScene extends Phaser.Scene {
   hexGraphics: Record<string, HexGraphicsObject>
   playerTokens: Record<number, Phaser.GameObjects.Graphics>
   selectedHex: string | null
+  hexSelection: HexSelection | null // WHY: Dual-selection state for visual feedback
   hoveredHex: string | null // WHY: Track currently hovered hex for visual feedback
   hoverHighlight: Phaser.GameObjects.Graphics | null // WHY: Separate graphics for hover overlay
   onHexClick: ((hexId: string) => void) | null
@@ -58,6 +63,7 @@ export default class HexMapScene extends Phaser.Scene {
     this.hexGraphics = {}
     this.playerTokens = {}
     this.selectedHex = null
+    this.hexSelection = null
     this.hoveredHex = null
     this.hoverHighlight = null
     this.onHexClick = null
@@ -235,11 +241,18 @@ export default class HexMapScene extends Phaser.Scene {
 
     const points = this.getHexPoints(x, y)
 
-    // WHY: Draw colored border overlay for selected hex, bases, and camps
+    // WHY: Draw colored border overlay for source/target, selected hex, bases, and camps
     let borderColor: number | null = null
     let borderWidth = 0
 
-    if (this.selectedHex === currentHexId) {
+    // WHY: Prioritize hex selection borders (source and target)
+    if (this.hexSelection?.sourceHex === currentHexId) {
+      borderColor = COLORS.sourceHex
+      borderWidth = 5
+    } else if (this.hexSelection?.targetHex === currentHexId) {
+      borderColor = COLORS.targetHex
+      borderWidth = 5
+    } else if (this.selectedHex === currentHexId) {
       borderColor = COLORS.selected
       borderWidth = 4
     } else if (hasBase) {
@@ -380,13 +393,17 @@ export default class HexMapScene extends Phaser.Scene {
     graphics.fillCircle(tokenX, tokenY, 10)
     graphics.lineStyle(2, 0xffffff, 1)
     graphics.strokeCircle(tokenX, tokenY, 10)
+    // WHY: Set depth above all hexes, zones, and paths to ensure visibility
+    graphics.setDepth(20)
 
     // Add player number
     this.add.text(tokenX, tokenY, `${player.id + 1}`, {
       fontSize: '10px',
       color: '#ffffff',
       fontStyle: 'bold',
-    }).setOrigin(0.5)
+    })
+      .setOrigin(0.5)
+      .setDepth(21) // WHY: Text above token circle for readability
 
     // Highlight current player
     if (playerIndex === this.currentPlayerIndex) {
@@ -521,6 +538,11 @@ export default class HexMapScene extends Phaser.Scene {
     this.players = data.players || this.players
     this.currentPlayerIndex = data.currentPlayerIndex ?? this.currentPlayerIndex
     this.selectedHex = data.selectedHex ?? this.selectedHex
+
+    // WHY: Update hex selection state for dual-selection visual feedback
+    if (data.hexSelection !== undefined) {
+      this.hexSelection = data.hexSelection
+    }
 
     // WHY: Update regroup path if provided (Issue #38)
     if (data.regroupPath !== undefined) {

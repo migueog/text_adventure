@@ -1,6 +1,6 @@
-import { drizzle } from 'drizzle-orm/node-postgres'
-import { migrate } from 'drizzle-orm/node-postgres/migrator'
-import { Pool } from 'pg'
+import { drizzle } from 'drizzle-orm/neon-serverless'
+import { migrate } from 'drizzle-orm/neon-serverless/migrator'
+import { Pool } from '@neondatabase/serverless'
 import { config } from 'dotenv'
 
 // Load environment variables from .env file
@@ -8,25 +8,27 @@ config()
 
 /**
  * Database Migration Runner
- * 
+ *
+ * WHY: Uses Neon serverless driver for optimal Vercel compatibility
+ *
  * This script applies pending migrations to the database.
  * It reads SQL files from the migrations directory and executes them in order.
- * 
+ *
  * Usage:
  * ```bash
  * # Run migrations against DATABASE_URL
- * npm run db:migrate
- * 
+ * bun run db:migrate
+ *
  * # Run migrations against a specific database
- * MIGRATION_DATABASE_URL=postgresql://... npm run db:migrate
+ * MIGRATION_DATABASE_URL=postgresql://... bun run db:migrate
  * ```
- * 
+ *
  * Migration workflow:
  * 1. Make schema changes in lib/db/schema.ts
- * 2. Generate migration: npm run db:generate
+ * 2. Generate migration: bun run db:generate
  * 3. Review the generated SQL in lib/db/migrations/
- * 4. Apply migration: npm run db:migrate
- * 
+ * 4. Apply migration: bun run db:migrate
+ *
  * @see DATABASE_SETUP.md for detailed migration guide
  */
 
@@ -36,40 +38,36 @@ config()
  */
 async function runMigrations() {
   console.log('🔄 Starting database migration...')
-  
+
   // Use MIGRATION_DATABASE_URL if set, otherwise fall back to DATABASE_URL
   const connectionString = process.env.MIGRATION_DATABASE_URL || process.env.DATABASE_URL
-  
+
   if (!connectionString) {
     console.error('❌ Error: DATABASE_URL environment variable is not set')
     console.error('   Please set DATABASE_URL in your .env file or environment')
     console.error('   Example: DATABASE_URL=postgresql://user:pass@host:5432/dbname')
     process.exit(1)
   }
-  
+
   console.log('📡 Connecting to database...')
   console.log(`   Host: ${maskConnectionString(connectionString)}`)
-  
+
   // Create a connection pool for migrations
   const pool = new Pool({
-    connectionString,
-    // Use higher timeout for migrations as they may take longer
-    connectionTimeoutMillis: 10000,
-    // Single connection for migrations to avoid race conditions
-    max: 1
+    connectionString
   })
-  
+
   const db = drizzle(pool)
-  
+
   try {
     console.log('📦 Applying migrations from ./lib/db/migrations...')
-    
+
     // Run migrations
     await migrate(db, { migrationsFolder: './lib/db/migrations' })
-    
+
     console.log('✅ Migrations completed successfully!')
     console.log('   Your database schema is now up to date.')
-    
+
   } catch (error) {
     console.error('❌ Migration failed:', error)
     console.error('\nTroubleshooting:')

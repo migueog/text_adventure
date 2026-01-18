@@ -737,4 +737,496 @@ describe('useActionPhase', () => {
       )
     })
   })
+
+  describe('turn advancement after actions', () => {
+    it('should advance turn after successful RESUPPLY action', () => {
+      const players = [
+        createMockPlayer(0, 5, 0, { row: 0, col: 0 }),
+        createMockPlayer(1, 5, 0, { row: 0, col: 1 }),
+      ]
+      const hexes = createMockHexes()
+
+      const { result } = renderHook(() => useActionPhase({
+        players,
+        hexes,
+        currentPlayerIndex: 0,
+        currentRound: 1,
+        currentPhase: 'Action',
+        isSolo: false,
+        addEvent: mockAddEvent,
+        updatePlayer: mockUpdatePlayer,
+        exploreHex: mockExploreHex,
+      }))
+
+      act(() => {
+        result.current.calculateActionOrder()
+      })
+
+      const initialIndex = result.current.actionIndex
+
+      act(() => {
+        result.current.performAction('RESUPPLY')
+      })
+
+      // WHY: Turn should advance after successful action
+      expect(result.current.actionIndex).toBe(initialIndex + 1)
+    })
+
+    it('should advance turn after successful SCOUT action', () => {
+      const players = [
+        createMockPlayer(0, 5, 0, { row: 0, col: 0 }),
+        createMockPlayer(1, 5, 0, { row: 0, col: 1 }),
+      ]
+      const hexes = createMockHexes()
+
+      const { result } = renderHook(() => useActionPhase({
+        players,
+        hexes,
+        currentPlayerIndex: 0,
+        currentRound: 1,
+        currentPhase: 'Action',
+        isSolo: false,
+        addEvent: mockAddEvent,
+        updatePlayer: mockUpdatePlayer,
+        exploreHex: mockExploreHex,
+      }))
+
+      act(() => {
+        result.current.calculateActionOrder()
+      })
+
+      const initialIndex = result.current.actionIndex
+
+      act(() => {
+        result.current.performAction('SCOUT', { targetHex: '2,0', distance: 2 })
+      })
+
+      // WHY: Turn should advance after successful scout
+      expect(result.current.actionIndex).toBe(initialIndex + 1)
+    })
+
+    it('should advance turn after successful SEARCH action', () => {
+      const players = [
+        createMockPlayer(0, 5, 0, { row: 1, col: 0 }),
+        createMockPlayer(1, 5, 0, { row: 0, col: 1 }),
+      ]
+      const hexes = createMockHexes()
+
+      const { result } = renderHook(() => useActionPhase({
+        players,
+        hexes,
+        currentPlayerIndex: 0,
+        currentRound: 1,
+        currentPhase: 'Action',
+        isSolo: false,
+        addEvent: mockAddEvent,
+        updatePlayer: mockUpdatePlayer,
+        exploreHex: mockExploreHex,
+      }))
+
+      act(() => {
+        result.current.calculateActionOrder()
+      })
+
+      const initialIndex = result.current.actionIndex
+
+      act(() => {
+        result.current.performAction('SEARCH')
+      })
+
+      // WHY: Turn should advance after successful search
+      expect(result.current.actionIndex).toBe(initialIndex + 1)
+    })
+
+    it('should advance turn after successful ENCAMP action', () => {
+      const players = [
+        createMockPlayer(0, 5, 0, { row: 1, col: 0 }),
+        createMockPlayer(1, 5, 0, { row: 0, col: 1 }),
+      ]
+      const hexes = createMockHexes()
+
+      const { result } = renderHook(() => useActionPhase({
+        players,
+        hexes,
+        currentPlayerIndex: 0,
+        currentRound: 1,
+        currentPhase: 'Action',
+        isSolo: false,
+        addEvent: mockAddEvent,
+        updatePlayer: mockUpdatePlayer,
+        exploreHex: mockExploreHex,
+      }))
+
+      act(() => {
+        result.current.calculateActionOrder()
+      })
+
+      const initialIndex = result.current.actionIndex
+
+      act(() => {
+        result.current.performAction('ENCAMP', {
+          options: { cost: 3, campToRemove: null }
+        })
+      })
+
+      // WHY: Turn should advance after successful encamp
+      expect(result.current.actionIndex).toBe(initialIndex + 1)
+    })
+
+    it('should advance turn after SKIP_ACTION', () => {
+      const players = [
+        createMockPlayer(0, 5, 0, { row: 0, col: 0 }),
+        createMockPlayer(1, 5, 0, { row: 0, col: 1 }),
+      ]
+      const hexes = createMockHexes()
+
+      const { result } = renderHook(() => useActionPhase({
+        players,
+        hexes,
+        currentPlayerIndex: 0,
+        currentRound: 1,
+        currentPhase: 'Action',
+        isSolo: false,
+        addEvent: mockAddEvent,
+        updatePlayer: mockUpdatePlayer,
+        exploreHex: mockExploreHex,
+      }))
+
+      act(() => {
+        result.current.calculateActionOrder()
+      })
+
+      const initialIndex = result.current.actionIndex
+
+      act(() => {
+        result.current.performAction('SKIP_ACTION')
+      })
+
+      // WHY: Turn should advance after skip action
+      expect(result.current.actionIndex).toBe(initialIndex + 1)
+      expect(mockAddEvent).toHaveBeenCalledWith(
+        expect.stringContaining('skipped action'),
+        'action'
+      )
+    })
+
+    it('should NOT advance turn after failed action', () => {
+      const players = [
+        createMockPlayer(0, 1, 0, { row: 0, col: 0 }),
+        createMockPlayer(1, 5, 0, { row: 0, col: 1 }),
+      ]
+      const hexes = createMockHexes()
+
+      const { result } = renderHook(() => useActionPhase({
+        players,
+        hexes,
+        currentPlayerIndex: 0,
+        currentRound: 1,
+        currentPhase: 'Action',
+        isSolo: false,
+        addEvent: mockAddEvent,
+        updatePlayer: mockUpdatePlayer,
+        exploreHex: mockExploreHex,
+      }))
+
+      act(() => {
+        result.current.calculateActionOrder()
+      })
+
+      const initialIndex = result.current.actionIndex
+
+      act(() => {
+        // WHY: Insufficient SP - should fail
+        result.current.performAction('SCOUT', { targetHex: '2,0', distance: 2 })
+      })
+
+      // WHY: Turn should NOT advance after failed action
+      expect(result.current.actionIndex).toBe(initialIndex)
+    })
+
+    it('should NOT advance turn in solo mode', () => {
+      const players = [createMockPlayer(0, 5, 0, { row: 0, col: 0 })]
+      const hexes = createMockHexes()
+
+      const { result } = renderHook(() => useActionPhase({
+        players,
+        hexes,
+        currentPlayerIndex: 0,
+        currentRound: 1,
+        currentPhase: 'Action',
+        isSolo: true,
+        addEvent: mockAddEvent,
+        updatePlayer: mockUpdatePlayer,
+        exploreHex: mockExploreHex,
+      }))
+
+      act(() => {
+        result.current.calculateActionOrder()
+      })
+
+      // WHY: Solo mode should stay at index 0
+      expect(result.current.actionIndex).toBe(0)
+
+      act(() => {
+        result.current.performAction('RESUPPLY')
+      })
+
+      // WHY: Turn should NOT advance in solo mode
+      expect(result.current.actionIndex).toBe(0)
+    })
+
+    it('should wrap to index 0 after last player in action order', () => {
+      const players = [
+        createMockPlayer(0, 5, 0, { row: 0, col: 0 }),
+        createMockPlayer(1, 5, 0, { row: 0, col: 1 }),
+      ]
+      const hexes = createMockHexes()
+
+      const { result } = renderHook(() => useActionPhase({
+        players,
+        hexes,
+        currentPlayerIndex: 0,
+        currentRound: 1,
+        currentPhase: 'Action',
+        isSolo: false,
+        addEvent: mockAddEvent,
+        updatePlayer: mockUpdatePlayer,
+        exploreHex: mockExploreHex,
+      }))
+
+      act(() => {
+        result.current.calculateActionOrder()
+      })
+
+      // WHY: Advance to last player
+      act(() => {
+        result.current.performAction('RESUPPLY')
+      })
+
+      expect(result.current.actionIndex).toBe(1)
+
+      // WHY: Advance past last player should wrap to 0
+      act(() => {
+        result.current.performAction('RESUPPLY')
+      })
+
+      expect(result.current.actionIndex).toBe(0)
+    })
+
+    it('should handle null actionOrder gracefully', () => {
+      const players = [
+        createMockPlayer(0, 5, 0, { row: 0, col: 0 }),
+        createMockPlayer(1, 5, 0, { row: 0, col: 1 }),
+      ]
+      const hexes = createMockHexes()
+
+      const { result } = renderHook(() => useActionPhase({
+        players,
+        hexes,
+        currentPlayerIndex: 0,
+        currentRound: 1,
+        currentPhase: 'Action',
+        isSolo: false,
+        addEvent: mockAddEvent,
+        updatePlayer: mockUpdatePlayer,
+        exploreHex: mockExploreHex,
+      }))
+
+      // WHY: Don't calculate action order - leave it null
+      expect(result.current.actionOrder).toBeNull()
+
+      act(() => {
+        // WHY: This will succeed but won't advance turn
+        result.current.performAction('RESUPPLY')
+      })
+
+      // WHY: With null actionOrder, advanceActionTurn should return 0
+      expect(result.current.actionIndex).toBe(0)
+    })
+  })
+
+  describe('calculateEncampCost', () => {
+    it('should return distance to nearest base', () => {
+      // WHY: Player at (3,3), base at (0,0) = distance 3
+      const players = [createMockPlayer(0, 5, 0, { row: 3, col: 3 })]
+      const hexes = createMockHexes()
+
+      const { result } = renderHook(() => useActionPhase({
+        players,
+        hexes,
+        currentPlayerIndex: 0,
+        currentRound: 1,
+        currentPhase: 'Action',
+        isSolo: false,
+        addEvent: mockAddEvent,
+        updatePlayer: mockUpdatePlayer,
+        exploreHex: mockExploreHex,
+      }))
+
+      expect(result.current.calculateEncampCost(0)).toBe(3)
+    })
+
+    it('should return distance to nearest camp if closer', () => {
+      // WHY: Player at (2,2), camp at (2,1) = distance 1, base at (0,0) = distance 2
+      const players = [createMockPlayer(0, 5, 0, { row: 2, col: 2 })]
+      players[0]!.camps = [{ row: 2, col: 1 }]
+      const hexes = createMockHexes()
+
+      const { result } = renderHook(() => useActionPhase({
+        players,
+        hexes,
+        currentPlayerIndex: 0,
+        currentRound: 1,
+        currentPhase: 'Action',
+        isSolo: false,
+        addEvent: mockAddEvent,
+        updatePlayer: mockUpdatePlayer,
+        exploreHex: mockExploreHex,
+      }))
+
+      expect(result.current.calculateEncampCost(0)).toBe(1)
+    })
+
+    it('should return 999 for invalid player index', () => {
+      const players = [createMockPlayer(0)]
+      const hexes = createMockHexes()
+
+      const { result } = renderHook(() => useActionPhase({
+        players,
+        hexes,
+        currentPlayerIndex: 0,
+        currentRound: 1,
+        currentPhase: 'Action',
+        isSolo: false,
+        addEvent: mockAddEvent,
+        updatePlayer: mockUpdatePlayer,
+        exploreHex: mockExploreHex,
+      }))
+
+      expect(result.current.calculateEncampCost(99)).toBe(999)
+    })
+
+    it('should return 999 if player has no position', () => {
+      const players = [createMockPlayer(0, 5, 0)]
+      players[0]!.position = null
+      const hexes = createMockHexes()
+
+      const { result } = renderHook(() => useActionPhase({
+        players,
+        hexes,
+        currentPlayerIndex: 0,
+        currentRound: 1,
+        currentPhase: 'Action',
+        isSolo: false,
+        addEvent: mockAddEvent,
+        updatePlayer: mockUpdatePlayer,
+        exploreHex: mockExploreHex,
+      }))
+
+      expect(result.current.calculateEncampCost(0)).toBe(999)
+    })
+  })
+
+  describe('validateDemolish', () => {
+    it('should return valid result when targets exist and prerequisites met', () => {
+      // WHY: Setup player at hex with opponent camp + battle prerequisite
+      const players = [
+        createMockPlayer(0, 5, 0, { row: 1, col: 0 }),
+        createMockPlayer(1, 5, 0, { row: 2, col: 0 }),
+      ]
+      // WHY: Add camp at player 0's position
+      players[1]!.camps = [{ row: 1, col: 0 }]
+      // WHY: Add battle prerequisite (won against player 1 this round)
+      players[0]!.battleHistory = [{
+        round: 1,
+        timestamp: new Date().toISOString(),
+        result: 'WIN',
+        opponent: 1,
+        killTeam: 'Team 1',
+        opponentKillTeam: 'Team 2',
+        location: 'Test Location',
+        condition: 'Clear',
+        spEarned: 0,
+        cpEarned: 1,
+        operativesKilled: 0,
+      }]
+      const hexes = createMockHexes()
+
+      const { result } = renderHook(() => useActionPhase({
+        players,
+        hexes,
+        currentPlayerIndex: 0,
+        currentRound: 1,
+        currentPhase: 'Action',
+        isSolo: false,
+        addEvent: mockAddEvent,
+        updatePlayer: mockUpdatePlayer,
+        exploreHex: mockExploreHex,
+      }))
+
+      const validation = result.current.validateDemolish(0)
+      expect(validation.valid).toBe(true)
+      expect(validation.targets).toHaveLength(1)
+    })
+
+    it('should return invalid when no targets at position', () => {
+      const players = [createMockPlayer(0, 5, 0, { row: 1, col: 0 })]
+      const hexes = createMockHexes()
+
+      const { result } = renderHook(() => useActionPhase({
+        players,
+        hexes,
+        currentPlayerIndex: 0,
+        currentRound: 1,
+        currentPhase: 'Action',
+        isSolo: false,
+        addEvent: mockAddEvent,
+        updatePlayer: mockUpdatePlayer,
+        exploreHex: mockExploreHex,
+      }))
+
+      const validation = result.current.validateDemolish(0)
+      expect(validation.valid).toBe(false)
+      expect(validation.reason).toContain('No demolishable targets')
+    })
+
+    it('should return invalid when insufficient SP', () => {
+      // WHY: Player has only 2 SP, needs 3 for demolish
+      const players = [
+        createMockPlayer(0, 2, 0, { row: 1, col: 0 }),
+        createMockPlayer(1, 5, 0, { row: 2, col: 0 }),
+      ]
+      players[1]!.camps = [{ row: 1, col: 0 }]
+      players[0]!.battleHistory = [{
+        round: 1,
+        timestamp: new Date().toISOString(),
+        result: 'WIN',
+        opponent: 1,
+        killTeam: 'Team 1',
+        opponentKillTeam: 'Team 2',
+        location: 'Test Location',
+        condition: 'Clear',
+        spEarned: 0,
+        cpEarned: 1,
+        operativesKilled: 0,
+      }]
+      const hexes = createMockHexes()
+
+      const { result } = renderHook(() => useActionPhase({
+        players,
+        hexes,
+        currentPlayerIndex: 0,
+        currentRound: 1,
+        currentPhase: 'Action',
+        isSolo: false,
+        addEvent: mockAddEvent,
+        updatePlayer: mockUpdatePlayer,
+        exploreHex: mockExploreHex,
+      }))
+
+      const validation = result.current.validateDemolish(0)
+      expect(validation.valid).toBe(false)
+      expect(validation.reason).toContain('Insufficient SP')
+    })
+  })
 })

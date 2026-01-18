@@ -32,6 +32,9 @@ export function detectActiveThreatPhaseRules(
   const activeRules: ActiveThreatPhaseRule[] = []
 
   for (const player of players) {
+    // WHY: Skip players who haven't been placed on the map yet (position is null)
+    if (!player.position) continue
+
     const playerHexId = hexId(player.position.row, player.position.col)
     const hex = hexes[playerHexId]
 

@@ -661,16 +661,37 @@ export const TOMB_CONDITIONS: Record<number, Condition> = {
   }
 }
 
-// Map size tiers based on official rules:
-// 2-3 players: 5x5 (smaller map)
-// 4-5 players: 6x6 (standard map)  
-// 6 players: 7x7 (larger map)
+// Map size tiers - Official rules (2-6 players) + Extended scaling (7-20 players)
+// 2-3 players: 5x5 (25 hexes)
+// 4-5 players: 6x6 (36 hexes)
+// 6 players: 7x7 (49 hexes)
+// 7-8 players: 8x8 (64 hexes)
+// 9-10 players: 9x9 (81 hexes)
+// 11-12 players: 10x10 (100 hexes)
+// 13-14 players: 11x11 (121 hexes)
+// 15-16 players: 12x12 (144 hexes)
+// 17-18 players: 13x13 (169 hexes)
+// 19-20 players: 14x14 (196 hexes)
 export const MAP_CONFIGS: Record<number, MapConfig> = {
   2: { name: 'Small (2 Players)', rows: 5, cols: 5, surfaceRows: 2, tombRows: 3 },
   3: { name: 'Small (3 Players)', rows: 5, cols: 5, surfaceRows: 2, tombRows: 3 },
   4: { name: 'Standard (4 Players)', rows: 6, cols: 6, surfaceRows: 3, tombRows: 3 },
   5: { name: 'Standard (5 Players)', rows: 6, cols: 6, surfaceRows: 3, tombRows: 3 },
-  6: { name: 'Large (6 Players)', rows: 7, cols: 7, surfaceRows: 3, tombRows: 4 }
+  6: { name: 'Large (6 Players)', rows: 7, cols: 7, surfaceRows: 3, tombRows: 4 },
+  7: { name: 'Extended (7 Players)', rows: 8, cols: 8, surfaceRows: 4, tombRows: 4 },
+  8: { name: 'Extended (8 Players)', rows: 8, cols: 8, surfaceRows: 4, tombRows: 4 },
+  9: { name: 'Massive (9 Players)', rows: 9, cols: 9, surfaceRows: 4, tombRows: 5 },
+  10: { name: 'Massive (10 Players)', rows: 9, cols: 9, surfaceRows: 4, tombRows: 5 },
+  11: { name: 'Epic (11 Players)', rows: 10, cols: 10, surfaceRows: 5, tombRows: 5 },
+  12: { name: 'Epic (12 Players)', rows: 10, cols: 10, surfaceRows: 5, tombRows: 5 },
+  13: { name: 'Colossal (13 Players)', rows: 11, cols: 11, surfaceRows: 5, tombRows: 6 },
+  14: { name: 'Colossal (14 Players)', rows: 11, cols: 11, surfaceRows: 5, tombRows: 6 },
+  15: { name: 'Titanic (15 Players)', rows: 12, cols: 12, surfaceRows: 6, tombRows: 6 },
+  16: { name: 'Titanic (16 Players)', rows: 12, cols: 12, surfaceRows: 6, tombRows: 6 },
+  17: { name: 'Legendary (17 Players)', rows: 13, cols: 13, surfaceRows: 6, tombRows: 7 },
+  18: { name: 'Legendary (18 Players)', rows: 13, cols: 13, surfaceRows: 6, tombRows: 7 },
+  19: { name: 'Ultimate (19 Players)', rows: 14, cols: 14, surfaceRows: 7, tombRows: 7 },
+  20: { name: 'Ultimate (20 Players)', rows: 14, cols: 14, surfaceRows: 7, tombRows: 7 }
 }
 
 export const PLAYER_COLORS: string[] = [
@@ -680,6 +701,20 @@ export const PLAYER_COLORS: string[] = [
   '#f39c12', // Orange
   '#9b59b6', // Purple
   '#1abc9c', // Teal
+  '#f1c40f', // Yellow
+  '#e91e63', // Pink
+  '#00bcd4', // Cyan
+  '#8bc34a', // Lime
+  '#ff5722', // Deep Orange
+  '#795548', // Brown
+  '#34495e', // Navy
+  '#d4af37', // Gold
+  '#c0c0c0', // Silver
+  '#dc143c', // Crimson
+  '#4b0082', // Indigo
+  '#ff7f50', // Coral
+  '#98ff98', // Mint
+  '#e6e6fa', // Lavender
 ]
 
 export interface ActionInfo {

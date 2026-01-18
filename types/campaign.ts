@@ -402,6 +402,7 @@ export interface CampaignState {
   threatLevel: number
   targetThreatLevel: number
   selectedHex: string | null
+  hexSelection: HexSelection        // WHY: Dual-selection state for hex-based controls
   players: Player[]
   hexes: Record<string, Hex>
   mapConfig: MapConfig | null
@@ -546,4 +547,27 @@ export interface ExplorationResult {
   locationRoll: number
   conditionRoll: number
   playerName: string
+}
+
+/**
+ * WHY: Hex-based action menu system (hex-based player controls)
+ * Tracks source/target selection for contextual action menus on canvas
+ */
+export interface HexSelection {
+  sourceHex: string | null          // WHY: Player's current hex (where they are positioned)
+  targetHex: string | null          // WHY: Target hex for action (where they want to act)
+  selectedPlayerId: number | null   // WHY: Which player is acting (for multi-player hexes)
+  menuPosition: { x: number; y: number } | null  // WHY: Canvas coordinates for contextual menu
+}
+
+/**
+ * WHY: Available action for contextual menu display
+ * Combines validation logic with UI presentation
+ */
+export interface ActionOption {
+  type: 'move' | 'scout' | 'search' | 'encamp' | 'hold' | 'resupply' | 'regroup'
+  label: string         // WHY: Display text (e.g., "Move here (2 SP)")
+  cost: number          // WHY: SP cost for action
+  valid: boolean        // WHY: Can this action be executed?
+  reason?: string       // WHY: Error message if invalid (shown in disabled state)
 }

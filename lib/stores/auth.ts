@@ -8,9 +8,11 @@ import type { AuthState } from '@/types/auth'
  */
 export const useAuthStore = create<AuthState>((set) => ({
   // Initial state
+  // WHY: Start with isLoading: true to prevent flash of unauthenticated content
+  // The checkAuth() call in AuthProvider will set this to false after checking
   user: null,
   isAuthenticated: false,
-  isLoading: false,
+  isLoading: true,
   error: null,
 
   // Actions

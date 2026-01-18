@@ -1,15 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireCampaignAccess } from '@/lib/permissions/middleware'
-import { db } from '@/lib/db/client'
-import { campaigns } from '@/lib/db/schema'
-import { validateGameState } from '@/lib/game-state/validation'
-import { eq } from 'drizzle-orm'
 
 /**
  * GET /api/campaigns/[id]/state
- * Load campaign game state
+ * Get campaign game state for loading into the game UI
  *
- * WHY: Allows players and owner to retrieve current game state
+ * WHY: Separates game state loading from campaign metadata
+ * Allows the frontend to hydrate Zustand store with saved game state
+ *
+ * Returns:
+ * - gameState: Full game state (players, hexes, threat level, phase, etc.)
  */
 export async function GET(
   request: NextRequest,
@@ -18,21 +18,26 @@ export async function GET(
   const { id } = await params
   const campaignId = parseInt(id)
 
-  // WHY: Both owners and players can view game state
+  // WHY: Check user has access (owner or player)
   const access = await requireCampaignAccess(request, campaignId)
   if (access instanceof NextResponse) return access
 
+  // WHY: Return game state for frontend to load
   return NextResponse.json({
-    gameState: access.campaign.gameState
+    gameState: access.campaign.gameState,
+    campaignName: access.campaign.name
   })
 }
 
 /**
  * PATCH /api/campaigns/[id]/state
- * Save campaign game state
+ * Update campaign game state (auto-save functionality)
  *
- * WHY: Allows players to update game state during their turn
- * Both owners and players can update (for making moves)
+ * WHY: Allows game to periodically save state without full campaign update
+ * Used by Zustand store's saveCampaign action
+ *
+ * Request body:
+ * - gameState: Updated game state object
  */
 export async function PATCH(
   request: NextRequest,
@@ -41,13 +46,12 @@ export async function PATCH(
   const { id } = await params
   const campaignId = parseInt(id)
 
-  // WHY: Both owners and players can update state (for game actions)
+  // WHY: Check user has access (owner or player)
   const access = await requireCampaignAccess(request, campaignId)
   if (access instanceof NextResponse) return access
 
   try {
-    const body = await request.json()
-    const { gameState } = body
+    const { gameState } = await request.json()
 
     if (!gameState) {
       return NextResponse.json(
@@ -56,19 +60,11 @@ export async function PATCH(
       )
     }
 
-    // WHY: Validate state structure
-    const validation = validateGameState(gameState)
-    if (!validation.valid) {
-      return NextResponse.json(
-        {
-          error: 'Invalid game state',
-          details: validation.errors
-        },
-        { status: 400 }
-      )
-    }
+    // WHY: Update campaign's gameState and timestamp
+    const { db } = await import('@/lib/db/client')
+    const { campaigns } = await import('@/lib/db/schema')
+    const { eq } = await import('drizzle-orm')
 
-    // WHY: Update campaign game state in database
     const [updated] = await db
       .update(campaigns)
       .set({
@@ -78,12 +74,9 @@ export async function PATCH(
       .where(eq(campaigns.id, campaignId))
       .returning()
 
-    if (!updated) {
-      throw new Error('Failed to update campaign state')
-    }
-
     return NextResponse.json({
-      gameState: updated.gameState
+      success: true,
+      updatedAt: updated.updatedAt
     })
   } catch (error: any) {
     console.error('State update error:', error)
