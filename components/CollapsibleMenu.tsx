@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, type ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 
 interface CollapsibleMenuProps {
   children: ReactNode
@@ -18,12 +18,22 @@ export default function CollapsibleMenu({
   children,
   defaultOpen = true
 }: CollapsibleMenuProps) {
-  const [isOpen, setIsOpen] = useState(defaultOpen)
-
-  // WHY: Restore state from localStorage on mount
-  useEffect(() => {
-    restoreStateFromStorage(setIsOpen, defaultOpen)
-  }, [defaultOpen])
+  const [isOpen, setIsOpen] = useState(() => {
+    // WHY: Read localStorage synchronously before first render to prevent flicker
+    // SSR safe: returns defaultOpen when window is undefined (Next.js SSR)
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = localStorage.getItem(STORAGE_KEY)
+        if (stored !== null) {
+          return stored === 'true'
+        }
+      } catch (error) {
+        // WHY: localStorage not available or disabled, use defaultOpen
+        console.warn('Failed to read menu state from localStorage:', error)
+      }
+    }
+    return defaultOpen
+  })
 
   // WHY: Persist state to localStorage when changed
   const handleToggle = () => {
@@ -55,25 +65,6 @@ export default function CollapsibleMenu({
       </div>
     </div>
   )
-}
-
-/**
- * WHY: Extract localStorage restore logic to keep main component under 20 lines
- * Handles missing localStorage gracefully (SSR compatibility)
- */
-function restoreStateFromStorage(
-  setIsOpen: (value: boolean) => void,
-  defaultOpen: boolean
-): void {
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY)
-    if (stored !== null) {
-      setIsOpen(stored === 'true')
-    }
-  } catch (error) {
-    // WHY: localStorage not available (SSR or disabled), use default
-    setIsOpen(defaultOpen)
-  }
 }
 
 /**

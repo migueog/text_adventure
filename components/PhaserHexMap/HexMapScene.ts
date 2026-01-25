@@ -2,10 +2,15 @@ import * as Phaser from 'phaser'
 import type { Hex, Player, MapConfig, HexPosition, HexSelection } from '@/types/campaign'
 import { hexId } from '@/lib/utils/hexUtils'
 import { SURFACE_LOCATIONS, TOMB_LOCATIONS, SURFACE_CONDITIONS, TOMB_CONDITIONS } from '@/lib/data/campaignData'
-
-const HEX_SIZE = 40
-const HEX_HEIGHT = Math.sqrt(3) * HEX_SIZE
-const HEX_WIDTH = HEX_SIZE * 2
+import {
+  getHexPosition,
+  getCameraCenterPosition,
+  getCameraBounds,
+  HEX_SIZE,
+  HEX_HEIGHT,
+  HEX_WIDTH,
+} from '@/lib/utils/hexPositioning'
+import { hasHexChanged } from '@/lib/utils/hexChangeDetection'
 
 // Colors
 const COLORS = {
@@ -37,9 +42,12 @@ interface SceneData {
   regroupPath?: HexPosition[] | null // WHY: Path for REGROUP visualization (Issue #38)
 }
 
+// WHY: Track all objects for a hex to enable selective destruction and redraw
 interface HexGraphicsObject {
+  sprite: Phaser.GameObjects.Image
   graphics: Phaser.GameObjects.Graphics
   zone: Phaser.GameObjects.Zone
+  texts: Phaser.GameObjects.Text[]
 }
 
 export default class HexMapScene extends Phaser.Scene {
@@ -143,15 +151,26 @@ export default class HexMapScene extends Phaser.Scene {
     this.setupCamera()
     this.drawHexMap()
     this.drawPlayerTokens()
+
+    // WHY: Force camera to initialize internal state (midPoint, worldView) before centering
+    // Without preRender(), centerOn() won't work correctly because camera state isn't ready yet
+    this.cameras.main.preRender()
+
+    // WHY: Now centerOn() will work correctly because camera is fully initialized
     this.centerCamera()
   }
 
   // WHY: Configure camera bounds and zoom for hex map interaction
   setupCamera() {
-    this.cameras.main.setBounds(0, 0,
-      this.mapConfig.cols * HEX_WIDTH * 0.75 + HEX_SIZE * 2,
-      this.mapConfig.rows * HEX_HEIGHT + HEX_HEIGHT
-    )
+    const bounds = getCameraBounds(this.mapConfig.rows, this.mapConfig.cols)
+    this.cameras.main.setBounds(bounds.x, bounds.y, bounds.width, bounds.height)
+
+    // WHY: Log bounds to verify they're large enough for centering
+    console.log('[HexMapScene] Camera bounds:', bounds)
+    console.log('[HexMapScene] Camera viewport:', {
+      width: this.cameras.main.width,
+      height: this.cameras.main.height
+    })
 
     this.input.on('wheel', (_pointer: Phaser.Input.Pointer, _gameObjects: Phaser.GameObjects.GameObject[], _deltaX: number, deltaY: number) => {
       const zoom = this.cameras.main.zoom
@@ -160,18 +179,17 @@ export default class HexMapScene extends Phaser.Scene {
     })
   }
 
-  // WHY: Center camera on middle of hex map
+  // WHY: centerOn() works correctly after preRender() initializes camera state
+  // preRender() forces camera to calculate midPoint and worldView synchronously
   centerCamera() {
-    const centerX = (this.mapConfig.cols * HEX_WIDTH * 0.75) / 2
-    const centerY = (this.mapConfig.rows * HEX_HEIGHT) / 2
-    this.cameras.main.centerOn(centerX, centerY)
+    const centerPos = getCameraCenterPosition(this.mapConfig.rows, this.mapConfig.cols)
+    this.cameras.main.centerOn(centerPos.x, centerPos.y)
+    console.log('[HexMapScene] Camera centered on:', centerPos)
   }
 
+  // WHY: Delegate to utility function for consistent positioning logic
   getHexPosition(row: number, col: number): { x: number; y: number } {
-    // WHY: Account for device pixel ratio scaling - visual positions match internal coordinates
-    const x = col * HEX_WIDTH * 0.75 + HEX_SIZE + 20
-    const y = row * HEX_HEIGHT + (col % 2 === 1 ? HEX_HEIGHT / 2 : 0) + HEX_SIZE + 20
-    return { x, y }
+    return getHexPosition(row, col)
   }
 
   getHexPoints(centerX: number, centerY: number): Array<{ x: number; y: number }> {
@@ -299,43 +317,51 @@ export default class HexMapScene extends Phaser.Scene {
         this.onHexClicked(currentHexId)
       })
 
+    // WHY: Collect all text objects for selective cleanup
+    const texts: Phaser.GameObjects.Text[] = []
+
     // Add coordinate text
-    this.add.text(x, y - HEX_SIZE * 0.55, currentHexId, {
+    const coordText = this.add.text(x, y - HEX_SIZE * 0.55, currentHexId, {
       fontSize: '10px',
       color: '#ffffff80',
     }).setOrigin(0.5)
+    texts.push(coordText)
 
     // Add location name if explored
     if (explored && location) {
       const name = location.name.length > 10 ? location.name.slice(0, 10) + '..' : location.name
-      this.add.text(x, y - 5, name, {
+      const locationText = this.add.text(x, y - 5, name, {
         fontSize: '9px',
         color: '#ffffff',
         fontStyle: 'bold',
       }).setOrigin(0.5)
+      texts.push(locationText)
     }
 
     // Add condition if present and has effect
     if (explored && condition && condition.effect !== 'none') {
-      this.add.text(x, y + 10, condition.name, {
+      const conditionText = this.add.text(x, y + 10, condition.name, {
         fontSize: '8px',
         color: '#ffd700',
       }).setOrigin(0.5)
+      texts.push(conditionText)
     }
 
     // Add type label
     const typeLabel = type === 'surface' ? 'Surface' : 'Tomb'
-    this.add.text(x, y + HEX_SIZE * 0.5, typeLabel, {
+    const typeText = this.add.text(x, y + HEX_SIZE * 0.5, typeLabel, {
       fontSize: '8px',
       color: '#ffffff60',
     }).setOrigin(0.5)
+    texts.push(typeText)
 
     // Add base/camp icon
     if (hasBase) {
-      this.add.text(x - HEX_SIZE * 0.5, y - 5, '⌂', {
+      const baseIcon = this.add.text(x - HEX_SIZE * 0.5, y - 5, '⌂', {
         fontSize: '14px',
         color: '#2ecc71',
       }).setOrigin(0.5)
+      texts.push(baseIcon)
     } else if (hasCamp) {
       // WHY: Find which player owns this camp to use their color
       const campOwner = this.players.find(p =>
@@ -350,10 +376,11 @@ export default class HexMapScene extends Phaser.Scene {
       })
       campMarker.setOrigin(0.5)
       campMarker.setStroke('#000000', 2)
+      texts.push(campMarker)
     }
 
-    // Store reference
-    this.hexGraphics[currentHexId] = { graphics, zone }
+    // WHY: Store all hex objects for selective cleanup and redraw
+    this.hexGraphics[currentHexId] = { sprite: hexSprite, graphics, zone, texts }
   }
 
   drawPlayerTokens() {
@@ -532,8 +559,84 @@ export default class HexMapScene extends Phaser.Scene {
     this.drawRegroupPath()
   }
 
-  // Called from React to update the scene
+  // WHY: Selective update helper - destroy and redraw single hex
+  private updateHex(hex: Hex): void {
+    const hexId = hex.id
+    const hexObj = this.hexGraphics[hexId]
+
+    // WHY: Destroy only this hex's objects
+    if (hexObj) {
+      hexObj.sprite.destroy()
+      hexObj.graphics.destroy()
+      hexObj.zone.destroy()
+      hexObj.texts.forEach(text => text.destroy())
+      delete this.hexGraphics[hexId]
+    }
+
+    // Redraw single hex
+    this.drawHex(hex)
+  }
+
+  // WHY: Check and update only hexes that changed
+  private updateChangedHexes(oldHexData: Record<string, Hex>): void {
+    Object.values(this.hexData).forEach(hex => {
+      const oldHex = oldHexData[hex.id]
+      if (hasHexChanged(oldHex || null, hex)) {
+        this.updateHex(hex)
+      }
+    })
+  }
+
+  // WHY: Redraw all player tokens (simpler than diffing each player)
+  private updateChangedPlayers(): void {
+    Object.values(this.playerTokens).forEach(graphics => graphics.destroy())
+    this.playerTokens = {}
+    this.drawPlayerTokens()
+  }
+
+  // WHY: Update regroup path only if changed
+  private updateRegroupPathIfChanged(oldPath: HexPosition[] | null): void {
+    const pathChanged = JSON.stringify(oldPath) !== JSON.stringify(this.regroupPath)
+    if (pathChanged) {
+      if (this.regroupPathGraphics) {
+        this.regroupPathGraphics.destroy()
+        this.regroupPathGraphics = null
+      }
+      this.drawRegroupPath()
+    }
+  }
+
+  // WHY: Update only hexes affected by selection state changes
+  private updateSelectionHighlights(
+    oldSelectedHex: string | null,
+    oldHexSelection: HexSelection | null
+  ): void {
+    const affectedHexIds = new Set<string>()
+
+    // WHY: Collect all hexes that might have selection state changes
+    if (oldSelectedHex) affectedHexIds.add(oldSelectedHex)
+    if (this.selectedHex) affectedHexIds.add(this.selectedHex)
+    if (oldHexSelection?.sourceHex) affectedHexIds.add(oldHexSelection.sourceHex)
+    if (oldHexSelection?.targetHex) affectedHexIds.add(oldHexSelection.targetHex)
+    if (this.hexSelection?.sourceHex) affectedHexIds.add(this.hexSelection.sourceHex)
+    if (this.hexSelection?.targetHex) affectedHexIds.add(this.hexSelection.targetHex)
+
+    // WHY: Redraw only affected hexes
+    affectedHexIds.forEach(hexId => {
+      const hex = this.hexData[hexId]
+      if (hex) this.updateHex(hex)
+    })
+  }
+
+  // WHY: Called from React - selective update instead of complete redraw
   updateData(data: Partial<SceneData>) {
+    // WHY: Capture old state for change detection
+    const oldHexData = this.hexData
+    const oldSelectedHex = this.selectedHex
+    const oldHexSelection = this.hexSelection
+    const oldRegroupPath = this.regroupPath
+
+    // Update internal state
     this.hexData = data.hexes || this.hexData
     this.players = data.players || this.players
     this.currentPlayerIndex = data.currentPlayerIndex ?? this.currentPlayerIndex
@@ -549,13 +652,10 @@ export default class HexMapScene extends Phaser.Scene {
       this.regroupPath = data.regroupPath
     }
 
-    // Clear and redraw
-    this.children.removeAll()
-    this.hexGraphics = {}
-    this.playerTokens = {}
-
-    this.drawHexMap()
-    this.drawPlayerTokens()
-    this.drawRegroupPath()
+    // WHY: Selective updates - only redraw what changed
+    this.updateChangedHexes(oldHexData)
+    this.updateChangedPlayers()
+    this.updateRegroupPathIfChanged(oldRegroupPath)
+    this.updateSelectionHighlights(oldSelectedHex, oldHexSelection)
   }
 }

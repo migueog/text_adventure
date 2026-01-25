@@ -128,9 +128,22 @@ export default function PhaserHexMap({
 
   if (!mapConfig) return null
 
+  // WHY: Calculate explicit container dimensions to stabilize Phaser's Scale Manager
+  // Without explicit dimensions, the parent relies on flexbox/content sizing which can shift
+  // during React's layout stabilization, causing Phaser to recalculate and reapply inline styles
+  const containerWidth = Math.min(mapConfig.cols * 60 + 100, 800)
+  const containerHeight = Math.min(mapConfig.rows * 70 + 100, 600)
+
   return (
     <div className="phaser-hex-map-container">
-      <div ref={containerRef} className="phaser-canvas" />
+      <div
+        ref={containerRef}
+        className="phaser-canvas"
+        style={{
+          width: `${containerWidth}px`,
+          height: `${containerHeight}px`
+        }}
+      />
       <div className="map-legend">
         <div className="legend-item">
           <span className="legend-color" style={{ background: '#4a90a4' }}></span>

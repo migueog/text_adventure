@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import CollapsibleMenu from './CollapsibleMenu'
@@ -260,6 +260,72 @@ describe('CollapsibleMenu', () => {
       // WHY: Toggle back to open
       await user.click(toggleButton)
       expect(toggleButton).toHaveAttribute('title', 'Collapse Menu')
+    })
+  })
+
+  describe('when preventing render flicker', () => {
+    it('should initialize with localStorage value without re-render', () => {
+      // WHY: Verify state is correct from first render, not second
+      localStorage.setItem('collapsible-menu-open', 'false')
+
+      let renderCount = 0
+      const TestWrapper = () => {
+        renderCount++
+        return (
+          <CollapsibleMenu>
+            <div>Menu Content</div>
+          </CollapsibleMenu>
+        )
+      }
+
+      const { container } = render(<TestWrapper />)
+
+      // WHY: Should only render once with correct initial state
+      expect(renderCount).toBe(1)
+      expect(container.querySelector('.collapsible-menu')).toHaveClass('collapsed')
+    })
+
+    it('should handle localStorage errors gracefully', () => {
+      // WHY: localStorage.getItem throws when disabled
+      const spy = vi.spyOn(Storage.prototype, 'getItem')
+      spy.mockImplementation(() => {
+        throw new Error('localStorage disabled')
+      })
+
+      const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+      const { container } = render(
+        <CollapsibleMenu defaultOpen={true}>
+          <div>Menu Content</div>
+        </CollapsibleMenu>
+      )
+
+      // WHY: Should fall back to defaultOpen on error
+      expect(container.querySelector('.collapsible-menu')).toHaveClass('open')
+
+      spy.mockRestore()
+      consoleSpy.mockRestore()
+    })
+
+    it('should read localStorage synchronously before first render', () => {
+      // WHY: Verify localStorage is read during initialization, not in useEffect
+      localStorage.setItem('collapsible-menu-open', 'true')
+
+      const getItemSpy = vi.spyOn(localStorage, 'getItem')
+
+      const { container } = render(
+        <CollapsibleMenu defaultOpen={false}>
+          <div>Menu Content</div>
+        </CollapsibleMenu>
+      )
+
+      // WHY: Should have called getItem during initialization
+      expect(getItemSpy).toHaveBeenCalledWith('collapsible-menu-open')
+
+      // WHY: Should respect localStorage value over defaultOpen
+      expect(container.querySelector('.collapsible-menu')).toHaveClass('open')
+
+      getItemSpy.mockRestore()
     })
   })
 })
